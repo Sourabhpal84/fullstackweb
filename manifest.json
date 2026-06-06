@@ -1,8 +1,8 @@
-﻿{
+{
   "name": "MAGNEETOZ",
   "short_name": "MAGNEETOZ",
-  "description": "Premium food delivery by MAGNEETOZ.",
-  "start_url": "/index.html",
+  "description": "MAGNEETOZ pizza and fast food delivery in Greater Noida. Taste of Attraction.",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#090d13",
@@ -10,13 +10,13 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "logo_tran.png",
+      "src": "logo_tran1.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "logo_tran.png",
+      "src": "logo_tran1.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

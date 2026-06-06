@@ -1,0 +1,19 @@
+User-agent: *
+Allow: /
+Disallow: /8423order9839status.html
+Disallow: /8423total_sell9839.html
+Disallow: /add8423category9839dishes.html
+Disallow: /admin-login.html
+Disallow: /coupons-admin.html
+Disallow: /delivery-logic-admin.html
+Disallow: /feedback-admin.html
+Disallow: /offers-admin.html
+Disallow: /rider-dashboard.html
+Disallow: /rider-login.html
+Disallow: /rider-settlements-admin.html
+Disallow: /riders-admin.html
+Disallow: /super-admin-dashboard.html
+Disallow: /theme-studio-admin.html
+Disallow: /whatsapp-marketing-admin.html
+
+Sitemap: https://magneetoz.com/sitemap.xml
