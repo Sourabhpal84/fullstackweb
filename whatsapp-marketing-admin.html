@@ -1,0 +1,457 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAGNEETOZ WhatsApp CRM</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;font-family:Poppins,system-ui,sans-serif;color:#fff;background:radial-gradient(circle at 12% 0%,rgba(37,211,102,.18),transparent 30%),radial-gradient(circle at 90% 6%,rgba(255,123,0,.16),transparent 30%),linear-gradient(145deg,#06100a,#0b1218 52%,#090d13);padding:18px}
+.admin-auth-checking body{display:none}
+.wrap{width:min(1280px,100%);margin:auto}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px}
+h1{margin:0;font-size:27px;color:#25d366}.top p{margin:4px 0 0;color:#aeb8c7;font-size:13px}.admin-logout-btn{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:12px;padding:10px 14px;font-weight:800}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin-bottom:16px}.stat,.panel,.campaign,.table-wrap{background:linear-gradient(145deg,rgba(17,24,39,.92),rgba(24,34,51,.78));border:1px solid rgba(255,255,255,.1);border-radius:20px;box-shadow:0 20px 70px rgba(0,0,0,.32);backdrop-filter:blur(18px)}
+.stat{padding:15px}.stat b{display:block;font-size:24px;color:#25d366}.stat span{display:block;color:#aeb8c7;font-size:11px;margin-top:3px}
+.grid{display:grid;grid-template-columns:390px 1fr;gap:16px}.panel{padding:16px}.panel h2,.table-wrap h2{font-size:18px;margin:0 0 12px;color:#ffd166}
+label{display:block;color:#aeb8c7;font-size:11px;font-weight:900;margin:11px 0 6px}input,textarea,select{width:100%;border-radius:13px;border:1px solid #334155;background:#08100d;color:#fff;padding:11px;font:700 13px Poppins}textarea{min-height:90px;resize:vertical}
+button{border:0;border-radius:13px;min-height:42px;padding:0 13px;font:900 12px Poppins;cursor:pointer}.primary{width:100%;margin-top:13px;background:linear-gradient(135deg,#25d366,#00ffcc);color:#03110b}.soft{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:#fff}.danger{background:#ef4444;color:#fff}
+.upload{min-height:170px;border:1.5px dashed #334155;border-radius:18px;background:#07110d;display:grid;place-items:center;text-align:center;position:relative;overflow:hidden;cursor:pointer}.upload.drag{border-color:#25d366;box-shadow:0 0 28px rgba(37,211,102,.25)}.upload strong{color:#25d366}.upload span,.upload small{display:block;color:#aeb8c7;font-size:12px;margin-top:5px}.upload img{width:100%;height:170px;object-fit:cover}.bar{position:absolute;left:12px;right:12px;bottom:9px;height:7px;background:#1e293b;border-radius:999px;overflow:hidden}.bar i{display:block;width:0;height:100%;background:linear-gradient(90deg,#25d366,#00ffcc)}
+.campaigns{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.campaign{overflow:hidden}.campaign img{width:100%;height:128px;object-fit:cover;background:#08100d}.campaign div{padding:12px}.campaign h3{margin:0 0 6px}.campaign p{margin:0;color:#aeb8c7;font-size:12px;line-height:1.45}.badge{display:inline-block;margin-top:8px;background:rgba(37,211,102,.14);color:#86efac;border:1px solid rgba(37,211,102,.25);border-radius:999px;padding:5px 8px;font-size:10px;font-weight:900}
+.table-wrap{margin-top:16px;padding:16px}.tools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.tools input,.tools select{width:auto;min-width:180px}table{width:100%;border-collapse:collapse;overflow:hidden;border-radius:14px}th,td{padding:11px;border-bottom:1px solid rgba(255,255,255,.08);font-size:12px;text-align:left}th{color:#25d366;background:rgba(255,255,255,.04)}td{color:#e5e7eb}.tag{display:inline-block;margin:2px;padding:4px 7px;border-radius:999px;background:rgba(255,209,102,.13);color:#ffd166;font-size:10px;font-weight:800}.progress{height:9px;background:#1e293b;border-radius:999px;overflow:hidden;margin-top:8px}.progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,#25d366,#00ffcc);transition:.3s}
+@media(max-width:920px){.grid{grid-template-columns:1fr}.top{align-items:flex-start;flex-direction:column}.tools input,.tools select{width:100%}table{display:block;overflow-x:auto;white-space:nowrap}}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header class="top">
+    <div>
+      <h1>WhatsApp Marketing CRM</h1>
+      <p>Customer lists, campaign broadcasts, segmentation, and offer performance in one place.</p>
+    </div>
+  </header>
+
+  <section class="stats">
+    <div class="stat"><b id="totalCustomers">0</b><span>Total customers</span></div>
+    <div class="stat"><b id="activeCustomers">0</b><span>Active customers</span></div>
+    <div class="stat"><b id="repeatCustomers">0</b><span>Repeat customers</span></div>
+    <div class="stat"><b id="topSpenders">0</b><span>Top spenders</span></div>
+    <div class="stat"><b id="campaignReach">0</b><span>Campaign reach</span></div>
+    <div class="stat"><b id="deliveryStats">0%</b><span>Send success</span></div>
+  </section>
+
+  <section class="grid">
+    <form class="panel" id="campaignForm">
+      <h2>Create Campaign</h2>
+      <label>Campaign title</label>
+      <input id="title" required placeholder="Weekend Pizza Offer">
+      <label>Description</label>
+      <textarea id="description" required placeholder="Get 50% OFF on Pizza Today!"></textarea>
+      <label>Offer image</label>
+      <div class="upload" id="uploadBox">
+        <input id="imageFile" type="file" accept="image/*" hidden>
+        <div id="uploadPrompt"><strong>Upload offer image</strong><span>Tap or drag campaign creative</span></div>
+        <img id="preview" alt="Offer preview" style="display:none">
+        <div class="bar"><i id="uploadProgress"></i></div>
+        <small id="uploadStatus">Firebase Storage ready</small>
+      </div>
+      <input id="image" type="hidden">
+      <label>Reuse old campaign image</label>
+      <select id="oldImages"><option value="">Select saved image</option></select>
+      <label>Coupon code</label>
+      <input id="couponCode" placeholder="SAVE50">
+      <label>CTA button text</label>
+      <input id="buttonText" value="Order Now">
+      <label>Target audience</label>
+      <select id="targetAudience">
+        <option value="all">All opted-in customers</option>
+        <option value="vip">VIP users</option>
+        <option value="frequent">Frequent buyers</option>
+        <option value="highSpenders">High spenders</option>
+        <option value="firstTime">First-time customers</option>
+      </select>
+      <label>Schedule send time</label>
+      <input id="scheduledAt" type="datetime-local">
+      <label><input id="alsoPush" type="checkbox" checked style="width:auto"> Also create push/in-app offer banner</label>
+      <button class="primary" type="submit">Save Campaign</button>
+      <button class="soft" type="button" id="saveAndSendBtn" style="width:100%;margin-top:8px">Save & Send Campaign</button>
+      <div class="progress"><i id="sendProgress"></i></div>
+    </form>
+
+    <section>
+      <div class="panel" style="margin-bottom:12px">
+        <h2>WhatsApp API Status</h2>
+        <p id="apiStatus" style="color:#aeb8c7;margin:0">Checking WhatsApp Cloud API configuration...</p>
+        <p style="color:#aeb8c7;font-size:12px;margin:8px 0 0">Configure server-only credentials in <b>settings/whatsapp</b>: accessToken, phoneNumberId, websiteUrl, maxPerRun.</p>
+      </div>
+      <div class="campaigns" id="campaigns"></div>
+    </section>
+  </section>
+
+  <section class="table-wrap">
+    <h2>Customer Management</h2>
+    <div class="tools">
+      <input id="search" placeholder="Search name or phone">
+      <input id="manualName" placeholder="Manual name">
+      <input id="manualPhone" placeholder="Manual phone">
+      <button class="soft" id="addManualContact" type="button">Add Contact</button>
+      <input id="csvImport" type="file" accept=".csv,text/csv">
+      <select id="segment">
+        <option value="all">All customers</option>
+        <option value="vip">VIP</option>
+        <option value="frequent">Frequent Buyer</option>
+        <option value="inactive">Inactive</option>
+        <option value="first">First-time</option>
+        <option value="optedOut">Opted out</option>
+      </select>
+      <button class="soft" id="exportCsv" type="button">Export CSV</button>
+    </div>
+    <table>
+      <thead><tr><th>Name</th><th>Phone</th><th>Orders</th><th>Spent</th><th>Last Order</th><th>Tags</th><th>Opt-in</th></tr></thead>
+      <tbody id="customersTable"></tbody>
+    </table>
+  </section>
+</main>
+
+<script type="module">
+import { protectAdminPage, mountAdminLogout } from "./admin-guard.js";
+import { db, storage } from "./firebase-config.js";
+import {
+  addDoc,
+  collection,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import {
+  getDownloadURL,
+  ref,
+  uploadBytesResumable
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+
+protectAdminPage();
+mountAdminLogout(document.querySelector(".top"));
+
+let customers = [];
+let campaigns = [];
+let queues = [];
+let uploadedImage = "";
+let sendAfterSave = false;
+
+const money = amount => new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0}).format(Number(amount)||0);
+const val = id => document.getElementById(id).value.trim();
+const dateText = value => value?.toDate ? value.toDate().toLocaleDateString() : "-";
+
+function setProgress(id, pct){ document.getElementById(id).style.width = `${pct}%`; }
+
+async function uploadImage(file){
+  if(!file || !file.type.startsWith("image/")) return alert("Choose a valid image.");
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = "block";
+  uploadPrompt.style.display = "none";
+  uploadStatus.textContent = "Uploading...";
+  setProgress("uploadProgress", 5);
+  const clean = file.name.replace(/[^a-z0-9.]/gi, "-").toLowerCase();
+  const storageRef = ref(storage, `whatsapp-campaigns/${Date.now()}-${clean}`);
+  const task = uploadBytesResumable(storageRef, file, { contentType:file.type });
+  let lastProgressAt = Date.now();
+  const stuckTimer = setInterval(() => {
+    if(Date.now() - lastProgressAt > 12000){
+      uploadStatus.textContent = "Still connecting to Firebase Storage...";
+    }
+  }, 3000);
+  try{
+  await new Promise((resolve, reject) => {
+    task.on("state_changed", snap => {
+      lastProgressAt = Date.now();
+      setProgress("uploadProgress", snap.totalBytes ? Math.round((snap.bytesTransferred / snap.totalBytes) * 100) : 0);
+    }, reject, resolve);
+  });
+  uploadedImage = await getDownloadURL(task.snapshot.ref);
+  image.value = uploadedImage;
+  uploadStatus.textContent = "Image uploaded";
+  }catch(error){
+    console.error("Campaign image upload failed:", error);
+    uploadedImage = "";
+    image.value = "";
+    setProgress("uploadProgress", 0);
+    uploadStatus.textContent = error?.code === "storage/unauthorized"
+      ? "Upload blocked: deploy Firebase Storage rules."
+      : `Upload failed: ${error?.message || "Please try again."}`;
+    alert(error?.code === "storage/unauthorized"
+      ? "Firebase Storage permission denied. Deploy storage.rules, then try again."
+      : "Image upload failed. Please try again.");
+  }finally{
+    clearInterval(stuckTimer);
+  }
+}
+
+uploadBox.addEventListener("click", () => imageFile.click());
+imageFile.addEventListener("change", () => uploadImage(imageFile.files?.[0]));
+["dragenter","dragover"].forEach(name => uploadBox.addEventListener(name, event => {
+  event.preventDefault();
+  uploadBox.classList.add("drag");
+}));
+["dragleave","drop"].forEach(name => uploadBox.addEventListener(name, event => {
+  event.preventDefault();
+  uploadBox.classList.remove("drag");
+}));
+uploadBox.addEventListener("drop", event => uploadImage(event.dataTransfer.files?.[0]));
+oldImages.addEventListener("change", () => {
+  if(!oldImages.value) return;
+  uploadedImage = oldImages.value;
+  image.value = uploadedImage;
+  preview.src = uploadedImage;
+  preview.style.display = "block";
+  uploadPrompt.style.display = "none";
+});
+
+function readCampaign(){
+  const schedule = val("scheduledAt");
+  return {
+    title:val("title"),
+    description:val("description"),
+    image:uploadedImage || val("image") || "",
+    couponCode:val("couponCode").toUpperCase(),
+    buttonText:val("buttonText") || "Order Now",
+    targetAudience:val("targetAudience") || "all",
+    scheduledAt:schedule ? new Date(schedule).toISOString() : "",
+    createdAt:serverTimestamp(),
+    sendStatus:"draft",
+    messagesSent:0,
+    messagesFailed:0
+  };
+}
+
+async function saveCampaign(){
+  const data = readCampaign();
+  if(!data.title || !data.description) throw new Error("Title and description are required.");
+  const campaignRef = await addDoc(collection(db, "whatsappCampaigns"), data);
+  if(alsoPush.checked){
+    await addDoc(collection(db, "offers"), {
+      title:data.title,
+      description:data.description,
+      image:data.image || "logo_tran.png",
+      couponCode:data.couponCode,
+      notificationTitle:data.title,
+      notificationBody:data.description,
+      active:true,
+      broadcastStatus:"pending",
+      createdAt:serverTimestamp()
+    });
+  }
+  return campaignRef.id;
+}
+
+campaignForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  if(sendAfterSave) return;
+  try{
+    await saveCampaign();
+    campaignForm.reset();
+    uploadedImage = "";
+    preview.style.display = "none";
+    uploadPrompt.style.display = "block";
+    setProgress("uploadProgress", 0);
+    alert("Campaign saved.");
+  }catch(error){ alert(error.message); }
+});
+
+saveAndSendBtn.addEventListener("click", async () => {
+  sendAfterSave = true;
+  campaignForm.requestSubmit();
+});
+
+campaignForm.addEventListener("submit", async event => {
+  if(!sendAfterSave) return;
+  event.preventDefault();
+  sendAfterSave = false;
+  try{
+    const campaignId = await saveCampaign();
+    await sendCampaign(campaignId);
+    campaignForm.reset();
+    uploadedImage = "";
+    preview.style.display = "none";
+    uploadPrompt.style.display = "block";
+  }catch(error){ alert(error.message); }
+});
+
+async function sendCampaign(campaignId){
+  setProgress("sendProgress", 12);
+  await setDoc(doc(collection(db, "whatsappCampaignQueue")), {
+    campaignId,
+    status:"pending",
+    scheduledAt:val("scheduledAt") ? new Date(val("scheduledAt")).toISOString() : "",
+    requestedAt:serverTimestamp()
+  });
+  await updateDoc(doc(db, "whatsappCampaigns", campaignId), {
+    sendStatus:"queued",
+    queuedAt:serverTimestamp()
+  });
+  setProgress("sendProgress", 100);
+}
+
+window.sendCampaignNow = sendCampaign;
+
+onSnapshot(doc(db,"settings","whatsapp"), snap => {
+  const data = snap.exists() ? snap.data() : {};
+  apiStatus.textContent = data.phoneNumberId && data.accessToken
+    ? "WhatsApp Cloud API configured. Broadcast queue is ready."
+    : "WhatsApp Cloud API not configured yet.";
+});
+
+addManualContact.addEventListener("click", async () => {
+  const phone = manualPhone.value.replace(/\D/g, "").slice(-10);
+  if(!phone) return alert("Enter phone number");
+  await setDoc(doc(db, "customers", `91${phone}`), {
+    customerName:manualName.value.trim() || "Imported Customer",
+    phoneNumber:`91${phone}`,
+    displayPhone:manualPhone.value.trim(),
+    whatsappOptIn:true,
+    source:"manual_crm",
+    tags:["Imported"],
+    updatedAt:serverTimestamp(),
+    createdAt:serverTimestamp()
+  }, { merge:true });
+  manualName.value = "";
+  manualPhone.value = "";
+});
+
+csvImport.addEventListener("change", async () => {
+  const file = csvImport.files?.[0];
+  if(!file) return;
+  const text = await file.text();
+  const rows = text.split(/\r?\n/).map(row => row.split(",").map(cell => cell.trim())).filter(row => row.length && row.join(""));
+  let imported = 0;
+  for(const row of rows.slice(0, 1000)){
+    const [name, phoneValue] = row;
+    const phone = String(phoneValue || name || "").replace(/\D/g, "").slice(-10);
+    if(!phone) continue;
+    await setDoc(doc(db, "customers", `91${phone}`), {
+      customerName:phoneValue ? (name || "Imported Customer") : "Imported Customer",
+      phoneNumber:`91${phone}`,
+      displayPhone:phone,
+      whatsappOptIn:true,
+      source:"csv_import",
+      tags:["Imported"],
+      updatedAt:serverTimestamp(),
+      createdAt:serverTimestamp()
+    }, { merge:true });
+    imported++;
+  }
+  alert(`Imported ${imported} contact(s).`);
+  csvImport.value = "";
+});
+
+onSnapshot(query(collection(db,"customers"), orderBy("updatedAt","desc")), snap => {
+  customers = snap.docs.map(item => ({ id:item.id, ...item.data() }));
+  renderCustomers();
+  updateStats();
+});
+
+onSnapshot(query(collection(db,"whatsappCampaigns"), orderBy("createdAt","desc")), snap => {
+  campaigns = snap.docs.map(item => ({ id:item.id, ...item.data() }));
+  oldImages.innerHTML = `<option value="">Select saved image</option>` + campaigns.filter(c => c.image).map(c => `<option value="${c.image}">${c.title}</option>`).join("");
+  renderCampaigns();
+  updateStats();
+});
+
+onSnapshot(query(collection(db,"whatsappCampaignQueue"), orderBy("requestedAt","desc")), snap => {
+  queues = snap.docs.map(item => ({ id:item.id, ...item.data() }));
+  updateStats();
+});
+
+function filteredCustomers(){
+  const term = search.value.toLowerCase();
+  const seg = segment.value;
+  return customers.filter(c => {
+    const tags = c.tags || [];
+    const textMatch = !term || `${c.customerName || ""} ${c.phoneNumber || ""} ${c.displayPhone || ""}`.toLowerCase().includes(term);
+    const segMatch = seg === "all" ||
+      (seg === "vip" && tags.includes("VIP")) ||
+      (seg === "frequent" && tags.includes("Frequent Buyer")) ||
+      (seg === "inactive" && tags.includes("Inactive")) ||
+      (seg === "first" && (c.totalOrders || 0) === 1) ||
+      (seg === "optedOut" && c.whatsappOptIn === false);
+    return textMatch && segMatch;
+  });
+}
+
+function renderCustomers(){
+  const rows = filteredCustomers();
+  customersTable.innerHTML = rows.map(c => `
+    <tr>
+      <td>${c.customerName || "Customer"}</td>
+      <td>${c.displayPhone || c.phoneNumber || "-"}</td>
+      <td>${c.totalOrders || 0}</td>
+      <td>${money(c.totalSpent)}</td>
+      <td>${dateText(c.lastOrderDate)}</td>
+      <td>${(c.tags || []).map(tag => `<span class="tag">${tag}</span>`).join("")}</td>
+      <td><button class="${c.whatsappOptIn === false ? "danger" : "soft"}" onclick="toggleOptIn('${c.id}', ${c.whatsappOptIn !== false})">${c.whatsappOptIn === false ? "Opted out" : "Opted in"}</button></td>
+    </tr>
+  `).join("");
+}
+
+function renderCampaigns(){
+  campaignsEl();
+}
+
+function campaignsEl(){
+  campaigns = campaigns || [];
+  document.getElementById("campaigns").innerHTML = campaigns.map(c => `
+    <article class="campaign">
+      <img src="${c.image || "logo_tran.png"}" onerror="this.onerror=null;this.src='logo_tran.png';">
+      <div>
+        <h3>${c.title || "Campaign"}</h3>
+        <p>${c.description || ""}</p>
+        <span class="badge">${c.targetAudience || "all"} â€¢ ${c.sendStatus || "draft"}</span>
+        <p style="margin-top:8px">Sent ${c.messagesSent || 0} â€¢ Failed ${c.messagesFailed || 0}</p>
+        <button class="primary" onclick="sendCampaignNow('${c.id}')">Send Campaign</button>
+      </div>
+    </article>
+  `).join("");
+}
+
+window.toggleOptIn = async function(id, current){
+  await updateDoc(doc(db,"customers",id), { whatsappOptIn:!current });
+};
+
+function updateStats(){
+  totalCustomers.textContent = customers.length;
+  activeCustomers.textContent = customers.filter(c => c.whatsappOptIn !== false && !(c.tags || []).includes("Inactive")).length;
+  repeatCustomers.textContent = customers.filter(c => (c.totalOrders || 0) > 1).length;
+  topSpenders.textContent = customers.filter(c => (c.totalSpent || 0) >= 3000).length;
+  campaignReach.textContent = campaigns.reduce((sum,c) => sum + (c.lastReach || 0), 0);
+  const sent = campaigns.reduce((sum,c) => sum + (c.messagesSent || 0), 0);
+  const failed = campaigns.reduce((sum,c) => sum + (c.messagesFailed || 0), 0);
+  deliveryStats.textContent = sent + failed ? `${Math.round((sent / (sent + failed)) * 100)}%` : "0%";
+}
+
+search.addEventListener("input", renderCustomers);
+segment.addEventListener("change", renderCustomers);
+exportCsv.addEventListener("click", () => {
+  const rows = filteredCustomers();
+  const csv = ["Name,Phone,Orders,Spent,Last Order,Tags,Opt In"].concat(rows.map(c => [
+    c.customerName || "",
+    c.displayPhone || c.phoneNumber || "",
+    c.totalOrders || 0,
+    c.totalSpent || 0,
+    dateText(c.lastOrderDate),
+    (c.tags || []).join("|"),
+    c.whatsappOptIn !== false
+  ].map(v => `"${String(v).replaceAll('"','""')}"`).join(","))).join("\n");
+  const blob = new Blob([csv], { type:"text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "magneetoz-customers.csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+</script>
+  <script src="app-notifications.js"></script>
+</body>
+</html>

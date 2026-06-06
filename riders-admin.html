@@ -1,0 +1,440 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#090d13">
+<title>Magneetoz Riders Admin</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="logo_tran.png">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#090d13;
+  --card:#121821;
+  --card2:#192230;
+  --line:#263241;
+  --text:#f8fafc;
+  --muted:#9aa7b8;
+  --green:#22c55e;
+  --orange:#ff8a00;
+  --red:#ef4444;
+  --blue:#38bdf8;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:Poppins,Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  color:var(--text);
+  background:
+    radial-gradient(circle at 10% 0%, rgba(34,197,94,.14), transparent 28%),
+    linear-gradient(145deg,#090d13,#111923 56%,#090d13);
+  padding:18px;
+}
+.wrap{max-width:1180px;margin:0 auto}
+.header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  margin-bottom:18px;
+}
+h1{font-size:24px;margin:0}
+.header p{margin:4px 0 0;color:var(--muted);font-size:13px}
+.header-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.install-btn{
+  display:none;
+  align-items:center;
+  gap:8px;
+  min-height:44px;
+  border:1px solid rgba(34,197,94,.28);
+  background:linear-gradient(135deg,var(--green),#86efac);
+  color:#06110a;
+  box-shadow:0 12px 34px rgba(34,197,94,.2);
+}
+.install-btn.show{display:inline-flex}
+.install-note{
+  display:none;
+  color:var(--muted);
+  font-size:11px;
+  max-width:210px;
+  line-height:1.45;
+}
+.install-note.show{display:block}
+.summary{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:12px;
+  margin-bottom:18px;
+}
+.box,.card{
+  background:linear-gradient(145deg,var(--card),var(--card2));
+  border:1px solid var(--line);
+  border-radius:18px;
+  box-shadow:0 16px 48px rgba(0,0,0,.28);
+}
+.box{padding:16px}
+.box b{display:block;font-size:24px}
+.box span{display:block;color:var(--muted);font-size:12px;margin-top:4px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.rider-toolbar{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 220px;
+  gap:12px;
+  margin-bottom:16px;
+}
+.rider-toolbar input,.rider-toolbar select{
+  width:100%;
+  min-height:46px;
+  border-radius:14px;
+  border:1px solid var(--line);
+  background:#0b0f14;
+  color:var(--text);
+  padding:0 13px;
+  font:700 13px Poppins,sans-serif;
+}
+.card{padding:16px;transition:.22s ease}
+.card:hover{transform:translateY(-2px)}
+.top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.name{font-size:17px;font-weight:800}
+.phone{font-size:12px;color:var(--muted);margin-top:3px}
+.badge{
+  padding:6px 10px;
+  border-radius:999px;
+  font-size:10px;
+  font-weight:900;
+  text-transform:uppercase;
+  white-space:nowrap;
+}
+.approved{background:rgba(34,197,94,.14);color:#86efac}
+.waiting{background:rgba(255,138,0,.15);color:#ffc46b}
+.disabled{background:rgba(239,68,68,.14);color:#ff9b9b}
+.removed{background:rgba(148,163,184,.14);color:#cbd5e1}
+.online{background:rgba(56,189,248,.15);color:#7dd3fc}
+.offline{background:rgba(148,163,184,.14);color:#cbd5e1}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0}
+.stat{background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.07);border-radius:13px;padding:10px;text-align:center}
+.stat b{display:block;font-size:14px}
+.stat span{font-size:10px;color:var(--muted)}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+button{
+  border:0;
+  border-radius:12px;
+  min-height:42px;
+  padding:0 12px;
+  color:#fff;
+  cursor:pointer;
+  font:800 12px Poppins,sans-serif;
+}
+.btn-green{background:linear-gradient(135deg,var(--green),#16a34a)}
+.btn-red{background:linear-gradient(135deg,#ff5f5f,var(--red))}
+.btn-soft{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.09)}
+.empty{padding:28px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:18px}
+.admin-auth-checking body{display:none}
+.admin-logout-btn{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12)}
+.install-toast{
+  position:fixed;
+  right:18px;
+  bottom:18px;
+  z-index:20;
+  width:min(360px,calc(100% - 36px));
+  display:none;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:14px;
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,.12);
+  background:linear-gradient(145deg,#121821,#192230);
+  box-shadow:0 20px 60px rgba(0,0,0,.42);
+}
+.install-toast.show{display:flex}
+.install-toast strong{display:block;font-size:13px}
+.install-toast span{display:block;color:var(--muted);font-size:11px;margin-top:3px}
+.install-toast button{flex:0 0 auto}
+@media(max-width:640px){
+  .header{align-items:flex-start;flex-direction:column}
+  .header-actions{width:100%;justify-content:flex-start}
+  .install-note{max-width:none}
+  .rider-toolbar{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header class="header">
+    <div>
+      <h1>Riders Admin</h1>
+      <p>Approve riders, manage availability, and monitor delivery partner status.</p>
+    </div>
+    <div class="header-actions">
+      <button type="button" class="install-btn" id="installAppBtn">Install App</button>
+      <button type="button" class="btn-soft" onclick="location.href='rider-settlements-admin.html'">Settlements</button>
+      <span class="install-note" id="installNote">Open from the hosted site to install this admin panel as an app.</span>
+    </div>
+  </header>
+
+  <section class="summary">
+    <div class="box"><b id="totalRiders">0</b><span>Total riders</span></div>
+    <div class="box"><b id="approvedRiders">0</b><span>Approved</span></div>
+    <div class="box"><b id="onlineRiders">0</b><span>Online now</span></div>
+    <div class="box"><b id="offlineRiders">0</b><span>Offline</span></div>
+    <div class="box"><b id="totalEarnings">₹0</b><span>Rider earnings</span></div>
+  </section>
+
+  <section class="rider-toolbar">
+    <input id="riderSearch" type="search" placeholder="Search rider by name or phone">
+    <select id="riderFilter">
+      <option value="all">All riders</option>
+      <option value="approved">Approved</option>
+      <option value="waiting">Waiting approval</option>
+      <option value="online">Online</option>
+      <option value="offline">Offline</option>
+      <option value="disabled">Disabled / removed</option>
+    </select>
+  </section>
+
+  <section class="grid" id="riders"></section>
+</main>
+
+<div class="install-toast" id="installToast" aria-live="polite">
+  <div>
+    <strong>Install Riders Admin</strong>
+    <span>Fast access, standalone window, app-like dashboard.</span>
+  </div>
+  <button type="button" class="btn-green" id="installToastBtn">Install</button>
+</div>
+
+<script type="module">
+import { protectAdminPage, mountAdminLogout } from "./admin-guard.js";
+import { db } from "./firebase-config.js";
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  onSnapshot,
+  serverTimestamp,
+  updateDoc
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const ridersEl = document.getElementById("riders");
+protectAdminPage();
+mountAdminLogout(document.querySelector(".header-actions"));
+const installBtn = document.getElementById("installAppBtn");
+const installToast = document.getElementById("installToast");
+const installToastBtn = document.getElementById("installToastBtn");
+const installNote = document.getElementById("installNote");
+const riderSearch = document.getElementById("riderSearch");
+const riderFilter = document.getElementById("riderFilter");
+let deferredInstallPrompt = null;
+let ridersCache = [];
+
+function formatCurrency(amount){
+  return new Intl.NumberFormat("en-IN", {
+    style:"currency",
+    currency:"INR",
+    maximumFractionDigits:0
+  }).format(Number(amount) || 0);
+}
+
+function onlineOf(rider){
+  return !!(rider.online || rider.isOnline);
+}
+
+function activeOf(rider){
+  return rider.active !== false;
+}
+
+function renderRiders(){
+  let html = "";
+  let total = 0;
+  let approved = 0;
+  let online = 0;
+  let earnings = 0;
+  const search = (riderSearch?.value || "").trim().toLowerCase();
+  const filter = riderFilter?.value || "all";
+
+  ridersCache.forEach(({ id, ...r }) => {
+    const isApproved = !!r.approved;
+    const isActive = activeOf(r);
+    const isOnline = onlineOf(r);
+    total++;
+    if(isApproved) approved++;
+    if(isOnline) online++;
+    earnings += r.totalEarnings || 0;
+
+    const haystack = `${r.name || ""} ${r.phone || ""} ${r.phoneDigits || ""}`.toLowerCase();
+    if(search && !haystack.includes(search)) return;
+    if(filter === "approved" && !isApproved) return;
+    if(filter === "waiting" && (isApproved || !isActive)) return;
+    if(filter === "online" && !isOnline) return;
+    if(filter === "offline" && isOnline) return;
+    if(filter === "disabled" && isActive && !["removed","rejected"].includes(r.status)) return;
+
+    const approvalBadge = !isActive
+      ? `<span class="badge disabled">Disabled</span>`
+      : r.status === "removed"
+        ? `<span class="badge removed">Removed</span>`
+        : r.status === "rejected"
+          ? `<span class="badge disabled">Rejected</span>`
+      : isApproved
+        ? `<span class="badge approved">Approved</span>`
+        : `<span class="badge waiting">Waiting</span>`;
+
+    html += `
+      <article class="card">
+        <div class="top">
+          <div>
+            <div class="name">${r.name || "Magneetoz Rider"}</div>
+            <div class="phone">${r.phone || r.phoneDigits || "No phone"}</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+            ${approvalBadge}
+            <span class="badge ${isOnline ? "online" : "offline"}">${isOnline ? "Online" : "Offline"}</span>
+          </div>
+        </div>
+        <div class="stats">
+          <div class="stat"><b>${formatCurrency(r.totalEarnings)}</b><span>Earnings</span></div>
+          <div class="stat"><b>${r.totalOrders || 0}</b><span>Orders</span></div>
+          <div class="stat"><b>${r.totalDistance || 0}</b><span>KM</span></div>
+        </div>
+        <div class="actions">
+          ${isApproved ? "" : `<button class="btn-green" onclick="approveRider('${id}')">Approve</button>`}
+          <button class="btn-soft" onclick="rejectRider('${id}')">Reject</button>
+          <button class="${isActive ? "btn-red" : "btn-green"}" onclick="setActive('${id}', ${!isActive})">${isActive ? "Disable" : "Enable"}</button>
+          <button class="btn-red" onclick="removeRider('${id}')">Remove</button>
+          <button class="btn-red" onclick="deleteRider('${id}')">Delete</button>
+          <button class="btn-soft" onclick="forceOffline('${id}')">Set Offline</button>
+        </div>
+      </article>
+    `;
+  });
+
+  ridersEl.innerHTML = html || `<div class="empty">No riders have requested access yet.</div>`;
+  document.getElementById("totalRiders").textContent = total;
+  document.getElementById("approvedRiders").textContent = approved;
+  document.getElementById("onlineRiders").textContent = online;
+  document.getElementById("offlineRiders").textContent = Math.max(0, total - online);
+  document.getElementById("totalEarnings").textContent = formatCurrency(earnings);
+}
+
+onSnapshot(collection(db,"riders"), snap => {
+  ridersCache = snap.docs.map(docSnap => ({ id:docSnap.id, ...docSnap.data() }));
+  renderRiders();
+});
+
+riderSearch?.addEventListener("input", renderRiders);
+riderFilter?.addEventListener("change", renderRiders);
+
+window.approveRider = async function(id){
+  await updateDoc(doc(db,"riders",id), {
+    approved:true,
+    active:true,
+    status:"approved",
+    approvedAt:serverTimestamp()
+  });
+};
+
+window.rejectRider = async function(id){
+  if(!(await window.MagneetozNotify.confirm("Reject this rider?", { title:"Reject rider", okText:"Reject" }))) return;
+  const note = "Documents not verified";
+  await updateDoc(doc(db,"riders",id), {
+    approved:false,
+    active:false,
+    online:false,
+    isOnline:false,
+    status:"rejected",
+    adminNote:note,
+    rejectedAt:serverTimestamp()
+  });
+};
+
+window.removeRider = async function(id){
+  if(!(await window.MagneetozNotify.confirm("Remove this rider from active operations?", { title:"Remove rider", okText:"Remove" }))) return;
+  const note = "Removed by admin";
+  await updateDoc(doc(db,"riders",id), {
+    approved:false,
+    active:false,
+    online:false,
+    isOnline:false,
+    status:"removed",
+    adminNote:note,
+    removedAt:serverTimestamp()
+  });
+};
+
+window.deleteRider = async function(id){
+  if(!(await window.MagneetozNotify.confirm("Permanently delete this rider record? This cannot be undone.", { title:"Delete rider", okText:"Delete" }))) return;
+  await deleteDoc(doc(db,"riders",id));
+};
+
+window.setActive = async function(id, active){
+  await updateDoc(doc(db,"riders",id), {
+    active,
+    online:false,
+    isOnline:false,
+    updatedAt:serverTimestamp()
+  });
+};
+
+window.forceOffline = async function(id){
+  await updateDoc(doc(db,"riders",id), {
+    online:false,
+    isOnline:false,
+    updatedAt:serverTimestamp()
+  });
+};
+
+window.deleteAllRiders = async function(){
+  if(!(await window.MagneetozNotify.confirm("Delete all riders?", { title:"Delete riders", okText:"Delete all" }))) return;
+  const snap = await getDocs(collection(db,"riders"));
+  await Promise.all(snap.docs.map(item => deleteDoc(doc(db,"riders", item.id))));
+};
+
+function showInstallUI(){
+  installBtn?.classList.add("show");
+  installToast?.classList.add("show");
+  installNote?.classList.remove("show");
+}
+
+function hideInstallUI(){
+  installBtn?.classList.remove("show");
+  installToast?.classList.remove("show");
+}
+
+async function installAdminApp(){
+  if(!deferredInstallPrompt){
+    installNote.textContent = "Install is available after opening this page from the hosted secure site.";
+    installNote.classList.add("show");
+    return;
+  }
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  hideInstallUI();
+}
+
+window.addEventListener("beforeinstallprompt", event => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  showInstallUI();
+});
+
+window.addEventListener("appinstalled", () => {
+  deferredInstallPrompt = null;
+  hideInstallUI();
+});
+
+installBtn?.addEventListener("click", installAdminApp);
+installToastBtn?.addEventListener("click", installAdminApp);
+
+if("serviceWorker" in navigator && location.protocol.startsWith("http")){
+  navigator.serviceWorker.register("./sw.js").catch(() => {});
+}else{
+  installNote?.classList.add("show");
+}
+</script>
+  <script src="app-notifications.js"></script>
+</body>
+</html>

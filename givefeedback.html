@@ -1,0 +1,231 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MAGNEETOZ Feedback</title>
+  <style>
+    :root{color-scheme:light dark;--bg:#f7f8fb;--panel:#fff;--text:#111827;--muted:#64748b;--accent:#0ea5e9;--good:#16a34a;--bad:#dc2626;--line:#e5e7eb}
+    body.dark{--bg:#0b0f14;--panel:#121821;--text:#f8fafc;--muted:#94a3b8;--line:#263241}
+    body{margin:0;font-family:Inter,system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:grid;place-items:center;padding:18px}
+    .wrap{width:min(760px,100%);background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 24px 70px rgba(15,23,42,.12);overflow:hidden}
+    header{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:22px;border-bottom:1px solid var(--line)}
+    h1{margin:0;font-size:24px}.muted{color:var(--muted);margin:6px 0 0}
+    form{padding:22px;display:grid;gap:16px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.identity-grid[hidden]{display:none}
+    label{display:grid;gap:7px;font-weight:800;font-size:13px;color:var(--muted)}input,textarea{border:1px solid var(--line);border-radius:8px;padding:12px;background:transparent;color:var(--text);font:inherit}
+    textarea{min-height:120px;resize:vertical}.rating-block{display:grid;gap:8px;padding:16px;border:1px solid var(--line);border-radius:8px;background:rgba(14,165,233,.05)}.rating-title{display:flex;justify-content:space-between;gap:10px;align-items:center;color:var(--muted);font-weight:900}.rating-title strong{color:var(--text)}
+    .stars{display:flex;gap:6px;align-items:center}.stars button{width:42px;height:42px;font-size:30px;line-height:1;background:transparent;border:1px solid transparent;border-radius:8px;color:#cbd5e1;cursor:pointer;transition:.18s}.stars button:hover{transform:translateY(-2px);background:rgba(245,158,11,.12)}.stars button.active{color:#f59e0b;text-shadow:0 7px 18px rgba(245,158,11,.3)}
+    .ratings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.mini-rating{display:grid;gap:8px;border:1px solid var(--line);border-radius:8px;padding:12px}.mini-rating .stars button{width:31px;height:31px;font-size:22px}
+    .actions{display:flex;justify-content:space-between;gap:10px;align-items:center}.btn{border:0;border-radius:8px;padding:12px 16px;font-weight:900;cursor:pointer;background:var(--accent);color:#fff}.ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
+    .result{display:none;margin:0 22px 22px;padding:14px;border-radius:8px;background:rgba(14,165,233,.1);border:1px solid rgba(14,165,233,.25)}
+    @media(max-width:700px){.grid,.ratings{grid-template-columns:1fr}.actions{align-items:stretch;flex-direction:column}}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <div>
+        <h1>MAGNEETOZ Feedback</h1>
+        <p class="muted">Share your order experience. Low ratings are marked urgent automatically.</p>
+      </div>
+      <button class="btn ghost" id="themeBtn" type="button">Theme</button>
+    </header>
+    <form id="feedbackForm">
+      <div class="grid identity-grid" id="identityFields" hidden>
+        <label>Name<input id="customerName" autocomplete="name" placeholder="Your name"></label>
+        <label>Phone Number<input id="phone" inputmode="tel" autocomplete="tel" placeholder="10 digit mobile number"></label>
+        <label>Order ID (optional)<input id="orderId" placeholder="Optional"></label>
+      </div>
+      <input id="rating" type="hidden" value="0">
+      <div class="rating-block">
+        <div class="rating-title"><strong>Overall Experience</strong><span id="ratingText">Select Rating</span></div>
+        <div class="stars" id="stars" aria-label="Overall star rating"></div>
+      </div>
+      <div class="ratings">
+  <div class="mini-rating">
+    <div class="rating-title">
+      <strong>Food Quality</strong>
+      <span data-rating-label="foodQuality">Select</span>
+    </div>
+    <input id="foodQuality" type="hidden" value="0">
+    <div class="stars" data-star-target="foodQuality"></div>
+  </div>
+
+  <div class="mini-rating">
+    <div class="rating-title">
+      <strong>Delivery</strong>
+      <span data-rating-label="delivery">Select</span>
+    </div>
+    <input id="delivery" type="hidden" value="0">
+    <div class="stars" data-star-target="delivery"></div>
+  </div>
+
+  <div class="mini-rating">
+    <div class="rating-title">
+      <strong>Service</strong>
+      <span data-rating-label="service">Select</span>
+    </div>
+    <input id="service" type="hidden" value="0">
+    <div class="stars" data-star-target="service"></div>
+  </div>
+
+  <div class="mini-rating">
+    <div class="rating-title">
+      <strong>Value for Money</strong>
+      <span data-rating-label="valueForMoney">Select</span>
+    </div>
+    <input id="valueForMoney" type="hidden" value="0">
+    <div class="stars" data-star-target="valueForMoney"></div>
+  </div>
+</div>
+      <label>Feedback Message<textarea id="message" required placeholder="Food quality, late delivery, refund, service, taste..."></textarea></label>
+      <div class="actions">
+        <span class="muted" id="statusText">AI sentiment runs after submit.</span>
+        <button class="btn" type="submit">Submit Feedback</button>
+      </div>
+    </form>
+    <div class="result" id="resultBox"></div>
+  </main>
+  <script type="module">
+    import { db, auth } from "./firebase-config.js";
+    import { addDoc, collection, doc, getDoc, getDocs, limit, query, serverTimestamp, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    const rating = document.getElementById("rating");
+    const stars = document.getElementById("stars");
+    const resultBox = document.getElementById("resultBox");
+    const params = new URLSearchParams(location.search);
+    const identityFields = document.getElementById("identityFields");
+    const sourceMode = params.get("mode") || params.get("source") || "";
+    const orderParam = params.get("orderId") || params.get("order") || "";
+    ["orderId","customerName","phone"].forEach(id => { if(params.get(id)) document.getElementById(id).value = params.get(id); });
+    async function hydrateOrderContext(){
+      if(!orderParam) return false;
+      try{
+        const snap = await getDoc(doc(db, "orders", orderParam));
+        if(!snap.exists()) return false;
+        const order = snap.data();
+        document.getElementById("orderId").value = orderParam;
+        document.getElementById("customerName").value = order.customerName || order.name || "";
+        document.getElementById("phone").value = order.phone || order.customerPhone || "";
+        return true;
+      }catch(error){
+        return Boolean(document.getElementById("customerName").value && document.getElementById("phone").value);
+      }
+    }
+    const hasOrderContext = await hydrateOrderContext();
+    const directSharedLink = !hasOrderContext || ["general","qr","whatsapp","instagram","sms","campaign","manual"].includes(String(sourceMode).toLowerCase());
+    identityFields.hidden = !directSharedLink;
+    function localAnalysis(message, score){
+      const text = String(message || "").toLowerCase();
+      const bad = ["refund","late delivery","late","bad food","poor service","cold","wrong","missing","angry","frustrated"].find(w => text.includes(w));
+      const sentiment = score <= 2 || bad ? "negative" : score >= 4 ? "positive" : "neutral";
+      return { sentiment, sentimentScore:sentiment==="positive"?0.8:sentiment==="negative"?-0.8:0, emotion:sentiment==="positive"?"Satisfied":sentiment==="negative"?"Frustrated":"Neutral", highPriority:score<=2 || !!bad, complaintType:bad || "", recommendedAction:score<=2 || bad ? "Contact customer and resolve within 24 hours." : "Send thanks or loyalty offer." };
+    }
+    function ratingLabel(score){
+  return ({
+    0:"Select Rating",
+    1:"Poor",
+    2:"Needs work",
+    3:"Okay",
+    4:"Good",
+    5:"Excellent"
+  })[Number(score)] || "Select Rating";
+}
+    function renderStarControl(container, input, labelNode, compact = false){
+      container.innerHTML = [1,2,3,4,5].map(n => `<button type="button" class="${n <= Number(input.value) ? "active" : ""}" data-star="${n}" aria-label="${n} star">&#9733;</button>`).join("");
+      if(labelNode) labelNode.textContent = compact ? `${input.value}/5` : ratingLabel(input.value);
+      container.querySelectorAll("button").forEach(btn => btn.onclick = () => {
+        input.value = btn.dataset.star;
+        renderStarControl(container, input, labelNode, compact);
+      });
+}
+    function paintStars(){
+      renderStarControl(stars, rating, document.getElementById("ratingText"), false);
+      document.querySelectorAll("[data-star-target]").forEach(container => {
+        const input = document.getElementById(container.dataset.starTarget);
+        const label = document.querySelector(`[data-rating-label="${container.dataset.starTarget}"]`);
+        renderStarControl(container, input, label, true);
+      });
+    }
+    paintStars();
+    rating.value = "0";
+document.getElementById("foodQuality").value = "0";
+document.getElementById("delivery").value = "0";
+document.getElementById("service").value = "0";
+document.getElementById("valueForMoney").value = "0";
+paintStars();
+    document.getElementById("themeBtn").onclick = () => document.body.classList.toggle("dark");
+    function cleanPhone(value){
+      return String(value || "").replace(/\D/g, "").replace(/^91(?=\d{10}$)/, "");
+    }
+    function recentlySubmitted(key){
+      const stamp = Number(localStorage.getItem(key) || 0);
+      return stamp && Date.now() - stamp < 5 * 60 * 1000;
+    }
+    async function hasDuplicateFeedback({ orderId, phone }){
+      if(orderId){
+        try{
+          const snap = await getDocs(query(collection(db, "feedback"), where("orderId", "==", orderId), limit(1)));
+          if(!snap.empty) return true;
+        }catch(error){}
+      }
+      const localKey = `magneetozFeedback:${orderId || phone || "public"}`;
+      return recentlySubmitted(localKey);
+    }
+    document.getElementById("feedbackForm").onsubmit = async event => {
+      event.preventDefault();
+      const phone = cleanPhone(document.getElementById("phone").value);
+      const payload = {
+        customerName:document.getElementById("customerName").value.trim(),
+        phone,
+        orderId:document.getElementById("orderId").value.trim(),
+        rating:Number(rating.value),
+        foodQuality:Number(document.getElementById("foodQuality").value || rating.value),
+        delivery:Number(document.getElementById("delivery").value || rating.value),
+        service:Number(document.getElementById("service").value || rating.value),
+        valueForMoney:Number(document.getElementById("valueForMoney").value || rating.value),
+        message:document.getElementById("message").value.trim(),
+        source:directSharedLink ? (sourceMode || "shared_feedback_link") : "completed_order_page",
+        feedbackType:document.getElementById("orderId").value.trim() ? "order_feedback" : "general_feedback",
+        publicReviewOptIn:true,
+        reviewStatus:"pending",
+        rateLimitKey:`${phone || "anonymous"}:${new Date().toISOString().slice(0,10)}`
+      };
+      const requiredRatings = ["rating","foodQuality","delivery","service","valueForMoney"].map(id => Number(document.getElementById(id).value || 0));
+      if(requiredRatings.some(score => score < 1)){
+        document.getElementById("statusText").textContent = "Please select all ratings.";
+        return;
+      }
+      if(!payload.message){
+        document.getElementById("statusText").textContent = "Please write your feedback.";
+        return;
+      }
+      if(directSharedLink){
+        if(!payload.customerName){
+          document.getElementById("statusText").textContent = "Please enter your name.";
+          return;
+        }
+        if(!/^[6-9]\d{9}$/.test(phone)){
+          document.getElementById("statusText").textContent = "Please enter a valid 10 digit phone number.";
+          return;
+        }
+      }
+      if(await hasDuplicateFeedback(payload)){
+        document.getElementById("statusText").textContent = "Feedback already submitted. Thank you.";
+        return;
+      }
+      const ai = localAnalysis(payload.message, payload.rating);
+      document.getElementById("statusText").textContent = "Saving feedback...";
+      const ref = await addDoc(collection(db, "feedback"), { ...payload, comment:payload.message, userId:auth.currentUser?.uid || "", ai, sentiment:ai.sentiment, sentimentScore:ai.sentimentScore, emotion:ai.emotion, highPriority:ai.highPriority, createdAt:serverTimestamp() });
+      localStorage.setItem(`magneetozFeedback:${payload.orderId || payload.phone || "public"}`, String(Date.now()));
+      fetch("https://asia-south1-magneetoz.cloudfunctions.net/analyzeFeedbackAI", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ ...payload, feedbackId:ref.id }) }).catch(() => {});
+      resultBox.style.display = "block";
+      resultBox.innerHTML = `<strong>Thank you.</strong><br>Detected: ${ai.sentiment} / ${ai.emotion}${ai.highPriority ? "<br><b>Marked high priority for admin.</b>" : ""}`;
+      event.target.reset();
+["rating","foodQuality","delivery","service","valueForMoney"]
+.forEach(id => document.getElementById(id).value = "0");
+paintStars() ;
+      document.getElementById("statusText").textContent = "Feedback saved.";
+    };
+  </script>
+</body>
+</html>

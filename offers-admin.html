@@ -1,0 +1,283 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAGNEETOZ Offers Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;font-family:Poppins,system-ui,sans-serif;color:#fff;background:radial-gradient(circle at 12% 0%,rgba(255,123,0,.18),transparent 30%),linear-gradient(145deg,#070b10,#121821);padding:18px}
+.admin-auth-checking body{display:none}
+.admin-logout-btn{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:12px;padding:10px 14px;font-weight:800}
+.wrap{width:min(1180px,100%);margin:auto}
+.head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px}
+h1{margin:0;color:#ffd166;font-size:26px}
+.grid{display:grid;grid-template-columns:380px 1fr;gap:16px}
+.dashboard{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.metric{background:linear-gradient(145deg,#111827,#182233);border:1px solid #263241;border-radius:18px;padding:14px}
+.metric b{display:block;font-size:24px;color:#ffd166}.metric span{color:#aeb8c7;font-size:12px;font-weight:800}
+.panel,.card{background:linear-gradient(145deg,#111827,#182233);border:1px solid #263241;border-radius:20px;box-shadow:0 20px 70px rgba(0,0,0,.3)}
+.panel{padding:16px}
+label{display:block;color:#aeb8c7;font-size:12px;font-weight:800;margin:11px 0 6px}
+input,textarea{width:100%;border-radius:13px;border:1px solid #334155;background:#0b0f14;color:#fff;padding:11px;font:700 13px Poppins}
+textarea{min-height:88px;resize:vertical}
+button{border:0;border-radius:13px;min-height:44px;padding:0 14px;font:900 12px Poppins;cursor:pointer}
+.send{width:100%;margin-top:14px;background:linear-gradient(135deg,#ff7b00,#22c55e);color:#07100b}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.card{overflow:hidden}
+.card img{width:100%;height:132px;object-fit:cover;background:#0b0f14}
+.card div{padding:13px}.card h3{margin:0 0 6px}.card p{margin:0;color:#aeb8c7;font-size:12px;line-height:1.5}.code,.state{display:inline-block;margin-top:9px;color:#06110a;background:#ffd166;border-radius:999px;padding:6px 10px;font-weight:900;font-size:11px}.state.off{background:#ef4444;color:#fff}.state.on{background:#22c55e;color:#06110a}.card-actions{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px}.card-actions button{min-height:38px}.danger{background:#ef4444;color:#fff}.soft{background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.1)}.history{margin-top:18px}.history-list{display:grid;gap:8px}.history-item{background:#0b0f14;border:1px solid #263241;border-radius:14px;padding:10px;color:#aeb8c7;font-size:12px}
+@media(max-width:860px){.grid{grid-template-columns:1fr}.head{align-items:flex-start;flex-direction:column}}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header class="head">
+    <div>
+      <h1>Offer Broadcasts</h1>
+      <p style="margin:4px 0 0;color:#aeb8c7">Create Domino's-style promotions and notify logged-in customers.</p>
+    </div>
+  </header>
+  <section class="dashboard">
+    <div class="metric"><b id="totalOffers">0</b><span>Total offers</span></div>
+    <div class="metric"><b id="activeOffers">0</b><span>Active</span></div>
+    <div class="metric"><b id="broadcastOffers">0</b><span>Broadcasted</span></div>
+  </section>
+  <section class="grid">
+    <form class="panel" id="offerForm">
+      <label>Title</label>
+      <input id="title" required placeholder="Weekend Pizza Blast">
+      <label>Description</label>
+      <textarea id="description" required placeholder="Flat 50% off for selected customers."></textarea>
+      <label>Image URL</label>
+      <input id="image" placeholder="Optional offer image URL">
+      <label>Coupon Code</label>
+      <input id="couponCode" placeholder="VIPPIZZA">
+      <label>Expiry Date</label>
+      <input id="expiryDate" type="datetime-local">
+      <label>Notification Title</label>
+      <input id="notificationTitle" placeholder="MAGNEETOZ Deal Live">
+      <label>Notification Body</label>
+      <textarea id="notificationBody" placeholder="Tap to claim your offer."></textarea>
+      <input id="editingOfferId" type="hidden">
+      <button class="send" type="submit">Save Offer</button>
+    </form>
+    <section class="cards" id="offers"></section>
+  </section>
+  <section class="panel history">
+    <h2>Offer History</h2>
+    <div class="history-list" id="offerHistory"></div>
+  </section>
+</main>
+
+<script type="module">
+import { protectAdminPage, mountAdminLogout } from "./admin-guard.js";
+import { db } from "./firebase-config.js";
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  updateDoc,
+  Timestamp
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+protectAdminPage();
+mountAdminLogout(document.querySelector(".head"));
+
+const form = document.getElementById("offerForm");
+const list = document.getElementById("offers");
+const historyList = document.getElementById("offerHistory");
+let snapCache = [];
+let offerActionBusy = false;
+
+function value(id){ return document.getElementById(id).value.trim(); }
+function showAdminError(error, fallback = "Action failed. Please try again."){
+  console.error("[OFFERS_ADMIN]", error);
+  alert(error?.message || fallback);
+}
+async function confirmDanger(message){
+  if(window.MagneetozNotify?.confirm){
+    return window.MagneetozNotify.confirm(message, { title:"Confirm action", okText:"Delete" });
+  }
+  return confirm(message);
+}
+function expiryValue(ts){
+  if(!ts?.toDate) return "";
+  const date = ts.toDate();
+  date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+  return date.toISOString().slice(0, 16);
+}
+async function writeHistory(offerId, action, title){
+  await addDoc(collection(db, "offerHistory"), {
+    offerId,
+    action,
+    title:title || "",
+    createdAt:serverTimestamp()
+  });
+}
+async function safeWriteHistory(offerId, action, title){
+  try{
+    await writeHistory(offerId, action, title);
+  }catch(error){
+    console.warn("[OFFERS_ADMIN_HISTORY]", error);
+  }
+}
+function renderOffers(){
+  document.getElementById("totalOffers").textContent = snapCache.length;
+  document.getElementById("activeOffers").textContent = snapCache.filter(o => o.active !== false).length;
+  document.getElementById("broadcastOffers").textContent = snapCache.filter(o => o.broadcastRequested || o.broadcastStatus === "sent").length;
+  list.innerHTML = snapCache.filter(offer => offer.deleted !== true).map(offer => {
+    return `<article class="card" data-offer-id="${offer.id}">
+      <img src="${offer.image || "logo_tran.png"}" onerror="this.onerror=null;this.src='logo_tran.png';">
+      <div>
+        <h3>${offer.title || "Offer"}</h3>
+        <p>${offer.description || ""}</p>
+        ${offer.couponCode ? `<span class="code">${offer.couponCode}</span>` : ""}
+        <span class="state ${offer.active !== false ? "on" : "off"}">${offer.active !== false ? "Enabled" : "Disabled"}</span>
+        <p style="margin-top:8px">Broadcast: ${offer.broadcastStatus || "not sent"}</p>
+        <div class="card-actions">
+          <button onclick="broadcastOffer('${offer.id}')">Broadcast</button>
+          <button class="soft" onclick="editOffer('${offer.id}')">Edit</button>
+          <button class="soft" onclick="toggleOffer('${offer.id}', ${offer.active === false})">${offer.active === false ? "Enable" : "Disable"}</button>
+          <button class="danger" onclick="deleteOffer('${offer.id}')">Delete</button>
+        </div>
+      </div>
+    </article>`;
+  }).join("") || `<div class="history-item">No offers found.</div>`;
+}
+function removeStaleOffer(id){
+  snapCache = snapCache.filter(item => item.id !== id);
+  renderOffers();
+}
+
+form.addEventListener("submit", async event => {
+  event.preventDefault();
+  const expiry = value("expiryDate");
+  const editingId = value("editingOfferId");
+  const payload = {
+    title:value("title"),
+    description:value("description"),
+    image:value("image") || "logo_tran.png",
+    couponCode:value("couponCode").toUpperCase(),
+    expiryDate:expiry ? Timestamp.fromDate(new Date(expiry)) : null,
+    notificationTitle:value("notificationTitle") || value("title"),
+    notificationBody:value("notificationBody") || value("description"),
+    active:true,
+    updatedAt:serverTimestamp()
+  };
+  if(editingId){
+    await updateDoc(doc(db, "offers", editingId), payload);
+    await writeHistory(editingId, "edited", payload.title);
+  }else{
+    const created = await addDoc(collection(db, "offers"), {
+      ...payload,
+      broadcastRequested:false,
+      broadcastStatus:"draft",
+      createdAt:serverTimestamp()
+    });
+    await writeHistory(created.id, "created", payload.title);
+  }
+  form.reset();
+  alert(editingId ? "Offer updated." : "Offer saved.");
+});
+
+onSnapshot(query(collection(db, "offers"), orderBy("createdAt", "desc")), snap => {
+  snapCache = snap.docs.map(item => ({ id:item.id, ...item.data() }));
+  renderOffers();
+});
+
+window.broadcastOffer = async function(id){
+  const original = snapCache.find(item => item.id === id);
+  if(!original) return;
+  await updateDoc(doc(db, "offers", id), {
+    broadcastRequested:true,
+    broadcastStatus:"pending",
+    broadcastedAt:serverTimestamp(),
+    active:true
+  });
+  await writeHistory(id, "broadcast queued", original.title);
+  alert("Offer broadcast queued.");
+};
+
+window.editOffer = function(id){
+  const offer = snapCache.find(item => item.id === id);
+  if(!offer) return;
+  document.getElementById("editingOfferId").value = id;
+  document.getElementById("title").value = offer.title || "";
+  document.getElementById("description").value = offer.description || "";
+  document.getElementById("image").value = offer.image || "";
+  document.getElementById("couponCode").value = offer.couponCode || "";
+  document.getElementById("expiryDate").value = expiryValue(offer.expiryDate);
+  document.getElementById("notificationTitle").value = offer.notificationTitle || "";
+  document.getElementById("notificationBody").value = offer.notificationBody || "";
+  scrollTo({ top:0, behavior:"smooth" });
+};
+
+window.toggleOffer = async function(id, nextActive){
+  if(offerActionBusy) return;
+  offerActionBusy = true;
+  const offer = snapCache.find(item => item.id === id);
+  try{
+    const ref = doc(db, "offers", id);
+    const snap = await getDoc(ref);
+    if(!snap.exists()){
+      removeStaleOffer(id);
+      alert("This offer was already deleted. Removed it from the list.");
+      return;
+    }
+    await updateDoc(ref, {
+      active:!!nextActive,
+      disabledAt:nextActive ? null : serverTimestamp(),
+      updatedAt:serverTimestamp()
+    });
+    await safeWriteHistory(id, nextActive ? "enabled" : "disabled", offer?.title);
+  }catch(error){
+    showAdminError(error, "Offer status update failed.");
+  }finally{
+    offerActionBusy = false;
+  }
+};
+
+window.deleteOffer = async function(id){
+  if(offerActionBusy) return;
+  const offer = snapCache.find(item => item.id === id);
+  if(!(await confirmDanger("Delete this offer permanently?"))) return;
+  offerActionBusy = true;
+  try{
+    const ref = doc(db, "offers", id);
+    const snap = await getDoc(ref);
+    if(snap.exists()){
+      await updateDoc(ref, {
+        active:false,
+        deleted:true,
+        deletedAt:serverTimestamp(),
+        updatedAt:serverTimestamp()
+      });
+    }
+    await deleteDoc(ref);
+    removeStaleOffer(id);
+    await safeWriteHistory(id, "deleted", offer?.title);
+  }catch(error){
+    showAdminError(error, "Offer delete failed.");
+  }finally{
+    offerActionBusy = false;
+  }
+};
+
+onSnapshot(query(collection(db, "offerHistory"), orderBy("createdAt", "desc")), snap => {
+  historyList.innerHTML = snap.docs.slice(0, 20).map(item => {
+    const h = item.data();
+    return `<div class="history-item"><b>${h.action || "updated"}</b> ${h.title || h.offerId || ""}</div>`;
+  }).join("") || `<div class="history-item">No offer history yet.</div>`;
+});
+</script>
+  <script src="app-notifications.js"></script>
+</body>
+</html>

@@ -1,0 +1,1401 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Magneetoz Rider Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#080c12;
+  --card:rgba(18,24,33,.78);
+  --soft:rgba(255,255,255,.07);
+  --line:rgba(255,255,255,.1);
+  --text:#f8fafc;
+  --muted:#a6b0c2;
+  --green:#2dd36f;
+  --blue:#38bdf8;
+  --orange:#ff8a00;
+  --red:#ef4444;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  min-height:100vh;
+  font-family:Poppins,Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  color:var(--text);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(45,211,111,.2), transparent 28%),
+    radial-gradient(circle at 90% 8%, rgba(255,138,0,.18), transparent 30%),
+    linear-gradient(160deg,#080c12,#111923 55%,#080c12);
+}
+.app{width:min(1120px,100%);margin:0 auto;padding:18px 14px 88px}
+.top{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  margin-bottom:16px;
+}
+.brand h1{font-size:21px;margin:0;font-weight:800}
+.brand p{margin:2px 0 0;color:var(--muted);font-size:12px}
+.icon-btn{
+  border:1px solid var(--line);
+  background:var(--soft);
+  color:#fff;
+  border-radius:14px;
+  min-width:46px;
+  min-height:46px;
+  cursor:pointer;
+  font-size:18px;
+}
+.profile{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:14px;
+  margin-bottom:14px;
+}
+.glass{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:22px;
+  box-shadow:0 20px 70px rgba(0,0,0,.38);
+  backdrop-filter:blur(16px);
+}
+.profile-card{padding:18px}
+.profile-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.avatar{
+  width:54px;
+  height:54px;
+  border-radius:18px;
+  display:grid;
+  place-items:center;
+  color:#08100b;
+  background:linear-gradient(135deg,var(--green),#b9ffd2);
+  font-weight:900;
+  font-size:22px;
+}
+.identity{display:flex;align-items:center;gap:12px;min-width:0}
+.identity h2{font-size:18px;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.identity p{font-size:12px;color:var(--muted);margin:3px 0 0}
+.status-pill{
+  padding:7px 11px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:800;
+  white-space:nowrap;
+}
+.status-pill.online{background:rgba(45,211,111,.15);color:var(--green)}
+.status-pill.offline{background:rgba(239,68,68,.15);color:#ff8d8d}
+.toggle{
+  width:100%;
+  margin-top:16px;
+  min-height:54px;
+  border:0;
+  border-radius:18px;
+  font:800 15px Poppins,sans-serif;
+  cursor:pointer;
+  transition:.22s ease;
+}
+.toggle.go-online{background:linear-gradient(135deg,var(--green),#9bf6ba);color:#06110a}
+.toggle.go-offline{background:linear-gradient(135deg,#ff5f5f,var(--red));color:#fff}
+.metrics{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:10px;
+}
+.metric{padding:14px;text-align:center}
+.metric b{display:block;font-size:20px}
+.metric span{display:block;color:var(--muted);font-size:11px;margin-top:4px}
+.filters{
+  display:flex;
+  gap:8px;
+  overflow-x:auto;
+  padding:4px 0 14px;
+  scrollbar-width:none;
+}
+.wallet-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:14px 0}
+.wallet-card{padding:15px;position:relative;overflow:hidden}
+.wallet-card::after{content:"";position:absolute;inset:auto -20px -30px auto;width:90px;height:90px;border-radius:50%;background:rgba(255,138,0,.14)}
+.wallet-card span{display:block;color:var(--muted);font-size:11px}.wallet-card b{display:block;font-size:22px;margin-top:5px}
+.partner-panel{padding:16px;margin:14px 0}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
+.panel-head h3{margin:0;font-size:16px}.panel-head p{margin:3px 0 0;color:var(--muted);font-size:12px}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+.form-grid input{width:100%;min-height:46px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.07);color:#fff;padding:0 12px;font:600 13px Poppins,sans-serif}
+.primary-action{border:0;border-radius:14px;min-height:46px;padding:0 14px;background:linear-gradient(135deg,var(--orange),#ffd166);color:#111;font:900 12px Poppins,sans-serif;cursor:pointer}
+.history-list{display:grid;gap:8px;max-height:260px;overflow:auto}
+.history-item{display:flex;justify-content:space-between;gap:12px;padding:11px;border-radius:14px;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.07)}
+.history-item span{color:var(--muted);font-size:11px}.history-item b{font-size:13px}
+.filters::-webkit-scrollbar{display:none}
+.filter{
+  flex:0 0 auto;
+  border:1px solid var(--line);
+  background:var(--soft);
+  color:#fff;
+  border-radius:999px;
+  padding:10px 14px;
+  font:800 12px Poppins,sans-serif;
+  cursor:pointer;
+}
+.filter.active{background:#fff;color:#101720}
+.section-title{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin:2px 0 10px;
+}
+.section-title h3{font-size:15px;margin:0}
+.section-title span{font-size:12px;color:var(--muted)}
+.orders{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.order{
+  padding:15px;
+  overflow:hidden;
+  transition:.22s ease;
+}
+.order:hover{transform:translateY(-2px)}
+.order-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.order h4{margin:0 0 4px;font-size:16px}
+.order .customer{font-size:12px;color:var(--muted)}
+.badge{
+  padding:6px 9px;
+  border-radius:999px;
+  font-size:10px;
+  font-weight:900;
+  text-transform:uppercase;
+  white-space:nowrap;
+}
+.badge.assigned{background:rgba(56,189,248,.15);color:#7dd3fc}
+.badge.out{background:rgba(255,138,0,.15);color:#ffbd6b}
+.badge.delivered{background:rgba(45,211,111,.15);color:var(--green)}
+.badge.request{background:rgba(255,138,0,.16);color:#ffbd6b}
+.details{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:8px;
+  margin:14px 0;
+}
+.detail{
+  background:rgba(255,255,255,.055);
+  border:1px solid rgba(255,255,255,.07);
+  border-radius:14px;
+  padding:10px;
+  min-height:58px;
+}
+.detail span{display:block;color:var(--muted);font-size:10px;margin-bottom:4px}
+.detail b{font-size:13px}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+.actions button{
+  flex:1 1 120px;
+  min-height:44px;
+  border:0;
+  border-radius:14px;
+  cursor:pointer;
+  font:800 12px Poppins,sans-serif;
+}
+.btn-blue{background:linear-gradient(135deg,var(--blue),#2563eb);color:white}
+.btn-green{background:linear-gradient(135deg,var(--green),#86efac);color:#06110a}
+.btn-red{background:linear-gradient(135deg,#ff5f5f,var(--red));color:white}
+.btn-soft{background:rgba(255,255,255,.09);color:white;border:1px solid var(--line)!important}
+.empty{
+  padding:28px 18px;
+  text-align:center;
+  color:var(--muted);
+  border:1px dashed rgba(255,255,255,.16);
+  border-radius:20px;
+  background:rgba(255,255,255,.04);
+}
+.lock{
+  min-height:100vh;
+  display:grid;
+  place-items:center;
+  padding:20px;
+  text-align:center;
+}
+.lock .glass{max-width:420px;padding:24px}
+.lock h2{margin:0 0 8px}
+.lock p{color:var(--muted);font-size:13px;line-height:1.55}
+@media (min-width:760px){
+  .app{padding:26px 22px 90px}
+  .profile{grid-template-columns:1.1fr .9fr}
+}
+@media (max-width:420px){
+  .metrics{grid-template-columns:1fr 1fr}
+  .metric:last-child{grid-column:span 2}
+  .details{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="lock" id="guard">
+  <div class="glass">
+    <h2>Checking rider access</h2>
+    <p>Please wait while Magneetoz verifies your secure delivery session.</p>
+  </div>
+</div>
+
+<main class="app" id="app" style="display:none">
+  <header class="top">
+    <div class="brand">
+      <h1>Rider Dashboard</h1>
+      <p>Live assignments and delivery actions</p>
+    </div>
+    <button class="icon-btn" id="logoutBtn" title="Logout">⎋</button>
+  </header>
+
+  <section class="profile">
+    <div class="glass profile-card">
+      <div class="profile-head">
+        <div class="identity">
+          <div class="avatar" id="avatar">R</div>
+          <div>
+            <h2 id="riderName">Rider</h2>
+            <p id="riderPhone">Secure OTP session</p>
+          </div>
+        </div>
+        <span class="status-pill offline" id="onlineBadge">Offline</span>
+      </div>
+      <button class="toggle go-online" id="onlineToggle">Go Online</button>
+      <button class="toggle notify-toggle" id="notifyToggle" style="margin-top:10px;background:rgba(255,255,255,.09);color:white;border:1px solid rgba(255,255,255,.12)">Enable Delivery Alerts</button>
+    </div>
+
+    <div class="metrics">
+      <div class="glass metric">
+        <b id="activeDeliveries">0</b>
+        <span>Active</span>
+      </div>
+      <div class="glass metric">
+        <b id="earnings">₹0</b>
+        <span>Earnings</span>
+      </div>
+      <div class="glass metric">
+        <b id="completed">0</b>
+        <span>Delivered</span>
+      </div>
+      <div class="glass metric">
+        <b id="cashCollected">₹0</b>
+        <span>Cash Collected</span>
+      </div>
+      <div class="glass metric">
+        <b id="pendingCash">₹0</b>
+        <span>Pending Company Deposit</span>
+      </div>
+      <div class="glass metric">
+        <b id="onlineCollected">₹0</b>
+        <span>Online Payments</span>
+      </div>
+    </div>
+  </section>
+
+  <nav class="filters" id="filters">
+    <button class="filter active" data-filter="Requests">Requests</button>
+    <button class="filter" data-filter="Assigned">Assigned</button>
+    <button class="filter" data-filter="Out For Delivery">Out For Delivery</button>
+    <button class="filter" data-filter="Delivered">Delivered</button>
+  </nav>
+
+  <div class="section-title">
+    <h3 id="listTitle">Assigned orders</h3>
+    <span id="orderCount">0 orders</span>
+  </div>
+  <section class="orders" id="orders"></section>
+</main>
+
+  <section class="wallet-grid">
+    <div class="glass wallet-card"><span>Today earnings</span><b id="todayEarnings">₹0</b></div>
+    <div class="glass wallet-card"><span>Weekly earnings</span><b id="weeklyEarnings">₹0</b></div>
+    <div class="glass wallet-card"><span>Monthly earnings</span><b id="monthlyEarnings">₹0</b></div>
+    <div class="glass wallet-card"><span>Pending payout</span><b id="pendingSettlement">₹0</b></div>
+    <div class="glass wallet-card"><span>COD due to company</span><b id="companyDue">₹0</b></div>
+    <div class="glass wallet-card"><span>Completed payouts</span><b id="completedSettlements">₹0</b></div>
+  </section>
+
+  <section class="glass partner-panel">
+    <div class="panel-head">
+      <div><h3>Account Security</h3><p>Create or change your password. OTP remains available as fallback.</p></div>
+      <button class="primary-action" id="resetPasswordBtn">Reset Password</button>
+    </div>
+    <div class="form-grid">
+      <input id="profilePassword" type="password" autocomplete="new-password" placeholder="New password">
+      <button class="primary-action" id="changePasswordBtn">Change Password</button>
+    </div>
+  </section>
+
+  <section class="glass partner-panel">
+    <div class="panel-head">
+      <div><h3>Payment Methods</h3><p>UPI and bank details are visible only inside your rider session and admin settlement review.</p></div>
+      <button class="primary-action" id="savePayoutMethod">Save</button>
+    </div>
+    <div class="form-grid">
+      <input id="upiId" placeholder="UPI ID">
+      <input id="accountHolderName" placeholder="Account holder name">
+      <input id="bankAccount" placeholder="Bank account number">
+      <input id="ifscCode" placeholder="IFSC code">
+      <input id="panNumber" placeholder="PAN (future ready)">
+      <input id="aadhaarNumber" placeholder="Aadhaar (future ready)">
+    </div>
+  </section>
+
+  <section class="glass partner-panel">
+    <div class="panel-head">
+      <div><h3>Settlements & Payout History</h3><p>RazorpayX-ready records for weekly, manual, or instant payout approval.</p></div>
+      <button class="primary-action" id="requestWithdrawal">Request Withdrawal</button>
+    </div>
+    <div class="history-list" id="payoutHistory"></div>
+  </section>
+
+  
+
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script type="module">
+import { auth, db, messagingReady } from "./firebase-config.js";
+import { browserLocalPersistence, EmailAuthProvider, getIdToken, linkWithCredential, onAuthStateChanged, sendPasswordResetEmail, setPersistence, signOut, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js";
+import {
+  collection,
+  addDoc,
+  doc,
+  getDoc,
+  increment,
+  onSnapshot,
+  query,
+  where,
+  orderBy,
+  runTransaction,
+  arrayUnion,
+  updateDoc,
+  setDoc,
+  serverTimestamp,
+  deleteField
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const shop = { lat:28.465283, lng:77.502608 };
+const RAZORPAY_KEY_ID = "rzp_live_SVyEXhZPb4HTJf";
+const FUNCTIONS_BASE_URL = "https://asia-south1-magneetoz.cloudfunctions.net";
+let rider = null;
+let riderRef = null;
+let riderUnsub = null;
+let ordersUnsub = null;
+let requestOrdersUnsub = null;
+let payoutUnsub = null;
+let riderAuthNullTimer = null;
+let allOrders = [];
+let assignedOrderDocs = [];
+let requestOrderDocs = [];
+let currentFilter = "Requests";
+let riderRazorpayInFlight = false;
+let PRICING = {
+  BASE_FARE:25,
+  PAID_PER_KM:5,
+  PER_KM_RATE:5,
+  MIN_PAYOUT:25,
+  PLATFORM_FEE:0,
+  NIGHT_BONUS_ENABLED:false,
+  NIGHT_BONUS_AMOUNT:0,
+  PEAK_BONUS_ENABLED:false,
+  PEAK_BONUS_AMOUNT:0,
+  RAIN_BONUS_ENABLED:false,
+  RAIN_BONUS_AMOUNT:0,
+  DISTANCE_BONUS_AFTER_KM:8,
+  DISTANCE_BONUS_PER_KM:0
+};
+
+function riderLoginEmail(phone){
+  return `rider.${phone}@magneetoz.local`;
+}
+const ACTIVE_STATUSES = new Set([
+  "Rider Accepted",
+  "Picked Up",
+  "Out For Delivery",
+  "Reached Nearby",
+  "Cash Collected",
+  "Payment Settled",
+  "Delivery Code Pending",
+  "Collect Payment",
+  "Payment Completed",
+  "Assigned To Delivery Boy"
+]);
+const STATUS_FLOW = ["Pending","Accepted","Preparing","Searching For Rider","Rider Accepted","Picked Up","Out For Delivery","Reached Nearby","Cash Collected","Payment Settled","Delivery Code Pending","Payment Completed","Delivered"];
+
+const guard = document.getElementById("guard");
+const app = document.getElementById("app");
+const ordersEl = document.getElementById("orders");
+const els = {
+  name:document.getElementById("riderName"),
+  phone:document.getElementById("riderPhone"),
+  avatar:document.getElementById("avatar"),
+  badge:document.getElementById("onlineBadge"),
+  toggle:document.getElementById("onlineToggle"),
+  notify:document.getElementById("notifyToggle"),
+  active:document.getElementById("activeDeliveries"),
+  earnings:document.getElementById("earnings"),
+  completed:document.getElementById("completed"),
+  cashCollected:document.getElementById("cashCollected"),
+  pendingCash:document.getElementById("pendingCash"),
+  onlineCollected:document.getElementById("onlineCollected"),
+  todayEarnings:document.getElementById("todayEarnings"),
+  weeklyEarnings:document.getElementById("weeklyEarnings"),
+  monthlyEarnings:document.getElementById("monthlyEarnings"),
+  pendingSettlement:document.getElementById("pendingSettlement"),
+  companyDue:document.getElementById("companyDue"),
+  completedSettlements:document.getElementById("completedSettlements"),
+  payoutHistory:document.getElementById("payoutHistory"),
+  count:document.getElementById("orderCount"),
+  title:document.getElementById("listTitle")
+};
+let publicVapidKey = "";
+const VAPID_KEY_RE = /^[A-Za-z0-9_-]{80,}$/;
+
+function formatCurrency(amount){
+  return new Intl.NumberFormat("en-IN", {
+    style:"currency",
+    currency:"INR",
+    maximumFractionDigits:0
+  }).format(Number(amount) || 0);
+}
+
+function isCashPayment(method){
+  return ["CASH", "COD"].includes(String(method || "").toUpperCase());
+}
+
+function isOnlinePayment(method){
+  return ["UPI", "ONLINE"].includes(String(method || "").toUpperCase());
+}
+
+function isPaidOnlineOrder(order = {}){
+  const method = String(order.paymentMethod || order.paymentMode || "").toLowerCase();
+  const status = String(order.paymentStatus || "").toLowerCase();
+  return (method === "online" || method === "upi")
+    && (status === "paid" || order.paymentCaptured === true || !!order.razorpayPaymentId);
+}
+
+function isPaymentReady(order = {}){
+  const status = String(order.paymentStatus || "").toLowerCase();
+  return isPaidOnlineOrder(order) || status === "paid" || status === "collected";
+}
+
+function prepaidOtpVerified(order = {}){
+  return order.deliveryOtpStatus === "verified" || order.deliveryCompletionMode === "prepaid_customer_otp";
+}
+
+function isUnpaidOnlineOrder(order = {}){
+  const method = String(order.paymentMethod || order.paymentMode || "").toLowerCase();
+  return (method === "online" || method === "upi") && !isPaidOnlineOrder(order);
+}
+
+function logStructured(scope, detail = {}){
+  console.info(`[${scope}]`, detail);
+}
+
+async function callRiderFunction(name, payload = {}, timeoutMs = 25000){
+  const user = auth.currentUser;
+  if(!user) throw new Error("Please login again.");
+  const token = await getIdToken(user, true);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try{
+    const response = await fetch(`${FUNCTIONS_BASE_URL}/${name}`, {
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "Authorization":`Bearer ${token}`
+      },
+      body:JSON.stringify(payload),
+      signal:controller.signal
+    });
+    const data = await response.json().catch(() => ({}));
+    if(!response.ok || data.ok === false) throw new Error(data.error || "Request failed.");
+    return data;
+  }finally{
+    clearTimeout(timer);
+  }
+}
+
+function normalizeStatus(status){
+  if(status === "Assigned To Delivery Boy") return "Rider Accepted";
+  if(status === "Collect Payment") return "Reached Nearby";
+  return status || "Pending";
+}
+
+function statusRank(status){
+  const index = STATUS_FLOW.indexOf(normalizeStatus(status));
+  return index < 0 ? 0 : index;
+}
+
+async function updateAssignedOrderStatus(orderId, nextStatus, extra = {}){
+  const orderRef = doc(db, "orders", orderId);
+  await runTransaction(db, async transaction => {
+    const snap = await transaction.get(orderRef);
+    if(!snap.exists()) throw new Error("Order not found.");
+    const order = snap.data();
+    if(order.assignedRiderId !== rider?.riderId && order.riderId !== rider?.riderId){
+      throw new Error("This order is not assigned to you.");
+    }
+    if(statusRank(nextStatus) < statusRank(order.status)){
+      throw new Error(`Cannot move order backwards from ${order.status} to ${nextStatus}.`);
+    }
+    transaction.update(orderRef, {
+      status:nextStatus,
+      orderStatus:nextStatus,
+      lastStatusUpdatedAt:serverTimestamp(),
+      ...extra
+    });
+  });
+  logStructured("ORDER STATUS", { orderId, status:nextStatus, riderId:rider?.riderId });
+}
+
+function redirectLogin(){
+  window.location.replace("rider-login.html");
+}
+
+function showBlocked(message){
+  guard.innerHTML = `<div class="glass"><h2>Access paused</h2><p>${message}</p></div>`;
+  guard.style.display = "grid";
+  app.style.display = "none";
+}
+
+async function loadPricing(){
+  try{
+    const snap = await getDoc(doc(db,"settings","pricing"));
+    if(snap.exists()) PRICING = { ...PRICING, ...snap.data() };
+  }catch(error){
+    console.warn("Pricing fallback used", error);
+  }
+}
+
+onSnapshot(doc(db,"settings","notifications"), snap => {
+  publicVapidKey = snap.exists() ? String(snap.data().publicVapidKey || "").trim() : "";
+});
+
+async function enableDeliveryAlerts(){
+  if(!riderRef) return;
+  if(!("Notification" in window)){
+    alert("Notifications are not supported on this device.");
+    return;
+  }
+  if(!VAPID_KEY_RE.test(publicVapidKey)){
+    alert("FCM VAPID key is missing or invalid. Add a valid publicVapidKey in settings/notifications.");
+    return;
+  }
+  const permission = await Notification.requestPermission();
+  if(permission !== "granted"){
+    alert("Notification permission was not granted.");
+    return;
+  }
+  const messaging = await messagingReady;
+  if(!messaging){
+    alert("Firebase messaging is not supported in this browser.");
+    return;
+  }
+  const registration = await navigator.serviceWorker.register("./firebase-messaging-sw.js");
+  const token = await getToken(messaging, {
+    vapidKey:publicVapidKey,
+    serviceWorkerRegistration:registration
+  });
+  await updateDoc(riderRef, {
+    fcmToken:token,
+    fcmTokens:arrayUnion(token),
+    notificationsEnabled:true,
+    notificationTokenUpdatedAt:serverTimestamp()
+  });
+  els.notify.textContent = "Delivery Alerts Enabled";
+}
+
+messagingReady.then(messaging => {
+  if(!messaging) return;
+  onMessage(messaging, payload => {
+    const data = payload.data || {};
+    const audio = new Audio("ring2.mp3");
+    audio.play().catch(() => {});
+    if(Notification.permission === "granted"){
+      const notification = new Notification(payload.notification?.title || "New Delivery Request", {
+        body:payload.notification?.body || data.body || "A new order is waiting.",
+        icon:"logo_tran.png",
+        badge:"logo_tran.png",
+        tag:data.orderId || "magneetoz-delivery",
+        requireInteraction:true,
+        vibrate:[220,90,220,90,320],
+        data,
+        actions:[
+          { action:"accept", title:"Accept" },
+          { action:"reject", title:"Reject" }
+        ]
+      });
+      notification.onclick = () => {
+        window.focus();
+        if(data.orderId){
+          currentFilter = "Requests";
+          renderOrders();
+        }
+      };
+    }
+  });
+});
+
+function calcFinancials(order, distance){
+  const km = Math.max(1, Math.ceil(Number(distance) || 1));
+  let riderEarning = 0;
+  let companyProfit = 0;
+  let bonus = 0;
+  if(order.deliveryCharge && order.deliveryCharge > 0){
+    const base = PRICING.BASE_FARE || 25;
+    const variable = Math.max(0, km - 3) * (PRICING.PAID_PER_KM || 5);
+    riderEarning = base + variable;
+    companyProfit = order.deliveryCharge - riderEarning;
+  }else{
+    riderEarning = km * (PRICING.PER_KM_RATE || 5);
+    companyProfit = -riderEarning;
+  }
+  const hour = new Date().getHours();
+  if(PRICING.NIGHT_BONUS_ENABLED && (hour >= 22 || hour < 6)) bonus += Number(PRICING.NIGHT_BONUS_AMOUNT) || 0;
+  if(PRICING.PEAK_BONUS_ENABLED && ((hour >= 12 && hour <= 14) || (hour >= 19 && hour <= 22))) bonus += Number(PRICING.PEAK_BONUS_AMOUNT) || 0;
+  if(PRICING.RAIN_BONUS_ENABLED) bonus += Number(PRICING.RAIN_BONUS_AMOUNT) || 0;
+  if(km > (Number(PRICING.DISTANCE_BONUS_AFTER_KM) || 8)){
+    bonus += (km - (Number(PRICING.DISTANCE_BONUS_AFTER_KM) || 8)) * (Number(PRICING.DISTANCE_BONUS_PER_KM) || 0);
+  }
+  riderEarning = Math.max(riderEarning, PRICING.MIN_PAYOUT || 25);
+  riderEarning += bonus;
+  companyProfit -= PRICING.PLATFORM_FEE || 0;
+  companyProfit -= bonus;
+  return { riderEarning, companyProfit, distance:km, bonus };
+}
+
+function statusGroup(status){
+  if(status === "Delivered") return "Delivered";
+  if(status === "Out For Delivery" || status === "Reached Nearby" || status === "Collect Payment" || status === "Cash Collected" || status === "Payment Settled" || status === "Delivery Code Pending" || status === "Payment Completed") return "Out For Delivery";
+  return "Assigned";
+}
+
+function assignedToMe(order){
+  return order.riderId === rider?.riderId ||
+    order.assignedRiderId === rider?.riderId ||
+    order.riderPhone === rider?.phone ||
+    order.assignedRider?.phone === rider?.phone ||
+    order.assignedRider?.id === rider?.riderId;
+}
+
+function requestedForMe(order){
+  const request = order.riderRequest || {};
+  const candidates = request.candidateRiderIds || [];
+  const declined = request.declinedRiderIds || [];
+  return !!(rider?.riderId &&
+    request.status === "searching" &&
+    candidates.includes(rider.riderId) &&
+    !declined.includes(rider.riderId) &&
+    !rider.currentActiveOrderId &&
+    !order.assignedRiderId &&
+    !order.riderId);
+}
+
+function orderDistance(order){
+  if(order.actualRoadDistance) return Number(order.actualRoadDistance);
+  if(order.deliveryDistance && order.distanceSource === "google_routes_backend") return Number(order.deliveryDistance);
+  return 0;
+}
+
+function renderRider(){
+  els.name.textContent = rider.name || "Magneetoz Rider";
+  els.phone.textContent = rider.phone || "";
+  els.avatar.textContent = (rider.name || "R").trim().charAt(0).toUpperCase();
+  els.earnings.textContent = formatCurrency(rider.totalEarnings);
+  els.completed.textContent = rider.totalOrders || 0;
+  els.cashCollected.textContent = formatCurrency(rider.totalCashCollected || 0);
+  els.pendingCash.textContent = formatCurrency(rider.pendingCashSubmission || 0);
+  els.onlineCollected.textContent = formatCurrency(rider.onlineCollected || 0);
+  els.todayEarnings.textContent = formatCurrency(rider.todayEarnings || 0);
+  els.weeklyEarnings.textContent = formatCurrency(rider.weeklyEarnings || 0);
+  els.monthlyEarnings.textContent = formatCurrency(rider.monthlyEarnings || 0);
+  els.pendingSettlement.textContent = formatCurrency(rider.pendingSettlement || 0);
+  els.companyDue.textContent = formatCurrency(rider.companyDue || rider.pendingCashSubmission || 0);
+  els.completedSettlements.textContent = formatCurrency(rider.completedSettlements || 0);
+  ["upiId","accountHolderName","bankAccount","ifscCode","panNumber","aadhaarNumber"].forEach(id => {
+    const el = document.getElementById(id);
+    if(el && !el.value) el.value = rider[id] || "";
+  });
+  const online = !!(rider.online || rider.isOnline);
+  els.badge.textContent = online ? "Online" : "Offline";
+  els.badge.className = `status-pill ${online ? "online" : "offline"}`;
+  els.toggle.textContent = online ? "Go Offline" : "Go Online";
+  els.toggle.className = `toggle ${online ? "go-offline" : "go-online"}`;
+}
+
+function listenPayoutHistory(){
+  if(!rider?.riderId) return;
+  const q = query(collection(db,"riderPayouts"), where("riderId","==",rider.riderId), orderBy("createdAt","desc"));
+  payoutUnsub?.();
+  payoutUnsub = onSnapshot(q, snap => {
+    const rows = snap.docs.map(item => ({ id:item.id, ...item.data() })).slice(0, 12);
+    els.payoutHistory.innerHTML = rows.map(row => `
+      <div class="history-item">
+        <div><b>${formatCurrency(row.amount)}</b><br><span>${row.payoutMethod || "Settlement"} • ${row.payoutStatus || "Pending"}</span></div>
+        <span>${row.transactionId || row.id}</span>
+      </div>
+    `).join("") || `<div class="empty">No payout history yet.</div>`;
+  }, error => console.warn("[FIRESTORE LISTENER] Rider payouts failed", error));
+}
+
+function renderOrders(){
+  if(!rider) return;
+  const mine = allOrders.filter(assignedToMe);
+  const activeCount = mine.filter(o => ACTIVE_STATUSES.has(o.status)).length;
+  els.active.textContent = activeCount;
+
+  const filtered = currentFilter === "Requests"
+    ? allOrders.filter(requestedForMe)
+    : mine.filter(o => statusGroup(o.status) === currentFilter);
+  els.title.textContent = `${currentFilter} orders`;
+  els.count.textContent = `${filtered.length} order${filtered.length === 1 ? "" : "s"}`;
+
+  if(!filtered.length){
+    ordersEl.innerHTML = `<div class="empty">${rider.currentActiveOrderId && currentFilter === "Requests" ? "Complete current delivery to receive new orders." : `No ${currentFilter.toLowerCase()} orders right now.`}</div>`;
+    return;
+  }
+
+  ordersEl.innerHTML = filtered.map(order => {
+    const dist = orderDistance(order);
+    const financials = calcFinancials(order, dist || 1);
+    const group = currentFilter === "Requests" ? "Requests" : statusGroup(order.status);
+    const prepaidOnline = isPaidOnlineOrder(order);
+    const unpaidOnline = isUnpaidOnlineOrder(order);
+    const prepaidOtpActive = prepaidOnline && order.deliveryOtpStatus === "active";
+    const prepaidOtpDone = prepaidOnline && prepaidOtpVerified(order);
+    const paymentReady = isPaymentReady(order);
+    const isCashOrder = isCashPayment(order.paymentMethod || order.paymentMode);
+    const cashSettlementDone = isCashOrder && order.cashSettlementPending === false && !!order.codSettlementStatus;
+    const settlementAdjusted = Number(order.companySettlementPayoutAdjusted || 0);
+    const settlementNetPaid = Number(order.companySettlementNetPaid ?? order.companyRazorpaySettlementAmount ?? 0);
+    const amountToCollect = prepaidOnline ? 0 : Number(order.amountToCollect ?? order.totalAmount ?? order.finalAmount ?? order.total ?? 0);
+    const activeLocked = !!rider.currentActiveOrderId && rider.currentActiveOrderId !== order.id;
+    const badgeClass = group === "Requests" ? "request" : group === "Delivered" ? "delivered" : group === "Out For Delivery" ? "out" : "assigned";
+    return `
+      <article class="glass order">
+        <div class="order-top">
+          <div>
+            <h4>#${order.orderNumber || order.orderId || order.id}</h4>
+            <div class="customer">${order.customerName || "Customer"} • ${order.phone || ""}</div>
+          </div>
+          <span class="badge ${badgeClass}">${group === "Requests" ? "New Request" : (order.status || "Assigned")}</span>
+        </div>
+        <div class="details">
+          <div class="detail"><span>Distance</span><b>${dist ? `${dist} km` : "Pending"}</b></div>
+          <div class="detail"><span>Earning</span><b>${formatCurrency(financials.riderEarning)}</b></div>
+          <div class="detail"><span>Payment</span><b>${order.paymentMethod || order.paymentMode || "Order"}</b></div>
+          <div class="detail"><span>Payment Status</span><b>${prepaidOnline ? "Payment Received ✅" : unpaidOnline ? "Online Payment Pending" : (order.paymentStatus || "Pending")}</b></div>
+          <div class="detail"><span>Amount To Collect</span><b>${formatCurrency(amountToCollect)}</b></div>
+          <div class="detail"><span>Total</span><b>${formatCurrency(order.totalAmount || order.total)}</b></div>
+          ${isCashOrder && (cashSettlementDone || settlementAdjusted) ? `<div class="detail"><span>Payout Adjusted</span><b>${formatCurrency(settlementAdjusted)}</b></div><div class="detail"><span>Company Paid</span><b>${formatCurrency(settlementNetPaid)}</b></div>` : ""}
+        </div>
+        <div class="actions">
+          ${order.location?.lat ? `<button class="btn-soft" onclick="openCustomer(${order.location.lat},${order.location.lng})">Navigate</button>` : ""}
+          ${order.phone ? `<button class="btn-soft" onclick="callUser('${order.phone}')">Call</button>` : ""}
+          ${group === "Requests" ? `<button class="btn-green" ${activeLocked ? "disabled" : ""} onclick="acceptRequest('${order.id}')">${activeLocked ? "Complete current delivery first" : "Accept"}</button><button class="btn-red" onclick="rejectRequest('${order.id}')">Reject</button>` : ""}
+          ${group === "Assigned" ? `<button class="btn-blue" onclick="pickupOrder('${order.id}')">Picked Up</button>` : ""}
+          ${order.status === "Picked Up" ? `<button class="btn-blue" onclick="startDelivery('${order.id}')">Out For Delivery</button>` : ""}
+          ${order.status === "Out For Delivery" ? `<button class="btn-green" onclick="reachNearby('${order.id}')">Reached Nearby</button>` : ""}
+          ${(order.status === "Reached Nearby" || order.status === "Collect Payment") && !prepaidOnline && !unpaidOnline ? `<button class="btn-soft" onclick="markCashReceived('${order.id}')">Cash Received</button><button class="btn-blue" onclick="collectOnline('${order.id}')">Online Payment</button>` : ""}
+          ${(order.status === "Reached Nearby" || order.status === "Collect Payment") && prepaidOnline && !prepaidOtpActive && !prepaidOtpDone ? `<button class="btn-blue" onclick="requestPrepaidDeliveryOtp('${order.id}')">Request Delivery OTP</button>` : ""}
+          ${prepaidOtpActive ? `<button class="btn-green" onclick="completeWithCustomerCode('${order.id}')">Enter Delivery OTP</button>` : ""}
+          ${isCashOrder && String(order.paymentStatus || "").toLowerCase() === "collected" && !cashSettlementDone ? `<button class="btn-blue" onclick="payCompanyAndDeliver('${order.id}', ${dist || 1}, this)">Settle Company</button><button class="btn-soft" onclick="requestExceptionCode('${order.id}')">Use Customer Code</button>` : ""}
+          ${order.status === "Delivery Code Pending" ? `<button class="btn-green" onclick="completeWithCustomerCode('${order.id}')">Enter Customer Code</button>` : ""}
+          ${paymentReady && (!isCashOrder || cashSettlementDone) && !prepaidOnline ? `<button class="btn-green" onclick="deliver('${order.id}', ${dist || 1})">Delivered</button>` : ""}
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+function listenOrders(){
+
+  ordersUnsub?.();
+  requestOrdersUnsub?.();
+
+  const assignedQuery = query(
+    collection(db,"orders"),
+    where("assignedRiderId","==",rider.riderId)
+  );
+  const requestQuery = query(
+    collection(db,"orders"),
+    where("riderRequest.candidateRiderIds","array-contains",rider.riderId)
+  );
+
+  const rebuildOrders = () => {
+    const byId = new Map();
+    [...assignedOrderDocs, ...requestOrderDocs].forEach(d => byId.set(d.id, {
+      id:d.id,
+      ...d.data()
+    }));
+    allOrders = Array.from(byId.values());
+    renderOrders();
+  };
+
+  ordersUnsub = onSnapshot(assignedQuery,(snap)=>{
+    assignedOrderDocs = snap.docs;
+    rebuildOrders();
+    logStructured("FIRESTORE LISTENER", { name:"rider-assigned-orders", count:snap.size });
+  }, error => console.warn("[FIRESTORE LISTENER] Rider assigned orders failed", error));
+
+  requestOrdersUnsub = onSnapshot(requestQuery,(snap)=>{
+    requestOrderDocs = snap.docs;
+    rebuildOrders();
+    logStructured("FIRESTORE LISTENER", { name:"rider-request-orders", count:snap.size });
+  }, error => console.warn("[FIRESTORE LISTENER] Rider request orders failed", error));
+}
+
+function enterDashboard(){
+  guard.style.display = "none";
+  app.style.display = "block";
+  renderRider();
+  listenOrders();
+  listenPayoutHistory();
+  if(Notification.permission === "granted" && !rider.fcmToken){
+    enableDeliveryAlerts();
+  }
+}
+
+async function getRiderLocation(){
+  if(!navigator.geolocation) return null;
+  return new Promise(resolve => {
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({
+        lat:pos.coords.latitude,
+        lng:pos.coords.longitude,
+        updatedAt:new Date().toISOString()
+      }),
+      () => resolve(null),
+      { enableHighAccuracy:true, timeout:8000, maximumAge:60000 }
+    );
+  });
+}
+
+async function setOnline(online){
+  if(!riderRef) return;
+  const location = online ? await getRiderLocation() : null;
+  await updateDoc(riderRef, {
+    online,
+    isOnline:online,
+    ...(location ? { location } : {}),
+    lastSeenAt:serverTimestamp()
+  });
+}
+
+async function saveProfilePassword(){
+  const input = document.getElementById("profilePassword");
+  const password = input?.value || "";
+  const user = auth.currentUser;
+  if(!user || !riderRef) return;
+  if(password.length < 6){
+    alert("Password must be at least 6 characters.");
+    return;
+  }
+  const phoneDigits = String(rider.phoneDigits || rider.phone || user.phoneNumber || "").replace(/\D/g, "").slice(-10);
+  const loginEmail = user.email || rider.loginEmail || riderLoginEmail(phoneDigits);
+  try{
+    if(!user.email){
+      await linkWithCredential(user, EmailAuthProvider.credential(loginEmail, password));
+    }else{
+      await updatePassword(user, password);
+    }
+    await updateDoc(riderRef, {
+      passwordLoginEnabled:true,
+      loginEmail,
+      phoneDigits,
+      updatedAt:serverTimestamp()
+    });
+    if(phoneDigits){
+      await setDoc(doc(db, "riderAccounts", phoneDigits), {
+        riderId:user.uid,
+        phoneDigits,
+        loginEmail,
+        passwordLoginEnabled:true,
+        updatedAt:serverTimestamp()
+      }, { merge:true });
+    }
+    input.value = "";
+    alert("Password saved.");
+  }catch(error){
+    alert(error?.message || "Unable to save password. Please login again with OTP and retry.");
+  }
+}
+
+async function resetProfilePassword(){
+  const email = auth.currentUser?.email || rider?.loginEmail;
+  if(email && !email.endsWith("@magneetoz.local")){
+    await sendPasswordResetEmail(auth, email);
+    alert("Password reset email sent.");
+    return;
+  }
+  alert("Use OTP fallback on the rider login page, then set a new password.");
+}
+
+window.startDelivery = async function(orderId){
+  await updateAssignedOrderStatus(orderId, "Out For Delivery", {
+    outForDeliveryAt:serverTimestamp()
+  });
+};
+
+window.pickupOrder = async function(orderId){
+  await updateAssignedOrderStatus(orderId, "Picked Up", {
+    pickedUpAt:serverTimestamp()
+  });
+};
+
+window.acceptRequest = async function(orderId){
+  if(!rider) return;
+  if(rider.currentActiveOrderId){
+    alert("Complete current delivery first");
+    return;
+  }
+  const orderRef = doc(db,"orders",orderId);
+  const riderDocRef = riderRef;
+  try{
+    await runTransaction(db, async (transaction) => {
+      const riderSnap = await transaction.get(riderDocRef);
+      if(!riderSnap.exists()) throw new Error("Rider profile unavailable.");
+      if(riderSnap.data().currentActiveOrderId) throw new Error("Complete current delivery first");
+      const orderSnap = await transaction.get(orderRef);
+      if(!orderSnap.exists()) throw new Error("Order no longer exists.");
+      const order = orderSnap.data();
+      if(order.assignedRiderId || order.riderId) throw new Error("Another rider already accepted this order.");
+      const request = order.riderRequest || {};
+      if(!(request.candidateRiderIds || []).includes(rider.riderId)) throw new Error("This request is no longer available.");
+      transaction.update(orderRef, {
+        status:"Rider Accepted",
+        orderStatus:"Rider Accepted",
+        sentToRider:true,
+        riderId:rider.riderId,
+        assignedRiderId:rider.riderId,
+        riderName:rider.name || rider.riderName || "Magneetoz Rider",
+        riderPhone:rider.phone || rider.phoneDigits || "",
+        assignedRider:{
+          id:rider.riderId,
+          name:rider.name || rider.riderName || "Magneetoz Rider",
+          phone:rider.phone || rider.phoneDigits || ""
+        },
+        riderStatus:"Accepted by rider",
+        riderRequest:{
+          ...request,
+          status:"assigned",
+          acceptedRiderId:rider.riderId,
+          acceptedAt:serverTimestamp()
+        },
+        assignedAt:serverTimestamp()
+      });
+      transaction.update(riderDocRef, {
+        currentActiveOrderId:orderId,
+        activeOrderStartedAt:serverTimestamp()
+      });
+    });
+    logStructured("RIDER ASSIGNMENT", { orderId, riderId:rider.riderId, riderName:rider.name });
+    currentFilter = "Assigned";
+    document.querySelectorAll(".filter").forEach(el => el.classList.toggle("active", el.dataset.filter === "Assigned"));
+    renderOrders();
+  }catch(error){
+    alert(error.message || "Request is no longer available.");
+  }
+};
+
+window.rejectRequest = async function(orderId){
+  if(!rider) return;
+  await updateDoc(doc(db,"orders",orderId), {
+    "riderRequest.declinedRiderIds":arrayUnion(rider.riderId),
+    "riderRequest.lastRejectedAt":serverTimestamp(),
+    riderStatus:"Rider skipped, searching next nearby rider"
+  });
+};
+
+window.reachNearby = async function(orderId){
+  await updateAssignedOrderStatus(orderId, "Reached Nearby", {
+    reachedNearbyAt:serverTimestamp()
+  });
+};
+
+window.markCashReceived = async function(orderId){
+  try{
+    await callRiderFunction("riderMarkCashReceived", { orderId });
+  }catch(error){
+    alert(error?.message || "Unable to record cash collection.");
+  }
+};
+
+window.collectOnline = async function(orderId){
+  const orderSnap = await getDoc(doc(db,"orders",orderId));
+  if(!orderSnap.exists()) return;
+  const order = orderSnap.data();
+  if(typeof Razorpay === "undefined"){
+    alert("Payment gateway is loading. Please try again.");
+    return;
+  }
+  if(riderRazorpayInFlight){
+    alert("Payment is already opening. Please wait.");
+    return;
+  }
+  riderRazorpayInFlight = true;
+  let session;
+  try{
+    session = await callRiderFunction("createRiderPaymentSession", { orderId, type:"customer_online" }, 20000);
+  }catch(error){
+    riderRazorpayInFlight = false;
+    alert(error?.message || "Unable to start online payment.");
+    return;
+  }
+  const rzp = new Razorpay({
+    key:session.keyId || RAZORPAY_KEY_ID,
+    amount:Math.round(Number(session.amount || order.totalAmount || order.finalAmount || 0) * 100),
+    currency:"INR",
+    name:"Magneetoz",
+    description:`Doorstep payment for order #${order.orderNumber || orderId}`,
+    order_id:session.razorpayOrderId,
+    notes:{
+      orderId,
+      orderNumber:String(order.orderNumber || ""),
+      riderId:rider.riderId,
+      source:"rider_customer_online_collection"
+    },
+    method:{
+      upi:true,
+      card:true,
+      netbanking:true,
+      wallet:true
+    },
+    handler:async response => {
+      try{
+        await callRiderFunction("verifyRiderPayment", {
+          paymentSessionId:session.paymentSessionId,
+          razorpay_order_id:response.razorpay_order_id,
+          razorpay_payment_id:response.razorpay_payment_id,
+          razorpay_signature:response.razorpay_signature
+        });
+        alert("Payment verified successfully");
+      }catch(error){
+        alert(error?.message || "Payment done, but order update failed. Please contact admin with Razorpay payment id.");
+      }finally{
+        riderRazorpayInFlight = false;
+      }
+    },
+    modal:{
+      ondismiss:() => {
+        riderRazorpayInFlight = false;
+      }
+    }
+  });
+  rzp.on("payment.failed", response => {
+    riderRazorpayInFlight = false;
+    console.warn("[RAZORPAY CUSTOMER PAYMENT FAILED]", {
+      orderId,
+      reason:response?.error?.reason,
+      description:response?.error?.description,
+      paymentId:response?.error?.metadata?.payment_id
+    });
+    alert((response?.error?.description || "Payment failed. Please try again.") + "\n\nIf money was deducted, Razorpay will refund it automatically. Do not mark this order paid.");
+  });
+  try{
+    rzp.open();
+  }catch(error){
+    riderRazorpayInFlight = false;
+    alert(error?.message || "Payment gateway could not open. Please try again.");
+  }
+};
+
+window.payCompanyAndDeliver = async function(orderId, distance, button){
+  const orderRef = doc(db,"orders",orderId);
+  const orderSnap = await getDoc(orderRef);
+  if(!orderSnap.exists()) return;
+  const order = orderSnap.data();
+  if(!isCashPayment(order.paymentMethod || order.paymentMode) || String(order.paymentStatus || "").toLowerCase() !== "collected"){
+    alert("Cash payment must be collected first.");
+    return;
+  }
+  const result = calcFinancials(order, distance);
+  const codAmount = order.totalAmount || order.finalAmount || 0;
+  const companyAmount = Math.max(0, codAmount - result.riderEarning);
+  if(order.companyRazorpayPaymentId || order.codSettlementStatus){
+    alert("Company settlement is already recorded. Tap Delivered to complete the order.");
+    return;
+  }
+  if(typeof Razorpay === "undefined"){
+    alert("Razorpay is loading. Please try again.");
+    return;
+  }
+  if(riderRazorpayInFlight){
+    alert("Payment is already opening. Please wait.");
+    return;
+  }
+  riderRazorpayInFlight = true;
+  const originalText = button?.textContent || "Settle Company";
+  if(button){
+    button.disabled = true;
+    button.textContent = "Opening Razorpay...";
+  }
+  let session;
+  try{
+    session = await callRiderFunction("createRiderPaymentSession", { orderId, type:"cod_company_settlement" }, 20000);
+  }catch(error){
+    riderRazorpayInFlight = false;
+    if(button){
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+    alert(error?.message || "Unable to start settlement payment.");
+    return;
+  }
+  if(session.noPaymentRequired){
+    riderRazorpayInFlight = false;
+    if(button){
+      button.disabled = false;
+      button.textContent = "Delivered";
+    }
+    alert(`Company settlement completed by adjusting ${formatCurrency(session.payoutAdjusted || 0)} from your pending payout. Tap Delivered to complete the order.`);
+    return;
+  }
+  const settlementAmount = Number(session.amount || companyAmount || 0);
+  const rzp = new Razorpay({
+    key:session.keyId || RAZORPAY_KEY_ID,
+    amount:Math.round(settlementAmount * 100),
+    currency:"INR",
+    name:"Magneetoz",
+    description:`COD company settlement for order #${order.orderNumber || orderId}`,
+    order_id:session.razorpayOrderId,
+    method:{
+      upi:true,
+      card:true,
+      netbanking:true,
+      wallet:true
+    },
+    notes:{
+      orderId,
+      orderNumber:String(order.orderNumber || ""),
+      riderId:rider.riderId,
+      settlementType:"cod_company_due"
+    },
+    prefill:{
+      name:rider.name || rider.riderName || "",
+      contact:String(rider.phone || rider.phoneDigits || "").replace(/\D/g, "").slice(-10)
+    },
+    handler:async response => {
+      try{
+        await callRiderFunction("verifyRiderPayment", {
+          paymentSessionId:session.paymentSessionId,
+          razorpay_order_id:response.razorpay_order_id,
+          razorpay_payment_id:response.razorpay_payment_id,
+          razorpay_signature:response.razorpay_signature
+        });
+        alert("Company settlement verified. Tap Delivered to complete the order.");
+      }catch(error){
+        alert(error?.message || "Payment done, but order update failed. Please contact admin with Razorpay payment id.");
+      }finally{
+        riderRazorpayInFlight = false;
+        if(button){
+          button.disabled = false;
+          button.textContent = "Delivered";
+        }
+      }
+    },
+    modal:{
+      ondismiss:() => {
+        riderRazorpayInFlight = false;
+        if(button){
+          button.disabled = false;
+          button.textContent = originalText;
+        }
+      }
+    }
+  });
+  rzp.on("payment.failed", response => {
+    riderRazorpayInFlight = false;
+    console.warn("[RAZORPAY COMPANY SETTLEMENT FAILED]", {
+      orderId,
+      reason:response?.error?.reason,
+      description:response?.error?.description,
+      paymentId:response?.error?.metadata?.payment_id
+    });
+    if(button){
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+    alert(response?.error?.description || "Razorpay settlement failed. Please try again.");
+  });
+  try{
+    rzp.open();
+  }catch(error){
+    riderRazorpayInFlight = false;
+    if(button){
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+    alert(error?.message || "Payment gateway could not open. Please try again.");
+  }
+};
+
+window.requestExceptionCode = async function(orderId){
+  try{
+    await callRiderFunction("requestDeliveryExceptionCode", { orderId });
+    alert("Customer delivery code generated. Ask the customer for the 4 digit code shown on their tracking page.");
+  }catch(error){
+    alert(error?.message || "Unable to generate delivery code.");
+  }
+};
+
+window.requestPrepaidDeliveryOtp = async function(orderId){
+  try{
+    await callRiderFunction("requestPrepaidDeliveryCode", { orderId });
+    alert("Delivery OTP generated. Ask the customer for the 4 digit OTP shown on their order status page.");
+  }catch(error){
+    alert(error?.message || "Unable to generate delivery OTP.");
+  }
+};
+
+window.completeWithCustomerCode = async function(orderId){
+  const code = prompt("Enter the 4 digit code/OTP shown to the customer");
+  if(!code) return;
+  try{
+    await callRiderFunction("completeDeliveryWithCode", { orderId, code:String(code).trim() }, 25000);
+    alert("Delivery completed after customer OTP verification.");
+  }catch(error){
+    alert(error?.message || "Unable to complete delivery with this code.");
+  }
+};
+
+window.deliver = async function(orderId){
+  try{
+    await callRiderFunction("completeRiderDelivery", { orderId }, 25000);
+    alert("Delivery completed.");
+  }catch(error){
+    alert(error?.message || "Unable to mark delivered.");
+  }
+};
+
+document.getElementById("savePayoutMethod").addEventListener("click", async () => {
+  if(!riderRef) return;
+  await updateDoc(riderRef, {
+    upiId:document.getElementById("upiId").value.trim(),
+    accountHolderName:document.getElementById("accountHolderName").value.trim(),
+    bankAccount:document.getElementById("bankAccount").value.trim(),
+    ifscCode:document.getElementById("ifscCode").value.trim().toUpperCase(),
+    panNumber:document.getElementById("panNumber").value.trim().toUpperCase(),
+    aadhaarNumber:document.getElementById("aadhaarNumber").value.trim(),
+    payoutEnabled:false,
+    payoutMethodUpdatedAt:serverTimestamp()
+  });
+  alert("Payment method saved for admin verification.");
+});
+
+document.getElementById("requestWithdrawal").addEventListener("click", async () => {
+  if(!rider?.riderId) return;
+  const amount = Number(rider.pendingSettlement || 0);
+  if(amount <= 0){
+    alert("No pending payout available.");
+    return;
+  }
+  await addDoc(collection(db,"riderSettlements"), {
+    riderId:rider.riderId,
+    riderName:rider.name || "Magneetoz Rider",
+    amount,
+    payoutMethod:rider.upiId ? "UPI" : "BANK",
+    payoutStatus:"requested",
+    createdAt:serverTimestamp()
+  });
+  alert("Withdrawal request sent to admin.");
+});
+
+window.openCustomer = function(lat,lng){
+  window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, "_blank");
+};
+
+window.callUser = function(phone){
+  window.location.href = `tel:${phone}`;
+};
+
+document.getElementById("filters").addEventListener("click", (event) => {
+  const btn = event.target.closest(".filter");
+  if(!btn) return;
+  document.querySelectorAll(".filter").forEach(el => el.classList.remove("active"));
+  btn.classList.add("active");
+  currentFilter = btn.dataset.filter;
+  renderOrders();
+});
+
+els.toggle.addEventListener("click", () => setOnline(!(rider.online || rider.isOnline)));
+els.notify.addEventListener("click", enableDeliveryAlerts);
+document.getElementById("changePasswordBtn")?.addEventListener("click", saveProfilePassword);
+document.getElementById("resetPasswordBtn")?.addEventListener("click", resetProfilePassword);
+document.getElementById("logoutBtn").addEventListener("click", async () => {
+  try{ await setOnline(false); }catch(_){}
+  localStorage.removeItem("riderId");
+  localStorage.removeItem("riderPhone");
+  localStorage.removeItem("riderName");
+  await signOut(auth);
+  redirectLogin();
+});
+
+window.addEventListener("pagehide", () => {
+  riderUnsub?.();
+  ordersUnsub?.();
+  requestOrdersUnsub?.();
+  payoutUnsub?.();
+});
+
+await loadPricing();
+await setPersistence(auth, browserLocalPersistence).catch(() => {});
+
+onAuthStateChanged(auth, (user) => {
+  if(!user){
+    if(riderAuthNullTimer) clearTimeout(riderAuthNullTimer);
+    riderAuthNullTimer = setTimeout(() => {
+      if(auth.currentUser) return;
+      riderUnsub?.();
+      ordersUnsub?.();
+      requestOrdersUnsub?.();
+      payoutUnsub?.();
+      redirectLogin();
+    }, 2500);
+    return;
+  }
+  if(riderAuthNullTimer){
+    clearTimeout(riderAuthNullTimer);
+    riderAuthNullTimer = null;
+  }
+  riderUnsub?.();
+  ordersUnsub?.();
+  requestOrdersUnsub?.();
+  payoutUnsub?.();
+  riderRef = doc(db, "riders", user.uid);
+  riderUnsub = onSnapshot(riderRef, (snap) => {
+    if(!snap.exists()){
+      redirectLogin();
+      return;
+    }
+    const data = snap.data();
+    rider = {
+      riderId:user.uid,
+      ...data,
+      name:data.name || data.riderName || localStorage.getItem("riderName") || "Magneetoz Rider",
+      phone:data.phone || data.phoneNumber || data.phoneDigits || user.phoneNumber || ""
+    };
+    localStorage.setItem("riderId", user.uid);
+    localStorage.setItem("riderPhone", rider.phone || user.phoneNumber || "");
+    localStorage.setItem("riderName", rider.name || "Magneetoz Rider");
+    if(!rider.active){
+      showBlocked("Your rider account is disabled by admin.");
+      return;
+    }
+    if(!rider.approved){
+      showBlocked("Your OTP login is verified, but admin approval is still pending.");
+      return;
+    }
+    enterDashboard();
+    const params = new URLSearchParams(location.search);
+    const pushAction = params.get("pushAction");
+    const orderId = params.get("orderId");
+    if(pushAction === "accept" && orderId) acceptRequest(orderId);
+    if(pushAction === "reject" && orderId) rejectRequest(orderId);
+    if(!pushAction && orderId){
+      currentFilter = "Requests";
+      document.querySelectorAll(".filter").forEach(el => el.classList.toggle("active", el.dataset.filter === "Requests"));
+      renderOrders();
+    }
+  });
+});
+</script>
+  <script src="app-notifications.js"></script>
+</body>
+</html>

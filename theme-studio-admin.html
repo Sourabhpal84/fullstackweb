@@ -1,0 +1,241 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAGNEETOZ Theme Studio</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Poppins,system-ui,sans-serif;background:#080d14;color:#fff;padding:18px}.admin-auth-checking body{display:none}.wrap{max-width:1180px;margin:auto}.head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:18px}.admin-logout-btn,button{border:0;border-radius:13px;min-height:42px;padding:0 14px;font-weight:900;cursor:pointer}.admin-logout-btn,.soft{background:#1d2938;color:#fff}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}.card,.panel{background:linear-gradient(145deg,#111827,#1b2534);border:1px solid #2b3648;border-radius:20px;padding:16px;box-shadow:0 18px 60px rgba(0,0,0,.28)}.preview{height:110px;border-radius:16px;margin-bottom:12px;border:1px solid rgba(255,255,255,.12);display:grid;place-items:center;font-weight:900}.actions{display:flex;gap:8px;flex-wrap:wrap}.apply{background:linear-gradient(135deg,#ff7b00,#ffd166);color:#111}.panel{margin-top:18px}textarea{width:100%;min-height:170px;border-radius:16px;background:#0b0f14;color:#fff;border:1px solid #334155;padding:12px;font:700 12px ui-monospace,Consolas,monospace}.builder{display:grid;grid-template-columns:1.05fr .95fr;gap:16px;align-items:start}.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}label{display:grid;gap:7px;color:#cbd5e1;font-size:12px;font-weight:800}input,select{width:100%;height:42px;border-radius:12px;border:1px solid #334155;background:#0b0f14;color:#fff;padding:0 10px;font-weight:800}input[type=color]{padding:4px}.food-preview{background:var(--menu-card-bg);border:1px solid var(--menu-card-border);box-shadow:var(--menu-card-shadow);border-radius:24px;padding:14px;max-width:280px}.food-preview .img{height:120px;border-radius:18px;background:linear-gradient(135deg,#ff7b00,#22c55e);margin-bottom:14px}.food-preview h3{width:max-content;max-width:100%;padding:8px 12px;border-radius:12px;background:var(--menu-title-bg);color:var(--menu-title-text);margin:0 0 8px;font-size:26px;line-height:1.08;font-weight:950}.food-preview p{color:var(--menu-desc-text);font-weight:800;margin:0 0 12px}.food-preview .price{display:inline-flex;padding:5px 9px;border-radius:999px;background:var(--menu-price-bg);color:var(--menu-price-text);font-weight:950}.food-preview del{color:var(--menu-old-price-text);margin-left:8px}.food-preview .qty{display:flex;justify-content:space-between;align-items:center;margin:12px 0;padding:8px;background:var(--menu-qty-bg);color:var(--menu-qty-text);border:1px solid var(--menu-card-border)}.food-preview .qty b{background:var(--menu-qty-btn-bg);color:var(--menu-qty-btn-text);border-radius:999px;padding:2px 9px}.food-preview .add{display:inline-flex;padding:10px 22px;border-radius:999px;background:var(--menu-add-bg);color:var(--menu-add-text);font-weight:900}@media(max-width:820px){.builder{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header class="head"><div><h1>Advanced Theme Studio</h1><p style="color:#aeb8c7">Mobile-style theme switching for cart, cards, buttons, forms, header, footer, and page backgrounds.</p></div><button class="soft" onclick="location.href='offers-admin.html'">Live Offers</button></header>
+  <section class="grid" id="themes"></section>
+  <section class="panel">
+    <h2>Website Mode & Hero Text</h2>
+    <div class="form-grid">
+      <label>User website mode
+        <select id="siteMode"><option value="dark">Dark Mode</option><option value="light">Light Mode</option></select>
+      </label>
+      <label>Hero kicker<input id="heroKicker" value="Live kitchen • fast delivery • secure checkout"></label>
+      <label>Hero main title<input id="heroTitle" value="Cravings, Delivered Like Magic"></label>
+      <label>Hero subtitle<input id="heroSubtitle" value="Hot MAGNEETOZ favourites, cinematic tracking, and a checkout that feels effortless."></label>
+      <label>Primary button text<input id="heroPrimaryButton" value="Explore Menu"></label>
+      <label>Secondary button text<input id="heroSecondaryButton" value="Smart Search"></label>
+    </div>
+    <div class="actions" style="margin-top:14px">
+      <button class="apply" id="applyModeHero">Apply Mode & Hero</button>
+    </div>
+  </section>
+  <section class="panel builder">
+    <div>
+      <h2>Card Style Customizer</h2>
+      <p style="color:#aeb8c7">Customize Light card and Dark card separately. Website will use the selected mode above.</p>
+      <label style="max-width:240px;margin-bottom:12px">Editing style for
+        <select id="cardMode"><option value="light">Light card style</option><option value="dark">Dark card style</option></select>
+      </label>
+      <div class="form-grid" id="cardStyleForm"></div>
+      <div class="actions" style="margin-top:14px">
+        <button class="apply" id="applyCardStyle">Apply Card Style</button>
+        <button class="soft" id="loadCurrentCardStyle">Load Current</button>
+        <button class="soft" id="resetCardStyle">Reset Premium</button>
+      </div>
+    </div>
+    <div class="food-preview" id="foodPreview">
+      <div class="img"></div>
+      <h3>Pizza Item Name</h3>
+      <p>Fresh loaded cheese, herbs and MAGNEETOZ flavour.</p>
+      <div><span class="price">₹99</span><del>₹180</del></div>
+      <div class="qty"><b>-</b><strong>1</strong><b>+</b></div>
+      <span class="add">Add +</span>
+    </div>
+  </section>
+  <section class="panel">
+    <h2>Custom Variables JSON</h2>
+    <textarea id="themeJson"></textarea>
+    <div class="actions"><button class="apply" id="saveCustom">Save Custom Theme</button><button class="soft" id="exportTheme">Export Current</button><button class="soft" id="revertTheme">Revert Default</button></div>
+  </section>
+</main>
+<script type="module">
+import { protectAdminPage, mountAdminLogout } from "./admin-guard.js";
+import { db } from "./firebase-config.js";
+import { doc, getDoc, serverTimestamp, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+protectAdminPage(); mountAdminLogout(document.querySelector(".head"));
+const presets=[
+["Light Theme","light",{"--brand":"#ff7b00","--accent":"#22c55e","--bg":"#fffaf5","--page-bg":"linear-gradient(145deg,#fffaf5,#ffffff 55%,#fff1db)","--theme-ambient":"linear-gradient(90deg,rgba(255,123,0,.08) 1px,transparent 1px),linear-gradient(rgba(255,123,0,.06) 1px,transparent 1px)","--white":"#ffffff","--dark":"#172033","--gray":"#5b6472","--light-gray":"#fff1db","--border":"#fed7aa"}],
+["Dark Theme","dark",{"--brand":"#ff7b00","--accent":"#38bdf8","--bg":"#070b10","--page-bg":"linear-gradient(145deg,#070b10,#111827)","--theme-ambient":"radial-gradient(circle at 20% 0,rgba(255,123,0,.18),transparent 24rem)","--white":"#111827","--dark":"#f8fafc","--gray":"#cbd5e1","--light-gray":"#1f2937","--border":"#334155"}],
+["Glassmorphism Theme","dark",{"--brand":"#8b5cf6","--accent":"#22d3ee","--bg":"#0f172a","--page-bg":"url('logo_tran.png'),linear-gradient(145deg,#0f172a,#172554)","--theme-ambient":"radial-gradient(circle at 30% 10%,rgba(139,92,246,.28),transparent 20rem),radial-gradient(circle at 80% 35%,rgba(34,211,238,.18),transparent 20rem)","--white":"rgba(255,255,255,.12)","--dark":"#f8fafc","--gray":"#dbeafe","--light-gray":"rgba(255,255,255,.08)","--border":"rgba(255,255,255,.18)"}],
+["Neon Theme","dark",{"--brand":"#00ffcc","--accent":"#ff2bd6","--bg":"#050812","--page-bg":"linear-gradient(135deg,#050812,#10102a 55%,#12051e)","--theme-ambient":"radial-gradient(circle at 12% 8%,rgba(0,255,204,.22),transparent 18rem),radial-gradient(circle at 90% 20%,rgba(255,43,214,.22),transparent 20rem)","--white":"#101827","--dark":"#f8fafc","--gray":"#bae6fd","--light-gray":"#142033","--border":"#164e63"}],
+["Luxury Theme","dark",{"--brand":"#d4af37","--accent":"#f8e7a1","--bg":"#050505","--page-bg":"linear-gradient(145deg,#020202,#17130a)","--theme-ambient":"radial-gradient(circle at 78% 20%,rgba(212,175,55,.22),transparent 22rem)","--white":"#111","--dark":"#fff7d6","--gray":"#e7d99e","--light-gray":"#17130a","--border":"#4a3b15"}],
+["Founder Particle Theme","dark",{"--brand":"#d8aa4f","--accent":"#ffe1a0","--bg":"#050507","--page-bg":"radial-gradient(circle at 20% 4%,rgba(216,170,79,.18),transparent 28rem),radial-gradient(circle at 90% 18%,rgba(255,255,255,.08),transparent 28rem),linear-gradient(145deg,#050507,#090a0e 50%,#050507)","--theme-ambient":"radial-gradient(circle at 28% 42%,rgba(216,170,79,.18),transparent 24rem)","--particle-bg":"founder-gold","--white":"#111827","--dark":"#f8f4e8","--gray":"#d6ccba","--light-gray":"#17130a","--border":"rgba(255,225,160,.18)"}],
+["Modern Restaurant Theme","light",{"--brand":"#16a34a","--accent":"#ff7b00","--bg":"#f7fff6","--page-bg":"linear-gradient(145deg,#f7fff6,#fff7ed)","--theme-ambient":"radial-gradient(circle at 80% 10%,rgba(22,163,74,.16),transparent 22rem)","--white":"#ffffff","--dark":"#173322","--gray":"#53645a","--light-gray":"#ecfdf5","--border":"#bbf7d0"}],
+["Gradient Theme","light",{"--brand":"#ec4899","--accent":"#06b6d4","--bg":"#fff1f7","--page-bg":"linear-gradient(135deg,#fff1f7,#e0f2fe 52%,#fff7ed)","--theme-ambient":"linear-gradient(115deg,rgba(236,72,153,.10),rgba(6,182,212,.10),rgba(255,123,0,.10))","--white":"#ffffff","--dark":"#31243a","--gray":"#6b5f72","--light-gray":"#fde7f0","--border":"#fbcfe8"}],
+["Premium Black Theme","dark",{"--brand":"#f8fafc","--accent":"#ff7b00","--bg":"#000000","--page-bg":"linear-gradient(145deg,#000,#111 55%,#050505)","--theme-ambient":"radial-gradient(circle at 50% 0,rgba(255,255,255,.12),transparent 20rem)","--white":"#0a0a0a","--dark":"#f8fafc","--gray":"#d1d5db","--light-gray":"#151515","--border":"#2a2a2a"}],
+["Festival Theme","light",{"--brand":"#ef4444","--accent":"#facc15","--bg":"#fff7ed","--page-bg":"radial-gradient(circle at 18% 15%,rgba(250,204,21,.22),transparent 18rem),radial-gradient(circle at 84% 18%,rgba(239,68,68,.16),transparent 18rem),linear-gradient(145deg,#fff7ed,#ffffff)","--theme-ambient":"linear-gradient(45deg,rgba(239,68,68,.08) 25%,transparent 25%,transparent 50%,rgba(250,204,21,.08) 50%,rgba(250,204,21,.08) 75%,transparent 75%)","--white":"#ffffff","--dark":"#351b1b","--gray":"#725d48","--light-gray":"#fef3c7","--border":"#fecaca"}]
+];
+const host=document.getElementById("themes");
+const lightCardDefaults={
+"--site-background":"radial-gradient(circle at 18% 0%,rgba(255,123,0,.10),transparent 24rem),linear-gradient(145deg,#f8fafc,#ffffff 46%,#f3f6fb)",
+"--light-menu-card-bg":"linear-gradient(145deg,#fff8ed,#eadfce)",
+"--light-menu-card-border":"#f0d9bd",
+"--light-menu-title-bg":"#ffffff",
+"--light-menu-title-text":"#111827",
+"--light-menu-desc-text":"#334155",
+"--light-menu-badge-bg":"#ffe8cf",
+"--light-menu-badge-text":"#9a3412",
+"--light-menu-price-bg":"#fff0d8",
+"--light-menu-price-text":"#ea580c",
+"--light-menu-old-price-text":"#64748b",
+"--light-menu-qty-bg":"#ffffff",
+"--light-menu-qty-text":"#111827",
+"--light-menu-qty-btn-bg":"#0f172a",
+"--light-menu-qty-btn-text":"#22c55e",
+"--light-menu-add-bg":"linear-gradient(135deg,#ff7b00,#22c55e)",
+"--light-menu-add-text":"#ffffff"
+};
+const darkCardDefaults={
+"--site-background":"radial-gradient(circle at 20% 4%,rgba(216,170,79,.18),transparent 28rem),radial-gradient(circle at 90% 18%,rgba(255,255,255,.08),transparent 28rem),linear-gradient(145deg,#050507,#090a0e 50%,#050507)",
+"--dark-menu-card-bg":"linear-gradient(145deg,#111827,#172033)",
+"--dark-menu-card-border":"#263241",
+"--dark-menu-title-bg":"rgba(255,255,255,.10)",
+"--dark-menu-title-text":"#ffffff",
+"--dark-menu-desc-text":"#e2e8f0",
+"--dark-menu-badge-bg":"rgba(255,123,0,.18)",
+"--dark-menu-badge-text":"#ffb86b",
+"--dark-menu-price-bg":"rgba(255,123,0,.22)",
+"--dark-menu-price-text":"#ffedd5",
+"--dark-menu-old-price-text":"#cbd5e1",
+"--dark-menu-qty-bg":"rgba(255,255,255,.08)",
+"--dark-menu-qty-text":"#ffffff",
+"--dark-menu-qty-btn-bg":"#111827",
+"--dark-menu-qty-btn-text":"#22c55e",
+"--dark-menu-add-bg":"linear-gradient(135deg,#ff7b00,#22c55e)",
+"--dark-menu-add-text":"#ffffff"
+};
+const cardFields=[
+["--site-background","Overall background","text"],
+["menu-card-bg","Card background","text"],
+["menu-card-border","Card border","color"],
+["menu-title-bg","Item name background","color"],
+["menu-title-text","Item name text","color"],
+["menu-desc-text","Description text","color"],
+["menu-price-bg","Price background","color"],
+["menu-price-text","Price text","color"],
+["menu-old-price-text","Old price text","color"],
+["menu-qty-bg","Quantity background","color"],
+["menu-qty-text","Quantity text","color"],
+["menu-qty-btn-bg","Plus/minus background","color"],
+["menu-qty-btn-text","Plus/minus text","color"],
+["menu-add-bg","Add button background","text"],
+["menu-add-text","Add button text","color"]
+];
+function previewStyle(vars){
+  const ambient = vars["--theme-ambient"] ? `${vars["--theme-ambient"]},` : "";
+  return `background:${ambient}${vars["--page-bg"] || vars["--bg"]};color:${vars["--dark"]};border-color:${vars["--border"]}`;
+}
+async function applyTheme(name, mode, variables){await setDoc(doc(db,"settings","theme"),{name,mode,variables,updatedAt:serverTimestamp()},{merge:true});alert("Theme applied globally.");}
+host.innerHTML=presets.map((p,i)=>`<article class="card"><div class="preview" style="${previewStyle(p[2])}">${p[0]}${p[2]["--particle-bg"] ? "<small style='display:block;font-size:10px;margin-top:6px;opacity:.8'>Animated particles</small>" : ""}</div><div class="actions"><button class="apply" onclick="applyPreset(${i})">Apply</button><button class="soft" onclick="loadPreset(${i})">Preview JSON</button></div></article>`).join("");
+window.applyPreset=i=>{
+  const preset=presets[i];
+  applyTheme(preset[0],preset[1],{...preset[2],...getCardValues()});
+};
+window.loadPreset=i=>themeJson.value=JSON.stringify({name:presets[i][0],mode:presets[i][1],variables:presets[i][2]},null,2);
+saveCustom.onclick=async()=>{const t=JSON.parse(themeJson.value);await applyTheme(t.name||"Custom",t.mode||"dark",t.variables||{})};
+exportTheme.onclick=async()=>{const snap=await getDoc(doc(db,"settings","theme"));themeJson.value=JSON.stringify(snap.exists()?snap.data():{},null,2)};
+revertTheme.onclick=()=>applyTheme("Light Theme","light",presets[0][2]);
+function activeCardDefaults(){
+  return cardMode.value === "dark" ? darkCardDefaults : lightCardDefaults;
+}
+function fullCardKey(key){
+  if(key === "--site-background") return key;
+  return `--${cardMode.value}-${key}`;
+}
+function activePreviewKey(key){
+  if(key === "--site-background") return key;
+  return `--${key}`;
+}
+function paintCardForm(values=activeCardDefaults()){
+  const defaults=activeCardDefaults();
+  cardStyleForm.innerHTML=cardFields.map(([key,label,type])=>{
+    const realKey=fullCardKey(key);
+    return `<label>${label}<input data-card-var="${realKey}" data-preview-var="${activePreviewKey(key)}" type="${type}" value="${values[realKey] || defaults[realKey] || ""}"></label>`;
+  }).join("");
+  updateFoodPreview();
+  cardStyleForm.querySelectorAll("input").forEach(input=>input.addEventListener("input",updateFoodPreview));
+}
+function getCardValues(){
+  return Object.fromEntries([...cardStyleForm.querySelectorAll("[data-card-var]")].map(input=>[input.dataset.cardVar,input.value.trim()]));
+}
+function getCardValuesForMode(mode){
+  const entries = [...cardStyleForm.querySelectorAll("[data-card-var]")].map(input => {
+    const previewKey = input.dataset.previewVar;
+    const key = previewKey === "--site-background" ? previewKey : `--${mode}-${previewKey.slice(2)}`;
+    return [key, input.value.trim()];
+  });
+  return Object.fromEntries(entries);
+}
+function updateFoodPreview(){
+  [...cardStyleForm.querySelectorAll("[data-card-var]")].forEach(input=>{
+    if(input.value.trim()) foodPreview.style.setProperty(input.dataset.previewVar,input.value.trim());
+  });
+}
+async function readCurrentTheme(){
+  const snap=await getDoc(doc(db,"settings","theme"));
+  return snap.exists()?snap.data():{name:"Custom",mode:"light",variables:{}};
+}
+applyCardStyle.onclick=async()=>{
+  const current=await readCurrentTheme();
+  const targetMode = siteMode.value || current.mode || "dark";
+  const values = getCardValuesForMode(targetMode);
+  const variables = {...(current.variables||{}), ...values};
+  await setDoc(doc(db,"settings","theme"),{
+    name:current.name || "Custom Card Theme",
+    mode:targetMode,
+    variables,
+    hero:current.hero || {},
+    updatedAt:serverTimestamp()
+  },{merge:true});
+  alert(`${targetMode === "dark" ? "Dark" : "Light"} card style applied.`);
+};
+loadCurrentCardStyle.onclick=async()=>{
+  const current=await readCurrentTheme();
+  siteMode.value=current.mode || "dark";
+  const hero=current.hero || {};
+  heroKicker.value=hero.kicker || heroKicker.value;
+  heroTitle.value=hero.title || heroTitle.value;
+  heroSubtitle.value=hero.subtitle || heroSubtitle.value;
+  heroPrimaryButton.value=hero.primaryButton || heroPrimaryButton.value;
+  heroSecondaryButton.value=hero.secondaryButton || heroSecondaryButton.value;
+  paintCardForm({...activeCardDefaults(),...(current.variables||{})});
+};
+resetCardStyle.onclick=()=>paintCardForm(activeCardDefaults());
+cardMode.onchange=()=>paintCardForm(activeCardDefaults());
+siteMode.onchange=()=>{
+  cardMode.value=siteMode.value;
+  paintCardForm(activeCardDefaults());
+};
+applyModeHero.onclick=async()=>{
+  const current=await readCurrentTheme();
+  await setDoc(doc(db,"settings","theme"),{
+    name:current.name || "Custom Theme",
+    mode:siteMode.value,
+    variables:current.variables || {},
+    hero:{
+      kicker:heroKicker.value.trim(),
+      title:heroTitle.value.trim(),
+      subtitle:heroSubtitle.value.trim(),
+      primaryButton:heroPrimaryButton.value.trim(),
+      secondaryButton:heroSecondaryButton.value.trim()
+    },
+    updatedAt:serverTimestamp()
+  },{merge:true});
+  alert("Website mode and hero text updated.");
+};
+loadCurrentCardStyle.click();
+loadPreset(0);
+</script>
+  <script src="app-notifications.js"></script>
+</body>
+</html>

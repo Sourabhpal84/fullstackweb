@@ -1,0 +1,701 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+  <title>Magneetoz Admin | Orders</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --accent: #00ffcc; --bg: #0b0f14; --card: #121821; }
+    body { margin:0; font-family:'Poppins','Inter',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:var(--bg); color:#fff; padding:20px; }
+    .admin-auth-checking body{display:none}
+    .admin-logout-btn{position:fixed;right:18px;top:16px;z-index:40;background:#121821;color:#00ffcc;border:1px solid #1e2933;border-radius:12px;padding:10px 14px;cursor:pointer;font-weight:800}
+    h1 { text-align:center; font-weight:800; letter-spacing:1px; margin-bottom:30px; color: var(--accent); }
+    
+    .filter-bar { display:flex; justify-content:center; flex-wrap:wrap; gap:10px; margin-bottom:30px; }
+    .filter-bar button { background:var(--card); color:var(--accent); border:1px solid #1e2933; padding:10px 20px; border-radius:30px; cursor:pointer; font-weight:600; transition:0.3s; }
+    .filter-bar button:hover, .filter-bar button.active { background:var(--accent); color:#000; box-shadow: 0 0 15px var(--accent); }
+
+    .orders-grid { display:grid; gap:20px; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); }
+    .order-card { background:var(--card); padding:20px; border-radius:20px; border:1px solid #1e2933; transition:0.3s; position:relative; }
+    .order-card:hover { transform:translateY(-5px); border-color:var(--accent); box-shadow:0 10px 30px rgba(0,255,204,0.1); }
+    
+    .status-badge { padding:6px 15px; border-radius:30px; font-size:11px; font-weight:700; text-transform:uppercase; margin-bottom:15px; display:inline-block; }
+    .Pending { background: #ff980033; color: #ff9800; border: 1px solid #ff9800; }
+    .Accepted { background: #4caf5033; color: #4caf50; border: 1px solid #4caf50; }
+    .Delivered { background: #2196f333; color: #2196f3; border: 1px solid #2196f3; }
+
+    .order-card h3 { margin:0 0 10px; font-size:18px; }
+    .info-row { font-size:13px; color:#aaa; margin-bottom:5px; display:flex; align-items:center; gap:8px; }
+    .items-list { background:#0b0f14; padding:10px; border-radius:10px; margin:15px 0; font-size:12px; border-left:3px solid var(--accent); }
+    
+    .btn-group { display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:15px; }
+    .btn-group button { padding:10px; border:none; border-radius:10px; cursor:pointer; font-weight:600; font-size:12px; transition:0.2s; }
+    .btn-accept { background:#4caf50; color:white; }
+    .btn-reject { background:#f44336; color:white; }
+    .btn-wa { background:#25d366; color:white; grid-column: span 2; }
+    .delete-btn{
+  display:block;
+  margin:0 auto 20px;
+  background:linear-gradient(45deg,#ff4d00,#ff0000);
+  color:white;
+  border:none;
+  padding:10px 20px;
+  border-radius:10px;
+  cursor:pointer;
+  font-weight:600;
+  transition:0.3s;
+}
+
+.delete-btn:hover{
+  transform:scale(1.05);
+  box-shadow:0 5px 20px rgba(255,0,0,0.4);
+}
+
+/* =========================================
+   ADMIN STATUS BUTTONS
+========================================= */
+
+.status-grid{
+
+  grid-template-columns:
+  repeat(2,1fr) !important;
+
+  gap:10px;
+}
+
+.btn-status{
+
+  border:none;
+
+  padding:12px;
+
+  border-radius:14px;
+
+  background:
+  linear-gradient(
+    135deg,
+    #1e293b,
+    #0f172a
+  );
+
+  color:white;
+
+  font-size:12px;
+  font-weight:700;
+
+  cursor:pointer;
+
+  transition:.25s ease;
+}
+
+.btn-status:hover{
+
+  transform:translateY(-2px);
+
+  background:
+  linear-gradient(
+    135deg,
+    #00ffcc,
+    #00d4ff
+  );
+
+  color:black;
+}
+
+.btn-delivered{
+
+  background:
+  linear-gradient(
+    135deg,
+    #22c55e,
+    #16a34a
+  );
+}
+
+.btn-reject{
+
+  background:
+  linear-gradient(
+    135deg,
+    #ef4444,
+    #dc2626
+  );
+}
+.btn-status.locked{opacity:.48;filter:saturate(.2);cursor:not-allowed;background:#334155;color:#cbd5e1}
+.btn-status.locked:hover{transform:none;background:#334155;color:#cbd5e1}
+.ops-panel{margin:0 auto 20px;max-width:980px;background:linear-gradient(145deg,#121821,#192230);border:1px solid #263241;border-radius:20px;padding:16px;box-shadow:0 18px 60px rgba(0,0,0,.28)}
+.ops-panel h2{margin:0 0 12px;color:#00ffcc;font-size:18px}
+.ops-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.ops-grid label{font-size:11px;color:#94a3b8;font-weight:700}
+.ops-grid input,.ops-grid textarea{width:100%;margin-top:5px;border-radius:12px;border:1px solid #334155;background:#0b0f14;color:white;padding:10px;font-family:inherit}
+.ops-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.ops-actions button{border:0;border-radius:12px;padding:11px 14px;font-weight:800;cursor:pointer}
+.open-btn{background:#22c55e;color:#06110a}.close-btn{background:#ef4444;color:white}.save-btn{background:#00ffcc;color:#06110a}
+.toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#111827;color:white;border:1px solid #263241;border-radius:14px;padding:12px 16px;z-index:80;display:none;font-weight:800}
+.toast.show{display:block}
+
+.assign-modal{position:fixed;inset:0;background:rgba(0,0,0,.68);display:none;align-items:center;justify-content:center;z-index:50;padding:18px;}
+.assign-modal.show{display:flex;}
+.assign-panel{width:min(520px,100%);max-height:82vh;overflow:auto;background:linear-gradient(145deg,#121821,#1b2634);border:1px solid #263241;border-radius:22px;box-shadow:0 26px 80px rgba(0,0,0,.55);padding:18px;}
+.assign-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px;}
+.assign-head h2{font-size:18px;margin:0;color:#fff;}
+.assign-close{width:40px;height:40px;border-radius:12px;border:1px solid #334155;background:#0f172a;color:#fff;cursor:pointer;}
+.rider-option{width:100%;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px;margin-bottom:10px;border-radius:16px;border:1px solid #263241;background:#0f172a;color:white;cursor:pointer;text-align:left;}
+.rider-option:hover{border-color:#00ffcc;transform:translateY(-1px);}
+.rider-option b{display:block;font-size:14px;}
+.rider-option span{display:block;color:#94a3b8;font-size:12px;margin-top:3px;}
+.online-dot{width:10px;height:10px;border-radius:50%;background:#22c55e;box-shadow:0 0 14px rgba(34,197,94,.8);flex:0 0 auto;}
+.assigned-rider{margin:12px 0;padding:10px;border-radius:12px;background:#0b0f14;border:1px solid #263241;color:#cbd5e1;font-size:12px;}
+.payment-badge{display:inline-flex;align-items:center;gap:6px;margin:10px 0 4px;padding:7px 10px;border-radius:999px;font-size:11px;font-weight:900;letter-spacing:.03em;text-transform:uppercase;border:1px solid #334155}
+.payment-badge.paid{background:rgba(34,197,94,.16);color:#86efac;border-color:#22c55e}
+.payment-badge.pending{background:rgba(250,204,21,.16);color:#fde68a;border-color:#facc15}
+.payment-badge.cod{background:rgba(56,189,248,.16);color:#7dd3fc;border-color:#38bdf8}
+.empty-riders{color:#94a3b8;text-align:center;padding:24px 10px;border:1px dashed #334155;border-radius:16px;}
+  </style>
+</head>
+<body>
+  <h1>MAGNEETOZ ORDERS</h1>
+  <section class="ops-panel">
+    <h2>Restaurant Availability</h2>
+    <div class="ops-grid">
+      <label>Close Time <input type="time" id="closeTime"></label>
+      <label>Open Time <input type="time" id="openTime"></label>
+      <label style="grid-column:1/-1">Unavailable Message <textarea id="unavailableMessage" rows="2"></textarea></label>
+      <label><input type="checkbox" id="autoCloseEnabled"> Auto close schedule</label>
+      <label><input type="checkbox" id="maintenanceMode"> Emergency maintenance</label>
+    </div>
+    <div class="ops-actions">
+      <button class="open-btn" onclick="setRestaurantOpen(true)">Open Restaurant</button>
+      <button class="close-btn" onclick="setRestaurantOpen(false)">Close Restaurant</button>
+      <button class="save-btn" onclick="saveRestaurantSettings()">Save Settings</button>
+      <button class="save-btn" onclick="fixCapturedPaymentOrders()">Fix Paid Online Orders</button>
+    </div>
+  </section>
+  <section class="ops-panel">
+    <h2>Restaurant Location Settings</h2>
+    <div class="ops-grid">
+      <label>Restaurant Latitude <input type="number" id="restaurantLatitude" step="0.000001" placeholder="28.465283"></label>
+      <label>Restaurant Longitude <input type="number" id="restaurantLongitude" step="0.000001" placeholder="77.502608"></label>
+    </div>
+    <div class="ops-actions">
+      <button class="open-btn" onclick="useCurrentRestaurantLocation()">Use Current Location</button>
+      <button class="save-btn" onclick="saveRestaurantLocation()">Save</button>
+      <button class="open-btn" onclick="saveRestaurantLocation()">Update</button>
+    </div>
+  </section>
+  <button class="delete-btn" onclick="deleteAllOrders()">Delete All Orders</button>
+
+  <div class="filter-bar" id="filters">
+
+  <button onclick="loadOrders('All')">
+    All
+  </button>
+
+  <button onclick="loadOrders('Pending')">
+    Pending
+  </button>
+
+  <button onclick="loadOrders('Accepted')">
+    Accepted
+  </button>
+
+  <button onclick="loadOrders('Preparing')">
+    Preparing
+  </button>
+
+  <button onclick="loadOrders('Ready')">
+    Ready
+  </button>
+
+  <button onclick="loadOrders('Searching For Rider')">
+    Searching For Rider
+  </button>
+
+  <button onclick="loadOrders('Rider Accepted')">
+    Rider Assigned
+  </button>
+
+  <button onclick="loadOrders('Picked Up')">
+    Picked Up
+  </button>
+
+  <button onclick="loadOrders('Out For Delivery')">
+    Out For Delivery
+  </button>
+
+  <button onclick="loadOrders('Reached Nearby')">
+    Nearby
+  </button>
+
+  <button onclick="loadOrders('Payment Completed')">
+    Payment Done
+  </button>
+
+  <button onclick="loadOrders('Delivered')">
+    Delivered
+  </button>
+
+  <button onclick="loadOrders('Rejected')">
+    Rejected
+  </button>
+
+</div>
+  <div class="orders-grid" id="orders"></div>
+  <div class="toast" id="opsToast"></div>
+
+  <script type="module">
+import { protectAdminPage, mountAdminLogout } from "./admin-guard.js";
+import { db } from "./firebase-config.js";
+import { 
+  deleteDoc, getDoc, getDocs, 
+  collection, onSnapshot, updateDoc, doc, query, where, serverTimestamp, deleteField, setDoc, addDoc, runTransaction
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+let onlineRiders = [];
+let ordersUnsub = null;
+protectAdminPage();
+mountAdminLogout(document.body);
+const riderControlledStatuses = new Set(["Picked Up","Out For Delivery","Reached Nearby","Collect Payment","Payment Completed","Delivered"]);
+const STATUS_FLOW = ["Payment Pending","Pending","Accepted","Preparing","Searching For Rider","Rider Accepted","Picked Up","Out For Delivery","Reached Nearby","Payment Completed","Delivered"];
+
+function logStructured(scope, detail = {}){
+  console.info(`[${scope}]`, detail);
+}
+
+function normalizeStatus(status){
+  if(status === "Ready") return "Searching For Rider";
+  if(status === "Assigned To Delivery Boy") return "Rider Accepted";
+  if(status === "Collect Payment") return "Reached Nearby";
+  return status || "Pending";
+}
+
+function statusRank(status){
+  const index = STATUS_FLOW.indexOf(normalizeStatus(status));
+  return index < 0 ? 0 : index;
+}
+
+function toast(message){
+  const node = document.getElementById("opsToast");
+  node.textContent = message;
+  node.classList.add("show");
+  clearTimeout(node._t);
+  node._t = setTimeout(() => node.classList.remove("show"), 2600);
+}
+
+function formatCurrency(amount){
+  return new Intl.NumberFormat("en-IN", {
+    style:"currency",
+    currency:"INR",
+    maximumFractionDigits:0
+  }).format(Number(amount) || 0);
+}
+
+function paymentBadge(order = {}){
+  const method = String(order.paymentMethod || order.paymentMode || "").toLowerCase();
+  const status = String(order.paymentStatus || "").toLowerCase();
+  const captured = order.paymentCaptured === true || !!order.razorpayPaymentId;
+  if((method === "online" || method === "upi") && (status === "paid" || captured)){
+    return { cls:"paid", label:"PAID ONLINE" };
+  }
+  if(method === "cod" || method === "cash"){
+    return { cls:"cod", label:"COD" };
+  }
+  return { cls:"pending", label:"PAYMENT PENDING" };
+}
+
+function isPaidOnline(order = {}){
+  const badge = paymentBadge(order);
+  return badge.cls === "paid";
+}
+
+function isUnpaidOnline(order = {}){
+  const method = String(order.paymentMethod || order.paymentMode || "").toLowerCase();
+  const status = String(order.paymentStatus || "").toLowerCase();
+  return (method === "online" || method === "upi") && status !== "paid" && order.paymentCaptured !== true && !order.razorpayPaymentId;
+}
+
+window.sendToRider = async function(id){
+  await updateDoc(doc(db, "orders", id), {
+    sentToRider: true
+  });
+}
+
+onSnapshot(doc(db,"settings","restaurant"), snap => {
+  const data = snap.exists() ? snap.data() : {};
+  document.getElementById("closeTime").value = data.closeTime || "02:00";
+  document.getElementById("openTime").value = data.openTime || "08:00";
+  document.getElementById("unavailableMessage").value = data.unavailableMessage || "Restaurant currently closed";
+  document.getElementById("autoCloseEnabled").checked = data.autoCloseEnabled !== false;
+  document.getElementById("maintenanceMode").checked = data.maintenanceMode === true;
+  document.getElementById("restaurantLatitude").value = data.location?.lat ?? "";
+  document.getElementById("restaurantLongitude").value = data.location?.lng ?? "";
+});
+
+async function writeRestaurantSettings(extra = {}){
+  await setDoc(doc(db,"settings","restaurant"), {
+    restaurantOpen:true,
+    unavailableMessage:document.getElementById("unavailableMessage").value || "Restaurant currently closed",
+    autoCloseEnabled:document.getElementById("autoCloseEnabled").checked,
+    closeTime:document.getElementById("closeTime").value || "02:00",
+    openTime:document.getElementById("openTime").value || "08:00",
+    maintenanceMode:document.getElementById("maintenanceMode").checked,
+    lastUpdatedAt:serverTimestamp(),
+    ...extra
+  }, { merge:true });
+  toast("Restaurant settings updated");
+}
+
+window.setRestaurantOpen = open => writeRestaurantSettings({ restaurantOpen:open, maintenanceMode:open ? false : document.getElementById("maintenanceMode").checked });
+window.saveRestaurantSettings = () => writeRestaurantSettings();
+window.saveRestaurantLocation = async function(){
+  const lat = Number(document.getElementById("restaurantLatitude").value);
+  const lng = Number(document.getElementById("restaurantLongitude").value);
+  if(!Number.isFinite(lat) || !Number.isFinite(lng)){
+    alert("Enter valid latitude and longitude.");
+    return;
+  }
+  await setDoc(doc(db,"settings","restaurant"), {
+    location:{ lat, lng },
+    lastLocationUpdatedAt:serverTimestamp()
+  }, { merge:true });
+  const saved = await getDoc(doc(db,"settings","restaurant"));
+  const savedLocation = saved.data()?.location || {};
+  if(Number(savedLocation.lat) !== lat || Number(savedLocation.lng) !== lng){
+    throw new Error("Restaurant location save verification failed.");
+  }
+  toast("Restaurant location saved");
+};
+
+window.useCurrentRestaurantLocation = async function(){
+  if(!navigator.geolocation){
+    alert("Location is not supported on this device/browser.");
+    return;
+  }
+  const ok = confirm("Stand at the restaurant/store location, then allow location access. Use this device's live location as restaurant location?");
+  if(!ok) return;
+  navigator.geolocation.getCurrentPosition(async pos => {
+    const lat = Number(pos.coords.latitude.toFixed(6));
+    const lng = Number(pos.coords.longitude.toFixed(6));
+    document.getElementById("restaurantLatitude").value = lat;
+    document.getElementById("restaurantLongitude").value = lng;
+    await saveRestaurantLocation();
+  }, error => {
+    alert(error?.message || "Unable to fetch current location.");
+  }, {
+    enableHighAccuracy:true,
+    timeout:20000,
+    maximumAge:0
+  });
+};
+
+window.deleteAllOrders = async function(){
+
+  if(!(await window.MagneetozNotify.confirm("Delete ALL Online Orders?", { title:"Delete orders", okText:"Delete" }))) return;
+
+  const q = query(
+    collection(db,"orders"),
+    where("orderSource","==","online")
+  );
+
+  const snapshot = await getDocs(q);
+
+  const promises = snapshot.docs.map(docSnap => 
+    deleteDoc(doc(db,"orders",docSnap.id))
+  );
+
+  await Promise.all(promises);
+
+  alert("All Online Orders Deleted");
+
+} 
+
+
+
+window.loadOrders = function(filter) {
+  const q = query(collection(db, "orders"), where("orderSource", "==", "online"));
+  ordersUnsub?.();
+  ordersUnsub = onSnapshot(q, (snap) => {
+    const container = document.getElementById("orders");
+    container.innerHTML = "";
+    snap.forEach(docSnap => {
+      const d = docSnap.data();
+      if (filter !== "All" && d.status !== filter) return;
+      const badge = paymentBadge(d);
+      const paymentLocked = isUnpaidOnline(d);
+      
+      container.innerHTML += `
+        <div class="order-card">
+          <span class="status-badge ${d.status}">${d.status}</span>
+          <span class="payment-badge ${badge.cls}">${badge.label}</span>
+          <h3>#${d.orderNumber || d.orderId} - ${d.customerName}</h3>
+          <div class="info-row">📞 ${d.phone}</div>
+          <div class="info-row">🏠 ${d.address}</div>
+          <div class="items-list">${d.items.map(i => `• ${i.name} (x${i.qty})`).join('<br>')}</div>
+          <div style="font-weight:700; color:var(--accent);">Total: ${formatCurrency(d.totalAmount)}</div>
+          <div class="assigned-rider">Payment: ${d.paymentStatus || "pending"} ${d.paymentMethod ? `(${d.paymentMethod})` : ""}<br>Amount to collect: ${formatCurrency(d.amountToCollect ?? d.totalAmount ?? 0)}<br>Coupon: ${d.couponCode || "None"} ${d.couponDiscount ? `- ${formatCurrency(d.couponDiscount)}` : ""}</div>
+          ${d.riderName || d.assignedRider?.name ? `<div class="assigned-rider">Rider: ${d.riderName || d.assignedRider.name}<br>${d.riderPhone || d.assignedRider?.phone || ""}</div>` : ""}
+          <div class="btn-group status-grid">
+
+  <button
+    class="btn-status ${paymentLocked ? "locked" : ""}"
+    ${paymentLocked ? `title="Online payment is not confirmed yet" onclick="paymentPendingLocked()"` : `onclick="updateStatus('${docSnap.id}','Accepted')"`}>
+
+    ✅ Accept
+
+  </button>
+
+  <button
+    class="btn-status ${paymentLocked ? "locked" : ""}"
+    ${paymentLocked ? `title="Online payment is not confirmed yet" onclick="paymentPendingLocked()"` : `onclick="updateStatus('${docSnap.id}','Preparing')"`}>
+
+    👨‍🍳 Preparing
+
+  </button>
+
+  <button
+    class="btn-status ${paymentLocked ? "locked" : ""}"
+    ${paymentLocked ? `title="Online payment is not confirmed yet" onclick="paymentPendingLocked()"` : `onclick="requestNearbyRiders('${docSnap.id}')"`}>
+
+    ✅ Ready
+
+  </button>
+
+  <button
+    class="btn-status"
+    onclick="requestNearbyRiders('${docSnap.id}')">
+
+    🚚 Searching For Rider
+
+  </button>
+
+  <button
+    class="btn-status"
+    onclick="openManualAssign('${docSnap.id}')">
+
+    Assign Rider
+
+  </button>
+
+  <button class="btn-status locked" title="Controlled by Rider" onclick="lockedRiderStage()">🔒 Picked Up</button>
+  <button class="btn-status locked" title="Controlled by Rider" onclick="lockedRiderStage()">🔒 Out For Delivery</button>
+  <button class="btn-status locked" title="Controlled by Rider" onclick="lockedRiderStage()">🔒 Nearby</button>
+  <button class="btn-status locked" title="Controlled by Rider" onclick="lockedRiderStage()">🔒 Payment Done</button>
+  <button class="btn-status btn-delivered locked" title="Controlled by Rider" onclick="lockedRiderStage()">🔒 Delivered</button>
+
+  <button
+    class="btn-status btn-reject"
+    onclick="updateStatus('${docSnap.id}','Rejected')">
+
+    ❌ Reject
+
+  </button>
+
+</div>
+        </div>`;
+    });
+  }, error => console.warn("[FIRESTORE LISTENER] Admin orders failed", error));
+}
+
+window.updateStatus = async (id, s) => {
+  if(riderControlledStatuses.has(s)){
+    lockedRiderStage();
+    return;
+  }
+  const orderRef = doc(db, "orders", id);
+  const nextStatus = normalizeStatus(s);
+  const existing = await runTransaction(db, async transaction => {
+    const orderSnap = await transaction.get(orderRef);
+    if(!orderSnap.exists()) throw new Error("Order not found.");
+    const current = orderSnap.data();
+    if(isUnpaidOnline(current)){
+      throw new Error("Online payment is not confirmed yet. Do not accept or assign this order.");
+    }
+    if(!["Rejected","Cancelled"].includes(nextStatus) && statusRank(nextStatus) < statusRank(current.status)){
+      throw new Error(`Cannot move order backwards from ${current.status} to ${nextStatus}.`);
+    }
+    const updates = { status: nextStatus, orderStatus:nextStatus, lastStatusUpdatedAt:serverTimestamp() };
+    if(nextStatus === "Accepted") updates.acceptedAt = serverTimestamp();
+    if(nextStatus === "Preparing") updates.preparingAt = serverTimestamp();
+    if(nextStatus === "Searching For Rider") updates.readyAt = serverTimestamp();
+    if(nextStatus === "Rejected" || nextStatus === "Cancelled" || nextStatus === "Delivered"){
+      updates.completedAt = serverTimestamp();
+    }
+    transaction.update(orderRef, updates);
+    return current;
+  });
+  logStructured("ORDER STATUS", { orderId:id, status:nextStatus });
+  if((s === "Rejected" || s === "Cancelled" || s === "Delivered") && (existing.assignedRiderId || existing.riderId)){
+    await updateDoc(doc(db, "riders", existing.assignedRiderId || existing.riderId), {
+      currentActiveOrderId: deleteField()
+    });
+  }
+};
+
+window.lockedRiderStage = function(){
+  toast("Delivery stages are controlled by rider");
+};
+
+window.paymentPendingLocked = function(){
+  toast("Online payment is not confirmed yet.");
+};
+
+window.fixCapturedPaymentOrders = async function(){
+  const snapshot = await getDocs(query(collection(db, "orders"), where("orderSource", "==", "online")));
+  const fixes = [];
+  snapshot.forEach(docSnap => {
+    const order = docSnap.data();
+    const status = String(order.paymentStatus || "").toLowerCase();
+    const captured = order.paymentCaptured === true || !!order.razorpayPaymentId;
+    if(captured && status !== "paid"){
+      fixes.push(updateDoc(doc(db, "orders", docSnap.id), {
+        paymentStatus:"paid",
+        paymentMethod:"online",
+        paymentCaptured:true,
+        amountToCollect:0,
+        paymentStage:"Payment Completed",
+        lastStatusUpdatedAt:serverTimestamp()
+      }));
+    }
+  });
+  await Promise.all(fixes);
+  logStructured("PAYMENT MIGRATION", { fixed:fixes.length });
+  toast(`Fixed ${fixes.length} paid online order(s).`);
+};
+
+function riderOnline(rider){
+  return !!(rider.online || rider.isOnline);
+}
+
+onSnapshot(collection(db,"riders"), snap => {
+  onlineRiders = snap.docs
+    .map(item => ({ id:item.id, ...item.data() }))
+    .filter(rider => rider.approved === true && rider.active !== false && riderOnline(rider));
+});
+
+window.openManualAssign = async function(orderId){
+  const candidates = onlineRiders;
+  if(!candidates.length){
+    alert("No active riders are online.");
+    return;
+  }
+  const list = candidates
+    .map((rider, index) => `${index + 1}. ${rider.name || rider.riderName || "Magneetoz Rider"} (${rider.phone || rider.phoneDigits || "no phone"})`)
+    .join("\n");
+  const choice = prompt(`Assign order to rider:\n\n${list}\n\nEnter rider number`);
+  if(!choice) return;
+  const rider = candidates[Number(choice) - 1];
+  if(!rider){
+    alert("Invalid rider selection.");
+    return;
+  }
+  await assignSpecificRider(orderId, rider);
+};
+
+async function assignSpecificRider(orderId, rider){
+  const orderRef = doc(db, "orders", orderId);
+  await updateDoc(orderRef, {
+    status:"Rider Accepted",
+    orderStatus:"Rider Accepted",
+    sentToRider:true,
+    riderId:rider.id,
+    assignedRiderId:rider.id,
+    assignedRiderName:rider.name || rider.riderName || "Magneetoz Rider",
+    riderName:rider.name || rider.riderName || "Magneetoz Rider",
+    riderPhone:rider.phone || rider.phoneDigits || "",
+    assignedRider:{
+      id:rider.id,
+      name:rider.name || rider.riderName || "Magneetoz Rider",
+      phone:rider.phone || rider.phoneDigits || ""
+    },
+    riderStatus:"Manually assigned by admin",
+    riderRequest:{
+      status:"assigned",
+      candidateRiderIds:[rider.id],
+      candidates:[{
+        id:rider.id,
+        name:rider.name || rider.riderName || "Magneetoz Rider",
+        phone:rider.phone || rider.phoneDigits || ""
+      }],
+      declinedRiderIds:[],
+      acceptedRiderId:rider.id,
+      assignedManually:true,
+      requestedAt:serverTimestamp(),
+      acceptedAt:serverTimestamp()
+    },
+    assignedAt:serverTimestamp(),
+    assignedBy:"admin"
+  });
+  toast("Rider assigned");
+}
+
+window.requestNearbyRiders = async function(orderId){
+  const orderRef = doc(db, "orders", orderId);
+  const orderSnap = await getDoc(orderRef);
+  if(!orderSnap.exists()){
+    alert("Order not found.");
+    return;
+  }
+  const order = orderSnap.data();
+  if(isUnpaidOnline(order)){
+    alert("Online payment is not confirmed yet. Do not assign rider.");
+    return;
+  }
+  if(!["Accepted","Preparing","Ready","Searching For Rider"].includes(order.status)){
+    alert("Accept or mark order Preparing before searching rider.");
+    return;
+  }
+  if(order.assignedRiderId || order.riderId){
+    alert("A rider is already assigned.");
+    return;
+  }
+  const paymentFix = {};
+  const badge = paymentBadge(order);
+  if(badge.cls === "paid"){
+    paymentFix.paymentStatus = "paid";
+    paymentFix.paymentMethod = "online";
+    paymentFix.paymentCaptured = true;
+    paymentFix.amountToCollect = 0;
+  }
+  await updateDoc(orderRef, {
+    status:"Searching For Rider",
+    orderStatus:"Searching For Rider",
+    ...paymentFix,
+    sentToRider:false,
+    riderStatus:"Searching for nearby rider by road route",
+    riderRequest:{
+      status:"queued",
+      candidateRiderIds:[],
+      candidates:[],
+      declinedRiderIds:[],
+      requestedAt:serverTimestamp()
+    }
+  });
+  logStructured("RIDER ASSIGNMENT", {
+    orderId,
+    candidates:"backend_route_selection_pending",
+    paymentStatus:paymentFix.paymentStatus || order.paymentStatus || "pending",
+    amountToCollect:paymentFix.amountToCollect ?? order.amountToCollect ?? order.totalAmount ?? 0
+  });
+
+  await addDoc(collection(db, "riderNotificationQueue"), {
+    orderId,
+    status:"pending",
+    needsCandidateSelection:true,
+    candidateRiderIds:[],
+    title:"New Delivery Request",
+    body:`Order #${order.orderNumber || orderId} • ${formatCurrency(order.totalAmount || 0)}`,
+    orderNumber:order.orderNumber || "",
+    customerName:order.customerName || "",
+    amount:order.totalAmount || 0,
+    createdAt:serverTimestamp()
+  });
+  logStructured("RIDER MATCHING", { orderId, source:"backend_google_routes" });
+
+  alert("Rider search started. Nearby riders will be selected by backend road-route distance.");
+};
+
+loadOrders('Pending');
+  </script>
+  <script src="app-notifications.js"></script>
+</body>
+</html>

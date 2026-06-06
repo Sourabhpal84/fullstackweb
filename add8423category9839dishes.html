@@ -1,0 +1,729 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+  <title>MAGNEETOZ PRO ADMIN</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    .admin-auth-checking body{display:none}
+    .admin-logout-btn{position:fixed;right:18px;top:18px;z-index:50;background:#020617;color:#22c55e;border:1px solid #334155;border-radius:12px;padding:10px 14px;cursor:pointer;font-weight:800}
+    *{
+      margin:0;
+      padding:0;
+      box-sizing:border-box;
+      font-family:'Poppins','Inter',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    }
+
+    body{
+      display:flex;
+      background:#0f172a;
+      color:white;
+    }
+
+    /* 🔹 SIDEBAR */
+    .sidebar{
+      width:220px;
+      height:100vh;
+      background:#020617;
+      padding:20px;
+    }
+
+    .sidebar h2{
+      color:#22c55e;
+      margin-bottom:30px;
+    }
+
+    .sidebar p{
+      margin:15px 0;
+      color:#94a3b8;
+      cursor:pointer;
+    }
+
+    /* 🔹 MAIN */
+    .main{
+      flex:1;
+      padding:20px;
+    }
+
+    h3{
+      margin:20px 0 10px;
+    }
+
+    /* 🔹 CARD */
+    .card{
+      background:#020617;
+      padding:15px;
+      margin:10px 0;
+      border-radius:12px;
+      border:1px solid #1e293b;
+      transition:0.2s;
+    }
+
+    .card:hover{
+      transform:scale(1.01);
+      border-color:#22c55e;
+    }
+
+    /* 🔹 INPUT */
+    input, select{
+      padding:10px;
+      margin:5px;
+      border:none;
+      border-radius:8px;
+      background:#1e293b;
+      color:white;
+      width:200px;
+    }
+
+    input:focus{
+      outline:2px solid #22c55e;
+    }
+
+    button{
+  padding:8px 12px;
+  border:none;
+  border-radius:8px;
+  cursor:pointer;
+  margin:5px;
+  font-weight:600;
+  background:#334155; /* default */
+  color:white;
+}
+
+/* FORCE COLORS */
+.btn-green{
+  background:#22c55e !important;
+  color:black !important;
+}
+
+.btn-yellow{
+  background:#facc15 !important;
+  color:black !important;
+}
+
+.btn-red{
+  background:#ef4444 !important;
+  color:white !important;
+}
+
+    /* 🔹 LOGIN */
+    #loginBox{
+      margin:auto;
+      margin-top:100px;
+      text-align:center;
+    }
+
+    #adminPanel{ display:none; }
+
+    .grid{
+      display:flex;
+      flex-wrap:wrap;
+    }
+
+    .btn-green {
+  background: #22c55e !important;
+  color: black;
+}
+
+.btn-yellow {
+  background: #facc15 !important;
+  color: black;
+}
+
+.btn-red {
+  background: #ef4444 !important;
+  color: white;
+}
+
+.drag-handle{
+  color:#94a3b8;
+  padding:5px;
+}
+
+.drag-handle:active{
+  cursor:grabbing;
+  color:#22c55e;
+}
+.upload-box{
+  width:min(420px,100%);
+  min-height:190px;
+  margin:8px 5px 14px;
+  border:1.5px dashed #334155;
+  border-radius:18px;
+  background:linear-gradient(145deg,#020617,#111827);
+  display:grid;
+  place-items:center;
+  text-align:center;
+  cursor:pointer;
+  overflow:hidden;
+  position:relative;
+  transition:.25s ease;
+}
+.upload-box.dragover{border-color:#22c55e;box-shadow:0 0 28px rgba(34,197,94,.22)}
+.upload-box strong{display:block;color:#22c55e}
+.upload-box span,.upload-box small{display:block;color:#94a3b8;font-size:12px;margin-top:5px}
+.upload-box img{width:100%;height:190px;object-fit:cover;animation:previewIn .35s ease both}
+.upload-progress{position:absolute;left:14px;right:14px;bottom:30px;height:7px;border-radius:999px;background:#1e293b;overflow:hidden}
+.upload-progress i{display:block;width:0;height:100%;background:linear-gradient(90deg,#22c55e,#00ffcc);transition:.2s ease}
+#uploadStatus{position:absolute;left:14px;right:14px;bottom:8px}
+@keyframes previewIn{from{opacity:0;transform:scale(1.04)}to{opacity:1;transform:scale(1)}}
+
+  </style>
+</head>
+
+<body>
+
+<!-- 🔹 SIDEBAR -->
+<div class="sidebar">
+  <h2>🍕 MAGNEETOZ</h2>
+<p onclick="showSection('dashboard')">Dashboard</p>
+<p onclick="showSection('category')">Categories</p>
+<p onclick="showSection('dish')">Dishes</p>
+<p onclick="showSection('orders')">Orders</p>
+</div>
+
+<!-- 🔹 MAIN -->
+<div class="main">
+
+<!-- 🍕 PANEL -->
+<div id="adminPanel" style="display:block;">
+
+  <div id="dashboardSection">
+    <h2>🍕 Dashboard</h2>
+  </div>
+
+  <div id="categorySection" style="display:none;">
+    <h3>Add Category</h3>
+    <input id="catName" placeholder="Category Name">
+    <button class="btn-green" onclick="addCategory()">Add</button>
+
+    <div id="categoryList" class="sortable"></div>
+  </div>
+
+  <div id="dishSection" style="display:none;">
+    <h3>Add Dish</h3>
+
+    <input id="name" placeholder="Dish Name">
+    <input id="desc" placeholder="Description">
+    <input id="image" placeholder="Image URL or upload below">
+    <div class="upload-box" id="dishUploadBox">
+      <input id="dishImageFile" type="file" accept="image/*" hidden>
+      <div id="uploadPrompt">
+        <strong>Upload pizza image</strong>
+        <span>Tap or drag image here</span>
+      </div>
+      <img id="dishPreview" alt="Dish preview" style="display:none">
+      <div class="upload-progress"><i id="uploadProgress"></i></div>
+      <small id="uploadStatus">Firebase Storage upload ready</small>
+    </div>
+
+    <select id="category"></select>
+
+    <select id="type" onchange="toggleType()">
+      <option value="simple">Simple</option>
+      <option value="multiple">Size Based</option>
+    </select>
+
+    <div id="simpleBox">
+      <input id="price" placeholder="Price">
+      <input id="marketPrice" placeholder="Market Price">
+    </div>
+
+  <div id="sizeBox" style="display:none;">
+
+  <p>Small</p>
+  <input id="small" placeholder="Price">
+  <input id="smallMarket" placeholder="Market Price">
+
+  <p>Medium</p>
+  <input id="medium" placeholder="Price">
+  <input id="mediumMarket" placeholder="Market Price">
+
+  <p>Large</p>
+  <input id="large" placeholder="Price">
+  <input id="largeMarket" placeholder="Market Price">
+
+  </div>
+
+    <button class="btn-green" onclick="addDish()">Add Dish</button>
+
+    <hr>
+
+    <h3>All Dishes</h3>
+    <div id="list"></div>
+   </div>
+
+   <div id="ordersSection" style="display:none;">
+    <h3>Orders</h3>
+    <p>Coming soon...</p>
+  </div>
+
+</div>
+
+</div>
+
+<script type="module">
+
+// 🔥 SAME FIREBASE (NO CHANGE)
+import { protectAdminPage, mountAdminLogout } from "./admin-guard.js";
+import { db, storage } from "./firebase-config.js";
+import {
+  collection, addDoc, updateDoc,
+  deleteDoc, doc, onSnapshot, getDocs
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import {
+  getDownloadURL,
+  ref,
+  uploadBytesResumable
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+
+protectAdminPage();
+mountAdminLogout(document.body);
+
+let isSorting = false;
+let uploadedDishImageUrl = "";
+let activeUploadTask = null;
+
+function formatCurrency(amount){
+  return new Intl.NumberFormat("en-IN", {
+    style:"currency",
+    currency:"INR",
+    maximumFractionDigits:0
+  }).format(Number(amount) || 0);
+}
+
+function normalizeUnicodeText(value = ""){
+  return String(value || "").normalize("NFC").trim();
+}
+
+const uploadBox = document.getElementById("dishUploadBox");
+const fileInput = document.getElementById("dishImageFile");
+const preview = document.getElementById("dishPreview");
+const prompt = document.getElementById("uploadPrompt");
+const progress = document.getElementById("uploadProgress");
+const uploadStatus = document.getElementById("uploadStatus");
+
+function setUploadStatus(message, pct = null){
+  uploadStatus.textContent = message;
+  if(pct != null) progress.style.width = `${pct}%`;
+}
+
+function compressImageToDataUrl(file, maxWidth = 900, quality = .78){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const scale = Math.min(1, maxWidth / img.width);
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Could not read image."));
+    };
+    img.src = url;
+  });
+}
+
+async function useCompressedFallback(file, reason = "Firebase Storage is taking too long."){
+  const dataUrl = await compressImageToDataUrl(file);
+  uploadedDishImageUrl = dataUrl;
+  document.getElementById("image").value = dataUrl;
+  setUploadStatus(`${reason} Compressed image is ready.`, 100);
+}
+
+async function uploadDishImage(file){
+  if(!file || !file.type.startsWith("image/")){
+    alert("Please choose a valid image.");
+    return;
+  }
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = "block";
+  prompt.style.display = "none";
+  setUploadStatus("Uploading image...", 4);
+  const cleanName = file.name.replace(/[^a-z0-9.]/gi, "-").toLowerCase();
+  const storageRef = ref(storage, `menu-images/${Date.now()}-${cleanName}`);
+  const task = uploadBytesResumable(storageRef, file, { contentType:file.type });
+  activeUploadTask = task;
+  let lastProgressAt = Date.now();
+  let progressed = false;
+  const stuckTimer = setInterval(() => {
+    if(Date.now() - lastProgressAt > 12000){
+      setUploadStatus("Still connecting to Firebase Storage. Preparing backup...", progressed ? null : 4);
+    }
+  }, 3000);
+  try{
+  const uploadPromise = new Promise((resolve, reject) => {
+    task.on("state_changed", snap => {
+      lastProgressAt = Date.now();
+      progressed = snap.bytesTransferred > 0;
+      const pct = snap.totalBytes ? Math.round((snap.bytesTransferred / snap.totalBytes) * 100) : 0;
+      setUploadStatus(`Uploading ${pct}%`, pct);
+    }, error => {
+      reject(error);
+    }, resolve);
+  });
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error("storage-timeout")), 22000);
+  });
+  await Promise.race([uploadPromise, timeoutPromise]);
+  uploadedDishImageUrl = await getDownloadURL(task.snapshot.ref);
+  document.getElementById("image").value = uploadedDishImageUrl;
+  setUploadStatus("Upload complete. Image ready.", 100);
+  }catch(error){
+    console.error("Dish image upload failed:", error);
+    try{ task.cancel(); }catch(_){}
+    if(error?.message === "storage-timeout"){
+      await useCompressedFallback(file);
+      return;
+    }
+    uploadedDishImageUrl = "";
+    document.getElementById("image").value = "";
+    setUploadStatus(error?.code === "storage/unauthorized"
+      ? "Upload blocked: deploy Firebase Storage rules."
+      : `Upload failed: ${error?.message || "Please try again."}`, 0);
+    alert(error?.code === "storage/unauthorized"
+      ? "Firebase Storage permission denied. Deploy storage.rules, then try again."
+      : "Image upload failed. Please try again.");
+  }finally{
+    clearInterval(stuckTimer);
+    if(activeUploadTask === task) activeUploadTask = null;
+  }
+}
+
+uploadBox.addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", () => uploadDishImage(fileInput.files?.[0]));
+["dragenter","dragover"].forEach(name => uploadBox.addEventListener(name, event => {
+  event.preventDefault();
+  uploadBox.classList.add("dragover");
+}));
+["dragleave","drop"].forEach(name => uploadBox.addEventListener(name, event => {
+  event.preventDefault();
+  uploadBox.classList.remove("dragover");
+}));
+uploadBox.addEventListener("drop", event => uploadDishImage(event.dataTransfer.files?.[0]));
+
+/* 🔁 TYPE */
+window.toggleType = function(){
+  simpleBox.style.display = type.value==="simple"?"block":"none";
+  sizeBox.style.display = type.value==="multiple"?"block":"none";
+}
+
+/* ➕ CATEGORY */
+window.addCategory = async function(){
+  const cleanName = normalizeUnicodeText(catName.value);
+  if(!cleanName) return alert("Enter name ❌");
+
+  const snap = await getDocs(collection(db,"categories"));
+
+await addDoc(collection(db,"categories"),{
+  name: cleanName,
+  active:true,
+  order: snap.size + 1   // ⭐ IMPORTANT
+});
+
+  catName.value="";
+}
+
+/* 📋 CATEGORY LIST */
+onSnapshot(collection(db,"categories"), snap=>{
+
+  let html="";
+
+  const select = document.getElementById("category");
+  const categoryList = document.getElementById("categoryList");
+
+  if(select) select.innerHTML="";
+
+  snap.forEach(docSnap=>{
+
+    const c=docSnap.data();
+
+    if(select){
+      select.innerHTML += `<option>${c.name}</option>`;
+    }
+
+    html+=`
+    <div class="card" data-id="${docSnap.id}" style="display:flex;align-items:center;gap:12px;">
+
+    <!-- ☰ HANDLE -->
+    <span class="drag-handle" style="cursor:grab;font-size:22px;">☰</span>
+
+    <!-- CONTENT -->
+    <div style="flex:1;">
+
+    <b>${c.name}</b><br>
+
+    <span style="color:${c.active ? '#22c55e' : '#ef4444'};">
+      ${c.active ? "● Active" : "● Disabled"}
+    </span>
+
+    <br>
+
+    <button 
+      style="background:${c.active ? '#22c55e' : '#facc15'}; color:black;"
+      onclick="toggleCat('${docSnap.id}',${c.active})">
+      ${c.active ? "Disable" : "Enable"}
+    </button>
+
+    <button class="btn-red"
+      onclick="deleteCategory('${docSnap.id}','${c.name}')">
+      Delete
+    </button>
+
+  </div>
+
+</div>
+`;
+  });
+
+  if(categoryList && !isSorting){
+  categoryList.innerHTML = html;
+  initSortable();   // ⭐ yahin call karo
+}
+
+});
+
+
+function initSortable(){
+
+  const el = document.getElementById("categoryList");
+
+  if (!el) return;
+
+  if (el.sortableInstance) {
+    el.sortableInstance.destroy();
+  }
+
+  el.sortableInstance = new Sortable(el, {
+    animation:150,
+    handle:".drag-handle",
+
+    onEnd: async function(){
+
+  isSorting = true;   // ⭐ START
+
+  const items = el.querySelectorAll(".card");
+
+  for(let i=0;i<items.length;i++){
+    const id = items[i].dataset.id;
+
+    await updateDoc(doc(db,"categories",id),{
+      order:i+1
+    });
+  }
+
+  setTimeout(()=>{
+    isSorting = false;   // ⭐ END
+  }, 500);
+  }
+  });
+}
+/* ➕ DISH */
+window.addDish = async function(){
+
+  try{
+
+    const dishName = normalizeUnicodeText(document.getElementById("name").value);
+    const img = normalizeUnicodeText(uploadedDishImageUrl || document.getElementById("image").value);
+    const descText = normalizeUnicodeText(document.getElementById("desc").value);
+    const cat = normalizeUnicodeText(document.getElementById("category").value);
+    const t = document.getElementById("type").value;
+
+    if(!dishName || !img){
+      alert("Fill name & image ❌");
+      return;
+    }
+
+    let data = {
+      name: dishName,
+      image: img,
+      category: cat,
+      type: t,
+      description: descText,
+      available: true
+    };
+
+    if(t === "simple"){
+
+      const p = document.getElementById("price").value.trim();
+
+      if(!p || isNaN(p)){
+        alert("Enter valid price ❌");
+        return;
+      }
+
+      const market = document.getElementById("marketPrice").value.trim();
+
+     if(!market || isNaN(market)){
+     alert("Enter valid market price ❌");
+     return;
+     }
+
+     data.price = parseInt(p);
+     data.marketPrice = parseInt(market);
+
+    } else {
+
+      data.sizes = {
+  small: {
+    price: +document.getElementById("small").value,
+    market: +document.getElementById("smallMarket").value
+  },
+  medium: {
+    price: +document.getElementById("medium").value,
+    market: +document.getElementById("mediumMarket").value
+  },
+  large: {
+    price: +document.getElementById("large").value,
+    market: +document.getElementById("largeMarket").value
+  }
+   };
+    }
+
+    await addDoc(collection(db,"dishes"), data);
+
+    uploadedDishImageUrl = "";
+    document.getElementById("image").value = "";
+    fileInput.value = "";
+    preview.removeAttribute("src");
+    preview.style.display = "none";
+    prompt.style.display = "block";
+    setUploadStatus("Firebase Storage upload ready", 0);
+
+    alert("Dish Added ✅");
+
+  }catch(e){
+    console.error(e);
+    alert("Error: " + e.message);
+  }
+}
+
+/* 📋 DISH LIST (CATEGORY WISE) */
+onSnapshot(collection(db,"categories"), (catSnap)=>{
+
+  onSnapshot(collection(db,"dishes"), (dishSnap)=>{
+
+    document.getElementById("list").innerHTML = "";
+
+    catSnap.forEach(catDoc=>{
+
+      const catName = catDoc.data().name;
+
+      let html = `<div class="card"><h3>${catName}</h3>`;
+
+      let hasDish = false;
+
+      dishSnap.forEach(d=>{
+
+        const dish = d.data();
+
+        function format(name){
+          return name.replace(/\s/g,'').toLowerCase();
+        }
+
+        if(
+          dish.category &&
+          format(dish.category) === format(catName)
+        ){
+
+          hasDish = true;
+
+          html += `
+          <div style="margin-top:8px;">
+            ${dish.name} - ${formatCurrency(dish.price ? dish.price : (dish.sizes?.small?.price || 0))}
+
+            <button 
+  style="background:${dish.available ? '#22c55e' : '#facc15'}; color:black;"
+  onclick="toggleDish('${d.id}',${dish.available})">
+  ${dish.available ? "Disable" : "Enable"}
+</button>
+
+            <button class="btn-red"
+              onclick="del('${d.id}')">
+              Delete
+            </button>
+          </div>`;
+        }
+
+      });
+
+      if(!hasDish){
+        html += `<p>No dishes</p>`;
+      }
+
+      html += `</div>`;
+
+      list.innerHTML += html;
+
+    });
+
+  });
+
+});
+/* TOGGLE */
+window.toggleDish = async(id,c)=>{
+  await updateDoc(doc(db,"dishes",id),{available:!c});
+}
+
+/* DELETE */
+window.del = async(id)=>{
+  await deleteDoc(doc(db,"dishes",id));
+}
+
+/* CATEGORY DELETE */
+window.deleteCategory = async(id,name)=>{
+  const q = await getDocs(collection(db,"dishes"));
+
+  q.forEach(async d=>{
+    if(d.data().category===name){
+      await deleteDoc(doc(db,"dishes",d.id));
+    }
+  });
+
+  await deleteDoc(doc(db,"categories",id));
+}
+
+/* CATEGORY TOGGLE */
+window.toggleCat = async(id,c)=>{
+  await updateDoc(doc(db,"categories",id),{active:!c});
+}
+
+window.showSection = function(name){
+
+  document.getElementById("dashboardSection").style.display = "none";
+  document.getElementById("categorySection").style.display = "none";
+  document.getElementById("dishSection").style.display = "none";
+  document.getElementById("ordersSection").style.display = "none";
+
+  if(name === "dashboard"){
+    document.getElementById("dashboardSection").style.display = "block";
+  }
+
+  if(name === "category"){
+    document.getElementById("categorySection").style.display = "block";
+  }
+
+  if(name === "dish"){
+    document.getElementById("dishSection").style.display = "block";
+  }
+
+  if(name === "orders"){
+    document.getElementById("ordersSection").style.display = "block";
+  }
+
+}
+
+
+
+</script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+  <script src="app-notifications.js"></script>
+</body>
+</html>

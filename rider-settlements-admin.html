@@ -1,0 +1,89 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#090d13">
+<title>MAGNEETOZ Rider Settlements Admin</title>
+<link rel="icon" href="logo_tran.png">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#090d13;--card:#121821;--card2:#192230;--line:#263241;--text:#f8fafc;--muted:#9aa7b8;--green:#22c55e;--orange:#ff8a00;--red:#ef4444;--blue:#38bdf8}
+*{box-sizing:border-box}body{margin:0;font-family:Poppins,system-ui,sans-serif;color:var(--text);background:radial-gradient(circle at 10% 0,rgba(255,138,0,.16),transparent 30%),linear-gradient(145deg,#090d13,#111923 58%,#090d13);padding:18px}.wrap{max-width:1220px;margin:0 auto}.header{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:18px}.header p{margin:4px 0 0;color:var(--muted);font-size:13px}h1{margin:0;font-size:24px}.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:18px}.box,.card{background:linear-gradient(145deg,var(--card),var(--card2));border:1px solid var(--line);border-radius:18px;box-shadow:0 18px 54px rgba(0,0,0,.3)}.box{padding:16px}.box b{display:block;font-size:25px}.box span{display:block;color:var(--muted);font-size:12px;margin-top:5px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:14px}.card{padding:16px}.top{display:flex;justify-content:space-between;gap:10px}.badge{padding:6px 9px;border-radius:999px;font-size:10px;font-weight:900;text-transform:uppercase}.pending{background:rgba(255,138,0,.15);color:#ffc46b}.approved{background:rgba(34,197,94,.15);color:#86efac}.rejected{background:rgba(239,68,68,.15);color:#ff9b9b}.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:14px 0}.stat{background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.07);border-radius:13px;padding:10px}.stat span{display:block;color:var(--muted);font-size:10px}.stat b{font-size:14px}.actions{display:flex;flex-wrap:wrap;gap:8px}button{border:0;border-radius:12px;min-height:42px;padding:0 12px;color:#fff;cursor:pointer;font:800 12px Poppins,sans-serif}.btn-green{background:linear-gradient(135deg,var(--green),#16a34a)}.btn-red{background:linear-gradient(135deg,#ff5f5f,var(--red))}.btn-soft{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1)}.admin-auth-checking body{display:none}.empty{padding:28px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:18px}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header class="header">
+    <div><h1>Rider Settlements</h1><p>Approve payouts, monitor COD dues, adjust incentives, and prepare RazorpayX settlement records.</p></div>
+  </header>
+  <section class="summary">
+    <div class="box"><b id="pendingTotal">â‚¹0</b><span>Pending payouts</span></div>
+    <div class="box"><b id="codDue">â‚¹0</b><span>COD company due</span></div>
+    <div class="box"><b id="paidTotal">â‚¹0</b><span>Completed payouts</span></div>
+    <div class="box"><b id="liabilityTotal">â‚¹0</b><span>Company liability</span></div>
+  </section>
+  <section class="grid" id="settlements"></section>
+</main>
+<script type="module">
+import { protectAdminPage, mountAdminLogout } from "./admin-guard.js";
+import { db } from "./firebase-config.js";
+import { addDoc, collection, doc, increment, onSnapshot, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+protectAdminPage();
+mountAdminLogout(document.querySelector(".header"));
+const host = document.getElementById("settlements");
+let riders = [];
+function money(n){return new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0}).format(Number(n)||0)}
+onSnapshot(collection(db,"riders"), snap => {
+  riders = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+  render();
+});
+function render(){
+  let pending = 0, cod = 0, paid = 0;
+  const html = riders.map(r => {
+    const pendingSettlement = Number(r.pendingSettlement || 0);
+    const companyDue = Number(r.companyDue || r.pendingCashSubmission || 0);
+    const completed = Number(r.completedSettlements || 0);
+    pending += pendingSettlement; cod += companyDue; paid += completed;
+    const status = r.payoutEnabled ? "approved" : "pending";
+    return `<article class="card">
+      <div class="top"><div><strong>${r.name || "Magneetoz Rider"}</strong><div style="color:var(--muted);font-size:12px">${r.phone || ""}</div></div><span class="badge ${status}">${r.payoutEnabled ? "Payout verified" : "Needs verification"}</span></div>
+      <div class="stats">
+        <div class="stat"><span>Pending payout</span><b>${money(pendingSettlement)}</b></div>
+        <div class="stat"><span>COD due</span><b>${money(companyDue)}</b></div>
+        <div class="stat"><span>UPI</span><b>${r.upiId || "Not added"}</b></div>
+        <div class="stat"><span>Bank</span><b>${r.bankAccount ? `${r.accountHolderName || ""} â€¢ ${r.ifscCode || ""}` : "Not added"}</b></div>
+      </div>
+      <div class="actions">
+        <button class="btn-green" onclick="verifyMethod('${r.id}')">Verify Method</button>
+        <button class="btn-green" onclick="approvePayout('${r.id}', ${pendingSettlement})">Approve Payout</button>
+        <button class="btn-soft" onclick="settleCod('${r.id}', ${companyDue})">Mark COD Settled</button>
+        <button class="btn-red" onclick="rejectPayout('${r.id}')">Reject</button>
+      </div>
+    </article>`;
+  }).join("");
+  host.innerHTML = html || `<div class="empty">No rider payout records yet.</div>`;
+  document.getElementById("pendingTotal").textContent = money(pending);
+  document.getElementById("codDue").textContent = money(cod);
+  document.getElementById("paidTotal").textContent = money(paid);
+  document.getElementById("liabilityTotal").textContent = money(Math.max(0, pending - cod));
+}
+window.verifyMethod = id => updateDoc(doc(db,"riders",id), { payoutEnabled:true, payoutVerifiedAt:serverTimestamp() });
+window.approvePayout = async (id, amount) => {
+  if(amount <= 0) return alert("No pending payout.");
+  const rider = riders.find(r => r.id === id) || {};
+  const payoutMethod = rider.upiId ? "UPI" : "BANK";
+  const ref = await addDoc(collection(db,"riderPayouts"), { riderId:id, amount, payoutMethod, payoutStatus:"approved_manual", transactionId:`MANUAL-${Date.now()}`, createdAt:serverTimestamp(), payoutDate:serverTimestamp(), razorpayXReady:true });
+  await addDoc(collection(db,"riderSettlements"), { riderId:id, amount, payoutMethod, payoutStatus:"approved", transactionId:ref.id, createdAt:serverTimestamp(), payoutDate:serverTimestamp() });
+  await updateDoc(doc(db,"riders",id), { pendingSettlement:increment(-amount), completedSettlements:increment(amount), lastPayoutAt:serverTimestamp() });
+};
+window.settleCod = async (id, amount) => {
+  if(amount <= 0) return alert("No COD due.");
+  await addDoc(collection(db,"riderWalletTransactions"), { riderId:id, type:"cod_reconciliation", amount, createdAt:serverTimestamp() });
+  await updateDoc(doc(db,"riders",id), { companyDue:increment(-amount), pendingCashSubmission:increment(-amount), companySettlementPending:false, lastCodSettlementAt:serverTimestamp() });
+};
+window.rejectPayout = id => addDoc(collection(db,"riderPayouts"), { riderId:id, amount:0, payoutMethod:"review", payoutStatus:"rejected", createdAt:serverTimestamp() });
+</script>
+  <script src="app-notifications.js"></script>
+</body>
+</html>

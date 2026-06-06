@@ -1,0 +1,689 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#090d13">
+<title>Magneetoz Rider Login</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="logo_tran.png">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#090d13;
+  --panel:rgba(18,24,33,.76);
+  --line:rgba(255,255,255,.1);
+  --text:#f8fafc;
+  --muted:#a7b0c0;
+  --green:#2dd36f;
+  --orange:#ff7b00;
+  --red:#ef4444;
+}
+*{box-sizing:border-box}
+body{
+  min-height:100vh;
+  margin:0;
+  font-family:Poppins,system-ui,sans-serif;
+  color:var(--text);
+  background:
+    radial-gradient(circle at 20% 15%, rgba(45,211,111,.18), transparent 28%),
+    radial-gradient(circle at 90% 10%, rgba(255,123,0,.18), transparent 30%),
+    linear-gradient(145deg,#080b10,#101720 52%,#080b10);
+  display:grid;
+  place-items:center;
+  padding:20px;
+}
+.shell{
+  width:min(440px,100%);
+  animation:rise .5s ease both;
+}
+@keyframes rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+.brand{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:22px;
+}
+.brand-main{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  min-width:0;
+}
+.logo{
+  width:54px;
+  height:54px;
+  border-radius:18px;
+  background:linear-gradient(145deg,var(--orange),#ffb000);
+  display:grid;
+  place-items:center;
+  font-weight:900;
+  color:#111827;
+  box-shadow:0 18px 38px rgba(255,123,0,.3);
+}
+.brand h1{font-size:24px;margin:0;font-weight:800;letter-spacing:.2px}
+.brand p{margin:2px 0 0;color:var(--muted);font-size:13px}
+.install-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:auto;
+  min-height:44px;
+  padding:0 14px;
+  border:1px solid rgba(45,211,111,.32);
+  background:linear-gradient(135deg,var(--green),#8df5b2);
+  color:#06110a;
+  box-shadow:0 14px 34px rgba(45,211,111,.2);
+  white-space:nowrap;
+}
+.install-btn.hide{display:none}
+.card{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:24px;
+  padding:22px;
+  box-shadow:0 26px 80px rgba(0,0,0,.48);
+  backdrop-filter:blur(18px);
+}
+.hero{
+  background:linear-gradient(135deg,rgba(45,211,111,.16),rgba(255,123,0,.13));
+  border:1px solid var(--line);
+  border-radius:20px;
+  padding:18px;
+  margin-bottom:18px;
+}
+.hero h2{font-size:21px;margin:0 0 6px}
+.hero p{margin:0;color:var(--muted);font-size:13px;line-height:1.55}
+.field{margin:14px 0}
+label{display:block;font-size:12px;color:var(--muted);margin:0 0 8px;font-weight:600}
+input{
+  width:100%;
+  height:52px;
+  border-radius:16px;
+  border:1px solid rgba(255,255,255,.12);
+  background:rgba(255,255,255,.07);
+  color:white;
+  padding:0 15px;
+  font:600 16px Poppins,sans-serif;
+  outline:none;
+}
+input:focus{border-color:var(--green);box-shadow:0 0 0 4px rgba(45,211,111,.12)}
+.row{display:grid;grid-template-columns:1fr;gap:12px}
+button{
+  width:100%;
+  min-height:52px;
+  border:0;
+  border-radius:16px;
+  cursor:pointer;
+  font:800 14px Poppins,sans-serif;
+  transition:.22s ease;
+}
+button:disabled{opacity:.62;cursor:not-allowed}
+.primary{background:linear-gradient(135deg,var(--green),#8df5b2);color:#06110a}
+.secondary{background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.11)}
+button:not(:disabled):active{transform:scale(.98)}
+#recaptcha-container{margin-top:12px;display:grid;place-items:center;min-height:78px}
+.otp-zone{display:none}
+.otp-zone.show{display:block;animation:rise .35s ease both}
+.status{
+  display:none;
+  margin-top:16px;
+  padding:15px;
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,.1);
+  background:rgba(255,255,255,.06);
+  color:var(--muted);
+  font-size:13px;
+  line-height:1.55;
+}
+.status.show{display:block}
+.status strong{display:block;color:#fff;font-size:15px;margin-bottom:4px}
+.status.waiting{border-color:rgba(255,176,0,.32);background:rgba(255,176,0,.09)}
+.status.blocked{border-color:rgba(239,68,68,.28);background:rgba(239,68,68,.09)}
+.fineprint{color:var(--muted);font-size:11px;line-height:1.55;margin:14px 0 0;text-align:center}
+.install-panel{
+  display:none;
+  margin-top:14px;
+  padding:14px;
+  border-radius:18px;
+  border:1px solid rgba(45,211,111,.22);
+  background:rgba(45,211,111,.08);
+  color:#d1fae5;
+  font-size:12px;
+  line-height:1.55;
+}
+.install-panel.show{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+.install-panel strong{display:block;color:#fff;font-size:13px;margin-bottom:2px}
+.install-panel button{
+  width:auto;
+  min-width:104px;
+  min-height:42px;
+  flex:0 0 auto;
+}
+.toast{
+  position:fixed;
+  left:50%;
+  top:18px;
+  transform:translateX(-50%) translateY(-10px);
+  background:#111827;
+  color:#fff;
+  padding:12px 16px;
+  border-radius:14px;
+  font:700 13px Poppins,sans-serif;
+  box-shadow:0 16px 44px rgba(0,0,0,.35);
+  opacity:0;
+  pointer-events:none;
+  transition:.25s ease;
+  z-index:20;
+}
+.toast.show{opacity:1;transform:translateX(-50%)}
+.toast.success{background:#16a34a}
+.toast.error{background:#dc2626}
+@media(max-width:460px){
+  .brand{align-items:flex-start;flex-direction:column}
+  .install-btn{width:100%}
+  .install-panel{flex-direction:column;align-items:stretch}
+  .install-panel button{width:100%}
+}
+</style>
+</head>
+<body>
+<main class="shell">
+  <div class="brand">
+    <div class="brand-main">
+      <div class="logo">M</div>
+      <div>
+        <h1>Magneetoz Rider</h1>
+        <p>Secure delivery partner access</p>
+      </div>
+    </div>
+    <button type="button" class="install-btn" id="installAppBtn">Install App</button>
+  </div>
+
+  <section class="card">
+    <div class="hero">
+      <h2>Rider Login</h2>
+      <p>Use your password for daily login. OTP remains available for first login and password recovery.</p>
+    </div>
+
+    <div class="field">
+      <label for="passwordLoginId">Email or mobile number</label>
+      <input id="passwordLoginId" autocomplete="username" placeholder="Email or 10 digit mobile number">
+    </div>
+    <div class="field">
+      <label for="passwordLogin">Password</label>
+      <input id="passwordLogin" type="password" autocomplete="current-password" placeholder="Password">
+    </div>
+    <div class="row">
+      <button class="primary" id="passwordLoginBtn">Login with Password</button>
+      <button class="secondary" id="forgotPasswordBtn">Forgot Password</button>
+    </div>
+
+    <div class="field">
+      <label for="riderName">Name for new approval request</label>
+      <input id="riderName" autocomplete="name" placeholder="Your name">
+    </div>
+
+    <div class="field">
+      <label for="phoneNumber">Mobile number</label>
+      <input id="phoneNumber" inputmode="numeric" maxlength="10" autocomplete="tel" placeholder="10 digit mobile number">
+    </div>
+
+    <button class="primary" id="sendOtpBtn">Send OTP</button>
+    <div id="recaptcha-container"></div>
+
+    <div class="otp-zone" id="otpZone">
+      <div class="field">
+        <label for="otp">OTP</label>
+        <input id="otp" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="Enter 6 digit OTP">
+      </div>
+      <div class="row">
+      <button class="primary" id="verifyOtpBtn">Verify and Continue</button>
+        <button class="secondary" id="resendOtpBtn">Resend OTP</button>
+      </div>
+    </div>
+
+    <div class="otp-zone" id="setPasswordZone">
+      <div class="field">
+        <label for="newPassword">Create or reset password</label>
+        <input id="newPassword" type="password" autocomplete="new-password" minlength="6" placeholder="Minimum 6 characters">
+      </div>
+      <button class="primary" id="savePasswordBtn">Save Password</button>
+    </div>
+
+    <div class="status" id="approvalStatus"></div>
+    <p class="fineprint">Your login session stays active on this device until you logout.</p>
+  </section>
+  <div class="install-panel" id="installPanel" aria-live="polite">
+    <div>
+      <strong>Install Rider App</strong>
+      <span id="installText">Get faster access in a standalone app window.</span>
+    </div>
+    <button type="button" class="primary" id="installPanelBtn">Install</button>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { auth, db } from "./firebase-config.js";
+import {
+  browserLocalPersistence,
+  EmailAuthProvider,
+  RecaptchaVerifier,
+  linkWithCredential,
+  signInWithPhoneNumber,
+  signInWithEmailAndPassword,
+  onAuthStateChanged,
+  sendPasswordResetEmail,
+  setPersistence,
+  signOut,
+  updatePassword
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  onSnapshot,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const PHONE_RE = /^[6-9]\d{9}$/;
+let confirmationResult = null;
+let recaptchaVerifier = null;
+let approvalUnsub = null;
+let otpCooldownUntil = 0;
+let deferredInstallPrompt = null;
+
+const els = {
+  name: document.getElementById("riderName"),
+  phone: document.getElementById("phoneNumber"),
+  otp: document.getElementById("otp"),
+  passwordLoginId: document.getElementById("passwordLoginId"),
+  passwordLogin: document.getElementById("passwordLogin"),
+  newPassword: document.getElementById("newPassword"),
+  otpZone: document.getElementById("otpZone"),
+  setPasswordZone: document.getElementById("setPasswordZone"),
+  send: document.getElementById("sendOtpBtn"),
+  verify: document.getElementById("verifyOtpBtn"),
+  resend: document.getElementById("resendOtpBtn"),
+  passwordLoginBtn: document.getElementById("passwordLoginBtn"),
+  forgotPasswordBtn: document.getElementById("forgotPasswordBtn"),
+  savePasswordBtn: document.getElementById("savePasswordBtn"),
+  status: document.getElementById("approvalStatus"),
+  toast: document.getElementById("toast"),
+  installBtn: document.getElementById("installAppBtn"),
+  installPanel: document.getElementById("installPanel"),
+  installPanelBtn: document.getElementById("installPanelBtn"),
+  installText: document.getElementById("installText")
+};
+
+await setPersistence(auth, browserLocalPersistence).catch(() => {});
+
+function toast(message, type = "info"){
+  els.toast.textContent = message;
+  els.toast.className = `toast show ${type}`;
+  clearTimeout(els.toast._t);
+  els.toast._t = setTimeout(() => els.toast.className = "toast", 2800);
+}
+
+function showInstallPrompt(){
+  els.installBtn?.classList.remove("hide");
+  els.installPanel?.classList.add("show");
+  if(els.installText) els.installText.textContent = "Get faster access in a standalone app window.";
+}
+
+function hideInstallPrompt(){
+  els.installBtn?.classList.add("hide");
+  els.installPanel?.classList.remove("show");
+}
+
+async function installRiderApp(){
+  if(!deferredInstallPrompt){
+    if(els.installText) els.installText.textContent = location.protocol === "file:"
+      ? "File se install prompt nahi aata. Is page ko hosted HTTPS site par open karke install karein."
+      : "Browser install prompt ready nahi hai. Address bar ke install icon ko bhi check karein.";
+    els.installPanel?.classList.add("show");
+    return;
+  }
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  hideInstallPrompt();
+}
+
+function setBusy(button, busy, text){
+  if(!button) return;
+  if(!button.dataset.idle) button.dataset.idle = button.textContent;
+  button.disabled = busy;
+  button.textContent = busy ? text : button.dataset.idle;
+}
+
+function phoneValue(){
+  const raw = els.phone.value.replace(/\D/g,"").slice(-10);
+  els.phone.value = raw;
+  return raw;
+}
+
+function riderLoginEmail(phone){
+  return `rider.${phone}@magneetoz.local`;
+}
+
+async function resolveLoginEmail(value){
+  const raw = String(value || "").trim();
+  const phone = raw.replace(/\D/g, "").slice(-10);
+  if(PHONE_RE.test(phone)){
+    const snap = await getDoc(doc(db, "riderAccounts", phone));
+    return snap.exists() ? snap.data().loginEmail : riderLoginEmail(phone);
+  }
+  return raw;
+}
+
+async function passwordLogin(){
+  const loginEmail = await resolveLoginEmail(els.passwordLoginId.value);
+  const password = els.passwordLogin.value;
+  if(!loginEmail || !password){
+    toast("Enter login and password", "error");
+    return;
+  }
+  setBusy(els.passwordLoginBtn, true, "Logging in...");
+  try{
+    await signInWithEmailAndPassword(auth, loginEmail, password);
+    toast("Login successful", "success");
+  }catch(error){
+    console.error(error);
+    toast("Password login failed. Use OTP fallback if needed.", "error");
+  }finally{
+    setBusy(els.passwordLoginBtn, false);
+  }
+}
+
+async function ensureRecaptcha(){
+  if(recaptchaVerifier) return recaptchaVerifier;
+  recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
+    size:"normal",
+    "expired-callback":() => toast("reCAPTCHA expired. Try again.", "error")
+  });
+  await recaptchaVerifier.render();
+  return recaptchaVerifier;
+}
+
+async function sendOtp(){
+  const raw = phoneValue();
+  if(!PHONE_RE.test(raw)){
+    toast("Enter a valid 10 digit mobile number", "error");
+    return;
+  }
+  if(Date.now() < otpCooldownUntil){
+    toast(`Please wait ${Math.ceil((otpCooldownUntil - Date.now()) / 1000)}s`, "error");
+    return;
+  }
+
+  setBusy(els.send, true, "Sending OTP...");
+  try{
+    confirmationResult = await signInWithPhoneNumber(auth, `+91${raw}`, await ensureRecaptcha());
+    otpCooldownUntil = Date.now() + 30000;
+    els.otpZone.classList.add("show");
+    els.otp.focus();
+    toast("OTP sent successfully", "success");
+    startOtpAutofill();
+  }catch(error){
+    console.error(error);
+    toast(error?.message || "Unable to send OTP", "error");
+    try{ recaptchaVerifier?.clear(); }catch(_){}
+    recaptchaVerifier = null;
+  }finally{
+    setBusy(els.send, false);
+  }
+}
+
+async function verifyOtp(){
+  const code = els.otp.value.trim();
+  if(!confirmationResult){
+    toast("Send OTP first", "error");
+    return;
+  }
+  if(!/^\d{6}$/.test(code)){
+    toast("Enter valid 6 digit OTP", "error");
+    return;
+  }
+
+  setBusy(els.verify, true, "Verifying...");
+  try{
+    await confirmationResult.confirm(code);
+    toast("OTP verified", "success");
+  }catch(error){
+    console.error(error);
+    toast("Wrong OTP", "error");
+    setBusy(els.verify, false);
+  }
+}
+
+async function ensureRiderProfile(user){
+  const ref = doc(db, "riders", user.uid);
+  const snap = await getDoc(ref);
+  const rawPhone = (user.phoneNumber || "").replace("+91","");
+  const cleanName = els.name.value.trim();
+  if(!cleanName && !snap.exists()){
+    throw new Error("Enter your rider name.");
+  }
+  const base = {
+    riderId:user.uid,
+    phone:user.phoneNumber,
+    phoneDigits:rawPhone,
+    online:false,
+    isOnline:false,
+    lastLoginAt:serverTimestamp()
+  };
+
+  if(!snap.exists()){
+    await setDoc(ref, {
+      ...base,
+      name:cleanName,
+      riderName:cleanName,
+      approved:false,
+      active:true,
+      status:"pending",
+      totalOrders:0,
+      totalEarnings:0,
+      todayEarnings:0,
+      weeklyEarnings:0,
+      monthlyEarnings:0,
+      pendingSettlement:0,
+      completedSettlements:0,
+      codCollected:0,
+      companyDue:0,
+      incentives:0,
+      upiId:"",
+      bankAccount:"",
+      ifscCode:"",
+      accountHolderName:"",
+      panNumber:"",
+      aadhaarNumber:"",
+      payoutEnabled:false,
+      rejectedOrders:0,
+      totalDistance:0,
+      createdAt:serverTimestamp()
+    }, { merge:true });
+  }else{
+    const existing = snap.data();
+    await setDoc(ref, {
+      ...base,
+      name:(existing.name && existing.name !== "Magneetoz Rider") ? existing.name : (cleanName || existing.name || "Magneetoz Rider"),
+      riderName:(existing.riderName && existing.riderName !== "Magneetoz Rider") ? existing.riderName : (cleanName || existing.riderName || existing.name || "Magneetoz Rider"),
+      ...(existing.status === "removed" ? {
+        approved:false,
+        active:true,
+        status:"pending",
+        reapprovalRequestedAt:serverTimestamp()
+      } : {})
+    }, { merge:true });
+  }
+  return ref;
+}
+
+async function saveRiderPassword(){
+  const user = auth.currentUser;
+  const password = els.newPassword.value;
+  if(!user){
+    toast("Verify OTP first", "error");
+    return;
+  }
+  if(!password || password.length < 6){
+    toast("Password must be at least 6 characters", "error");
+    return;
+  }
+  const phoneDigits = (user.phoneNumber || els.phone.value || "").replace(/\D/g, "").slice(-10);
+  const loginEmail = user.email || riderLoginEmail(phoneDigits);
+  setBusy(els.savePasswordBtn, true, "Saving...");
+  try{
+    if(!user.email){
+      const credential = EmailAuthProvider.credential(loginEmail, password);
+      await linkWithCredential(user, credential);
+    }else{
+      await updatePassword(user, password);
+    }
+    if(phoneDigits){
+      await setDoc(doc(db, "riderAccounts", phoneDigits), {
+        riderId:user.uid,
+        phoneDigits,
+        loginEmail,
+        passwordLoginEnabled:true,
+        updatedAt:serverTimestamp()
+      }, { merge:true });
+    }
+    await setDoc(doc(db, "riders", user.uid), {
+      passwordLoginEnabled:true,
+      loginEmail,
+      phoneDigits,
+      updatedAt:serverTimestamp()
+    }, { merge:true });
+    toast("Password saved. Use it for next login.", "success");
+    els.setPasswordZone.classList.remove("show");
+  }catch(error){
+    console.error(error);
+    toast(error?.message || "Unable to save password", "error");
+  }finally{
+    setBusy(els.savePasswordBtn, false);
+  }
+}
+
+async function forgotPassword(){
+  const raw = String(els.passwordLoginId.value || els.phone.value || "").trim();
+  const phone = raw.replace(/\D/g, "").slice(-10);
+  try{
+    if(raw.includes("@")){
+      await sendPasswordResetEmail(auth, raw);
+      toast("Password reset email sent", "success");
+      return;
+    }
+    if(PHONE_RE.test(phone)){
+      els.phone.value = phone;
+      await sendOtp();
+      els.setPasswordZone.classList.add("show");
+      toast("Verify OTP, then set a new password", "success");
+      return;
+    }
+    toast("Enter rider email or mobile number", "error");
+  }catch(error){
+    console.error(error);
+    toast("Unable to start password recovery", "error");
+  }
+}
+
+function renderApproval(data){
+  els.status.className = "status show";
+  if(!data?.active){
+    els.status.classList.add("blocked");
+    els.status.innerHTML = "<strong>Account disabled</strong>Contact Magneetoz admin to reactivate your rider account.";
+    return;
+  }
+  if(!data?.approved){
+    els.status.classList.add("waiting");
+    els.status.innerHTML = "<strong>Waiting for approval</strong>Your OTP login is verified. Admin approval is required before dashboard access.";
+    return;
+  }
+  els.status.innerHTML = "<strong>Approved</strong>Opening your delivery dashboard...";
+}
+
+async function handleUser(user){
+  if(!user) return;
+  const ref = await ensureRiderProfile(user);
+  approvalUnsub?.();
+  approvalUnsub = onSnapshot(ref, async (snap) => {
+    const rider = snap.data();
+    renderApproval(rider);
+    if(rider?.approved && rider?.active){
+      localStorage.setItem("riderId", user.uid);
+      localStorage.setItem("riderPhone", rider.phone || user.phoneNumber);
+      localStorage.setItem("riderName", rider.name || "Rider");
+      if(!rider.passwordLoginEnabled){
+        els.setPasswordZone.classList.add("show");
+        return;
+      }
+      window.location.href = "rider-dashboard.html";
+    }
+  });
+}
+
+async function startOtpAutofill(){
+  if(!("OTPCredential" in window)) return;
+  try{
+    const ac = new AbortController();
+    setTimeout(() => ac.abort(), 60000);
+    const otp = await navigator.credentials.get({ otp:{ transport:["sms"] }, signal:ac.signal });
+    if(otp?.code){
+      els.otp.value = otp.code;
+      verifyOtp();
+    }
+  }catch(_){}
+}
+
+els.phone.addEventListener("input", phoneValue);
+els.send.addEventListener("click", sendOtp);
+els.resend.addEventListener("click", sendOtp);
+els.verify.addEventListener("click", verifyOtp);
+els.passwordLoginBtn.addEventListener("click", passwordLogin);
+els.forgotPasswordBtn.addEventListener("click", forgotPassword);
+els.savePasswordBtn.addEventListener("click", saveRiderPassword);
+els.installBtn?.addEventListener("click", installRiderApp);
+els.installPanelBtn?.addEventListener("click", installRiderApp);
+els.otp.addEventListener("keyup", (event) => {
+  if(event.key === "Enter") verifyOtp();
+});
+
+window.addEventListener("beforeinstallprompt", event => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  showInstallPrompt();
+});
+
+window.addEventListener("appinstalled", () => {
+  deferredInstallPrompt = null;
+  hideInstallPrompt();
+  toast("Rider app installed", "success");
+});
+
+if("serviceWorker" in navigator && location.protocol.startsWith("http")){
+  navigator.serviceWorker.register("./sw.js").catch(() => {});
+}else if(location.protocol === "file:"){
+  els.installBtn?.classList.remove("hide");
+  if(els.installText) els.installText.textContent = "File se install prompt nahi aata. Hosted HTTPS site par open karoge to Install button app install karega.";
+  els.installPanel?.classList.add("show");
+}
+
+onAuthStateChanged(auth, (user) => {
+  if(user) handleUser(user);
+});
+
+window.addEventListener("pagehide", () => approvalUnsub?.());
+window.riderLogout = () => signOut(auth);
+</script>
+  <script src="app-notifications.js"></script>
+</body>
+</html>

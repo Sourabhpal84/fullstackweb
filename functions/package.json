@@ -1,0 +1,14 @@
+{
+  "name": "magneetoz-functions",
+  "private": true,
+  "engines": {
+    "node": "22"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "firebase-admin": "^12.7.0",
+    "firebase-functions": "^6.3.2",
+    "razorpay": "^2.9.6"
+  }
+}

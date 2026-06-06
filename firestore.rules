@@ -1,0 +1,376 @@
+rules_version = '2';
+
+service cloud.firestore {
+
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && request.auth.token.email != null
+        && request.auth.token.email in [
+          "magneeto73@gmail.com",
+          "sourabhpal982@gmail.com"
+        ];
+    }
+
+    function owns(resourceUserId) {
+      return signedIn() && request.auth.uid == resourceUserId;
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function userRole() {
+      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        : "customer";
+    }
+
+    function hasRole(role) {
+      return isAdmin() || userRole() == role;
+    }
+
+    function isApprovedRider() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/riders/$(request.auth.uid))
+        && get(/databases/$(database)/documents/riders/$(request.auth.uid)).data.approved == true
+        && get(/databases/$(database)/documents/riders/$(request.auth.uid)).data.active != false;
+    }
+
+    function onlyCouponUsageFields() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(["usedCount", "totalDiscountGiven", "usageByUser", "lastUsedAt"]);
+    }
+
+    function validFeedbackCreate() {
+      return request.resource.data.keys().hasOnly([
+        "orderId",
+        "orderNumber",
+        "userId",
+        "customerName",
+        "phone",
+        "rating",
+        "foodQuality",
+        "delivery",
+        "comment",
+        "source",
+        "taste",
+        "price",
+        "service",
+        "valueForMoney",
+        "message",
+        "sentiment",
+        "sentimentScore",
+        "emotion",
+        "highPriority",
+        "ai",
+        "feedbackType",
+        "publicReviewOptIn",
+        "reviewStatus",
+        "featured",
+        "reviewedAt",
+        "rateLimitKey",
+        "createdAt"
+      ])
+      && (!("userId" in request.resource.data)
+        || request.resource.data.userId == ""
+        || request.auth != null);
+    }
+
+    function validCustomerOrderUpdate() {
+      return signedIn()
+        && resource.data.userId == request.auth.uid
+        && (
+          (
+            (resource.data.status == "Pending" || resource.data.status == "Payment Pending")
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(["status", "cancelledAt", "riderStatus"])
+            && request.resource.data.status == "Cancelled"
+            && request.resource.data.riderStatus == "Cancelled by customer"
+          )
+          ||
+          (
+            request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(["feedbackSubmitted", "feedbackSubmittedAt", "feedbackRating", "feedbackAt"])
+            && request.resource.data.feedbackSubmitted == true
+          )
+        );
+    }
+
+    function paymentNotReverted() {
+      return !(
+          resource.data.paymentStatus == "paid"
+          || resource.data.paymentStatus == "Paid"
+          || resource.data.paymentCaptured == true
+          || "razorpayPaymentId" in resource.data
+        )
+        || (
+          (request.resource.data.paymentStatus == "paid" || request.resource.data.paymentStatus == "Paid")
+          && (!("amountToCollect" in request.resource.data) || request.resource.data.amountToCollect == 0)
+        );
+    }
+
+    function candidateRiderOrder() {
+      return signedIn()
+        && resource.data.riderRequest is map
+        && resource.data.riderRequest.candidateRiderIds is list
+        && resource.data.riderRequest.candidateRiderIds.hasAny([request.auth.uid]);
+    }
+
+    function assignedRiderRead() {
+      return signedIn()
+        && (resource.data.riderId == request.auth.uid
+          || resource.data.assignedRiderId == request.auth.uid);
+    }
+
+    function assignedRiderWrite() {
+      return signedIn()
+        && (resource.data.riderId == request.auth.uid
+          || resource.data.assignedRiderId == request.auth.uid);
+    }
+
+    function validCandidateRiderUpdate() {
+      return candidateRiderOrder()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "status",
+          "orderStatus",
+          "sentToRider",
+          "riderId",
+          "assignedRiderId",
+          "riderName",
+          "riderPhone",
+          "assignedRider",
+          "riderStatus",
+          "riderRequest",
+          "assignedAt",
+          "lastStatusUpdatedAt"
+        ])
+        && (
+          request.resource.data.assignedRiderId == request.auth.uid
+          || request.resource.data.riderId == request.auth.uid
+          || request.resource.data.riderRequest.declinedRiderIds.hasAny([request.auth.uid])
+        );
+    }
+
+    function validAssignedRiderUpdate() {
+      return assignedRiderWrite()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "status",
+          "orderStatus",
+          "lastStatusUpdatedAt",
+          "pickedUpAt",
+          "outForDeliveryAt",
+          "reachedNearbyAt",
+          "riderStatus"
+        ])
+        && request.resource.data.status in ["Picked Up", "Out For Delivery", "Reached Nearby"]
+        && paymentNotReverted();
+    }
+
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /dishes/{dishId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /coupons/{couponId} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (signedIn() && onlyCouponUsageFields());
+    }
+
+    match /offers/{offerId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /offerHistory/{historyId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /combos/{comboId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /feedback/{feedbackId} {
+      allow create: if validFeedbackCreate()
+        && (!("userId" in request.resource.data)
+          || request.resource.data.userId == ""
+          || (signedIn() && request.resource.data.userId == request.auth.uid));
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /customers/{customerId} {
+      allow read, write: if isAdmin() || hasRole("restaurantOwner");
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /counters/{counterId} {
+  allow read: if signedIn();
+  allow create, update: if signedIn();
+  allow delete: if isAdmin();
+}
+
+    match /users/{userId} {
+      allow read, update, create: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /orders/{orderId} {
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.paymentMethod == "cod"
+        && (request.resource.data.paymentStatus == "pending" || request.resource.data.paymentStatus == "Pending");
+      allow list: if isAdmin() || hasRole("restaurantOwner") || isApprovedRider();
+      allow read: if isAdmin() || hasRole("restaurantOwner") || (signedIn() && resource.data.restaurantOwnerId == request.auth.uid) || (signedIn() && resource.data.restaurantOwnerEmail == request.auth.token.email) || (signedIn() && resource.data.userId == request.auth.uid) || assignedRiderRead() || candidateRiderOrder();
+      allow update: if paymentNotReverted() && (isAdmin() || hasRole("restaurantOwner") || (signedIn() && resource.data.restaurantOwnerId == request.auth.uid) || (signedIn() && resource.data.restaurantOwnerEmail == request.auth.token.email) || validCustomerOrderUpdate() || validAssignedRiderUpdate() || validCandidateRiderUpdate());
+      allow delete: if isAdmin();
+    }
+
+    match /paymentSessions/{sessionId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    match /paidOrderRecovery/{recoveryId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    match /paymentTransactionLogs/{logId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    match /riderPaymentSessions/{sessionId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.riderId == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    match /deliveryAuthorizationCodes/{codeId} {
+      allow read, write: if false;
+    }
+
+    match /customerDeliveryCodes/{orderId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    match /orderAuditLogs/{logId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /complaintTickets/{ticketId} {
+      allow read, update, delete: if isAdmin();
+      allow create: if false;
+    }
+
+    match /riders/{riderId} {
+      allow create, read, update: if isOwner(riderId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /riderAccounts/{accountId} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create, update: if signedIn()
+        && request.resource.data.riderId == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+
+    match /riderSettlements/{settlementId} {
+      allow create: if isAdmin() || (signedIn() && request.resource.data.riderId == request.auth.uid);
+      allow read: if isAdmin() || (signedIn() && resource.data.riderId == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    match /riderPayouts/{payoutId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.riderId == request.auth.uid);
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /riderWalletTransactions/{transactionId} {
+      allow create: if isAdmin() || (signedIn() && request.resource.data.riderId == request.auth.uid);
+      allow read: if isAdmin() || (signedIn() && resource.data.riderId == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    match /riderNotificationQueue/{queueId} {
+      allow create: if isAdmin() || signedIn();
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /rewardRedemptions/{redemptionId} {
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid;
+      allow read: if isAdmin()
+        || (signedIn() && resource.data.userId == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    match /notificationTokens/{tokenId} {
+      allow create, update: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.token == tokenId;
+      allow read, delete: if isAdmin()
+        || (signedIn() && resource.data.userId == request.auth.uid);
+    }
+
+    match /whatsappCampaigns/{campaignId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /whatsappCampaignQueue/{queueId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /notificationHistory/{notificationId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /profiles/{userId} {
+      allow read, create, update: if signedIn() && request.auth.uid == userId;
+      allow delete: if false;
+    }
+
+    match /expenses/{documentId} {
+      allow read: if owns(resource.data.userId);
+      allow create: if owns(request.resource.data.userId);
+      allow update, delete: if owns(resource.data.userId);
+    }
+
+    match /revenues/{documentId} {
+      allow read: if owns(resource.data.userId);
+      allow create: if owns(request.resource.data.userId);
+      allow update, delete: if owns(resource.data.userId);
+    }
+
+    match /inventory/{documentId} {
+      allow read: if owns(resource.data.userId);
+      allow create: if owns(request.resource.data.userId);
+      allow update, delete: if owns(resource.data.userId);
+    }
+
+    match /budgets/{documentId} {
+      allow read: if owns(resource.data.userId);
+      allow create: if owns(request.resource.data.userId);
+      allow update, delete: if owns(resource.data.userId);
+    }
+  }
+}

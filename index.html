@@ -1,0 +1,1049 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+  <!-- BASIC -->
+  <meta charset="UTF-8" />
+
+  <title>MAGNEETOZ — The Taste Of Attraction</title>
+  <link rel="canonical" href="https://magneetoz.com/" />
+
+  <!-- MOBILE -->
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+
+  <meta
+    name="theme-color"
+    content="#ff7b00" />
+
+  <meta
+    name="format-detection"
+    content="telephone=no" />
+
+  <!-- SEO -->
+  <meta
+    name="description"
+    content="MAGNEETOZ is a professional food ordering and delivery platform offering fresh food, secure payments, realtime delivery tracking, OTP login, customer support, and WhatsApp order notifications." />
+
+  <meta
+    name="keywords"
+    content="pizza, food delivery, magneetoz, online pizza, fast food, pizza order" />
+
+  <meta
+    name="author"
+    content="MAGNEETOZ" />
+
+  <!-- OPEN GRAPH -->
+  <meta
+    property="og:title"
+    content="MAGNEETOZ — The Taste Of Attraction" />
+
+  <meta
+    property="og:description"
+    content="Order fresh MAGNEETOZ food online with secure payments, customer support, realtime delivery tracking, and WhatsApp notifications." />
+
+  <meta
+    property="og:image"
+    content="logo_tran1.png" />
+
+  <meta
+    property="og:type"
+    content="website" />
+
+  <meta
+    property="og:url"
+    content="https://magneetoz.com" />
+
+  <!-- TWITTER -->
+  <meta
+    name="twitter:card"
+    content="summary_large_image" />
+
+  <meta
+    name="twitter:title"
+    content="MAGNEETOZ — The Taste Of Attraction" />
+
+  <meta
+    name="twitter:description"
+    content="Hot & fresh pizza delivered fast 🍕" />
+
+  <meta
+    name="twitter:image"
+    content="logo_tran1.png" />
+
+  <!-- SECURITY -->
+  <meta
+http-equiv="Content-Security-Policy"
+content="
+default-src 'self' https: data: blob:;
+
+img-src
+'self'
+https:
+data:
+blob:;
+
+script-src
+'self'
+'unsafe-inline'
+'unsafe-eval'
+https://checkout.razorpay.com
+https://cdn.razorpay.com
+https://cdnjs.cloudflare.com
+https://www.gstatic.com
+https://www.googleapis.com
+https://maps.googleapis.com
+https://apis.google.com
+https://www.google.com;
+
+style-src
+'self'
+'unsafe-inline'
+https://fonts.googleapis.com;
+
+font-src
+'self'
+https://fonts.gstatic.com
+data:;
+
+connect-src
+*
+https://firebase.googleapis.com
+https://identitytoolkit.googleapis.com
+https://securetoken.googleapis.com
+https://firestore.googleapis.com;
+
+frame-src
+https://api.razorpay.com
+https://checkout.razorpay.com
+https://*.firebaseapp.com
+https://www.google.com;
+
+object-src 'none';
+
+base-uri 'self';
+"> 
+
+  <!-- ICON -->
+  <link
+    rel="icon"
+    href="logo_tran1.png" />
+
+  <link
+    rel="apple-touch-icon"
+    href="logo_tran1.png" />
+
+  <!-- PWA -->
+  <link
+    rel="manifest"
+    href="manifest.json" />
+
+  <!-- PRECONNECT -->
+  <link
+    rel="preconnect"
+    href="https://fonts.googleapis.com" />
+
+  <link
+    rel="preconnect"
+    href="https://fonts.gstatic.com"
+    crossorigin />
+
+  <!-- GOOGLE FONTS -->
+  <link
+    href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap"
+    rel="stylesheet" />
+
+  <!-- CSS -->
+  <link
+    rel="stylesheet"
+    href="style.css" />
+
+    
+
+</head>
+
+<body>
+
+  <div id="premiumSplash" class="premium-splash">
+    <div class="splash-orbit">
+      <img src="logo_tran1.png" alt="MAGNEETOZ" />
+    </div>
+    <div class="splash-copy">
+      <strong>MAGNEETOZ</strong>
+      <span>Freshness is warming up</span>
+    </div>
+  </div>
+
+  <!-- JS REQUIRED -->
+  <noscript>
+    <div
+      style="padding:20px;text-align:center;font-family:Poppins,sans-serif;">
+      Please enable JavaScript to use MAGNEETOZ.
+    </div>
+  </noscript>
+
+  <!-- APP ERROR -->
+  <div
+    id="appError"
+    style="display:none;padding:20px;text-align:center;font-family:Poppins,sans-serif;">
+    Something went wrong. Please refresh the page.
+  </div>
+
+  <!-- GLOBAL LOADER -->
+  <div id="globalLoader"
+    style="
+      display:none;
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.5);
+      z-index:99999;
+      backdrop-filter:blur(4px);
+      justify-content:center;
+      align-items:center;
+      color:white;
+      font-family:Poppins,sans-serif;
+      font-size:18px;
+      font-weight:600;
+    ">
+    Loading...
+  </div>
+
+  <!-- ================= LOGIN POPUP ================= -->
+
+  <div
+    id="authPopup"
+    style="display:none;"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="authTitle">
+
+    <div class="auth-box">
+      <button type="button" class="auth-close" id="closeAuthPopup" aria-label="Close login">×</button>
+
+      <h2 id="authTitle">
+        Secure Checkout Login
+      </h2>
+      <p class="auth-subtitle">Enter your mobile number only when you are ready to place the order. Your cart and coupon stay saved.</p>
+
+      <!-- PHONE -->
+      <div class="phone-input-box">
+
+  <span>+91</span>
+
+  <input
+    type="tel"
+    id="phoneNumber"
+    placeholder="Enter mobile number"
+    autocomplete="tel"
+    inputmode="numeric"
+    maxlength="10" />
+
+</div>
+
+      <!-- RECAPTCHA -->
+      <div id="recaptcha-container"></div>
+
+      <!-- SEND OTP -->
+      <button
+id="sendOtpBtn"
+type="button">
+Send OTP
+      </button>
+
+      <br><br>
+
+      <!-- OTP -->
+      <input
+  type="text"
+  id="otp"
+  name="otp"
+  placeholder="Enter 6-digit OTP"
+  autocomplete="one-time-code"
+  inputmode="numeric"
+  pattern="[0-9]*"
+  enterkeyhint="done"
+  maxlength="6"
+  autocapitalize="off"
+  spellcheck="false"
+/>
+
+      <!-- VERIFY -->
+      <button
+id="verifyOtpBtn"
+type="button">
+Verify OTP
+      </button>
+
+    </div>
+  </div>
+
+  <!-- ================= MAIN WEBSITE ================= -->
+
+  <div id="mainWebsite" style="display:none;">
+
+    <!-- HEADER -->
+    <header class="main-header">
+
+      <div class="header-left">
+
+        <div class="logo-circle">
+          <img
+            src="logo_tran1.png"
+            alt="MAGNEETOZ logo"
+            loading="lazy" />
+        </div>
+
+        <div class="brand-name">
+          MAGNEETOZ
+        </div>
+
+        
+
+      </div>
+
+      <div class="header-actions">
+
+  <!-- TRACK -->
+  <button id="trackOrderBtn" class="track-order-btn">
+    📦 Track Order
+  </button>
+
+  <!-- MENU BUTTON -->
+  <button id="menuToggleBtn" class="menu-toggle-btn">
+
+    <span></span>
+    <span></span>
+    <span></span>
+
+  </button>
+
+  <!-- DROPDOWN -->
+  <div id="headerDropdown" class="header-dropdown">
+
+    <button id="dropdownTrackBtn">
+      📦 Track Orders
+    </button>
+
+    <button onclick="logout()">
+      🚪 Logout
+    </button>
+
+  </div>
+
+</div>
+
+    </header>
+    <button type="button" id="customerDistanceBanner" class="customer-distance-banner">
+      📍 Enable location to see your distance from our kitchen
+    </button>
+
+    <!-- HERO -->
+
+    <section class="hero">
+
+      <div class="hero-bg bg1"></div>
+      <div class="hero-bg bg2"></div>
+      <div class="hero-bg bg3"></div>
+      <div class="cinema-glow glow-a"></div>
+      <div class="cinema-glow glow-b"></div>
+      <div class="floating-food food-a">🍕</div>
+      <div class="floating-food food-b">🧀</div>
+      <div class="floating-food food-c">🔥</div>
+
+      <div class="hero-content">
+        <div class="hero-kicker" id="heroKickerText">Live kitchen • fast delivery • secure checkout</div>
+        <h1 id="heroTitleText">Cravings, Delivered Like Magic</h1>
+
+        <h1>BHOOK LAGI HAI KYA? 🍕</h1>
+
+        <p>
+          <span id="heroSubtitleText">Hot MAGNEETOZ favourites, cinematic tracking, and a checkout that feels effortless.</span>
+        </p>
+
+        <a href="#menuSection" class="hero-btn" id="heroPrimaryBtnText">
+          Explore Menu
+        </a>
+
+        <button type="button" class="hero-secondary magnetic-btn" id="openSearchBtn">
+          <span id="heroSecondaryBtnText">Smart Search</span>
+        </button>
+
+        <div class="hero-proof">
+          <span>4.8 rated</span>
+          <span>Secure payments</span>
+          <span>Realtime tracking</span>
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- TRUST -->
+
+    <!-- <div class="trust-strip">
+
+      🚚 Fast Delivery (30 min)
+      &nbsp;•&nbsp;
+      💳 Secure Payment
+      &nbsp;•&nbsp;
+      ⭐ 4.8 Rating
+      &nbsp;•&nbsp;
+      🔥 Fresh Pizza Guarantee
+
+    </div> -->
+
+    <!-- CATEGORY NAV -->
+
+    <div class="sticky-area">
+
+      <div class="brand-tagline">
+        The Taste Of Attraction 🔥
+      </div>
+
+      <nav
+        class="category-nav"
+        id="categoryNav"
+        aria-label="Menu categories">
+
+      </nav>
+
+    </div>
+
+    <section class="premium-search-band">
+      <button type="button" class="smart-search-trigger" id="smartSearchTrigger">
+        <span>Search pizzas, snacks, combos...</span>
+        <b>✕</b>
+      </button>
+      <div class="live-activity-pill">
+        <i></i>
+        <span id="liveActivityText">12 customers are exploring MAGNEETOZ now</span>
+      </div>
+    </section>
+
+    <section class="trust-board reveal-on-scroll">
+      <div><strong>30 min</strong><span>delivery promise</span></div>
+      <div><strong>100%</strong><span>secure checkout</span></div>
+      <div><strong>4.8★</strong><span>customer love</span></div>
+      <div><strong>Live</strong><span>order tracking</span></div>
+    </section>
+
+    <section class="premium-rails reveal-on-scroll">
+      <div class="rail-head">
+        <div>
+          <p>Personalized picks</p>
+          <h2>Recommended for you</h2>
+        </div>
+        <button type="button" data-scroll-target="#menuSection">View menu</button>
+      </div>
+      <div class="recommendation-rail" id="recommendedRail"></div>
+    </section>
+
+    <section class="smart-food-assistant reveal-on-scroll" aria-label="Smart food assistant">
+      <div class="smart-assistant-copy">
+        <p>Smart Food Assistant</p>
+        <h2>Tell us your mood, we will suggest the best picks.</h2>
+        <span id="smartAssistantSummary">Fresh suggestions from MAGNEETOZ menu.</span>
+      </div>
+      <div class="smart-assistant-actions" id="smartAssistantChips">
+        <button type="button" data-ai-intent="budget">Under ₹99</button>
+        <button type="button" data-ai-intent="veg">Veg picks</button>
+        <button type="button" data-ai-intent="cheesy">Cheesy</button>
+        <button type="button" data-ai-intent="spicy">Spicy</button>
+        <button type="button" data-ai-intent="popular">Most loved</button>
+        <button type="button" data-ai-intent="freeDelivery">Free delivery help</button>
+      </div>
+      <div class="smart-assistant-results" id="smartAssistantResults"></div>
+    </section>
+
+    <section class="premium-rails reveal-on-scroll" id="offersSection">
+      <div class="rail-head">
+        <div>
+          <p>Live offers</p>
+          <h2>MAGNEETOZ Deals</h2>
+        </div>
+        <button type="button" onclick="enableMagneetozOffers()">Enable Alerts</button>
+      </div>
+      <div class="offer-rail" id="offerRail"></div>
+    </section>
+
+    <section class="premium-rails reveal-on-scroll" id="combosSection">
+      <div class="rail-head">
+        <div>
+          <p>Combo management</p>
+          <h2>Active Combos</h2>
+        </div>
+        <button type="button" data-scroll-target="#menuSection">Add more</button>
+      </div>
+      <div class="combo-rail" id="comboRail"></div>
+    </section>
+
+    <section class="experience-grid reveal-on-scroll">
+      <article><span>Most Loved</span><strong>Cheesy bestsellers your city keeps reordering.</strong></article>
+      <article><span>Late Night Cravings</span><strong>Warm, indulgent picks for serious hunger moments.</strong></article>
+      <article><span>Frequently Together</span><strong>Combos, sides, and drinks that complete the order.</strong></article>
+    </section>
+
+    <!-- MENU -->
+
+    <main id="menuSection">
+      <div id="categoryContainer"></div>
+    </main>
+
+    <!-- TRACK ORDER -->
+
+  
+    <!-- FOOTER -->
+
+    <footer class="footer">
+      <div class="footer-grid">
+        <div>
+          <strong>MAGNEETOZ</strong>
+          <p>Professional food ordering platform with delivery services, secure payments, OTP authentication, and customer support.</p>
+        </div>
+        <nav aria-label="Business links">
+          <a href="privacy-policy.html">Privacy Policy</a>
+          <a href="terms-and-conditions.html">Terms & Conditions</a>
+          <a href="contact-us.html">Contact Us</a>
+          <a href="about-us.html">About Us</a>
+          <a href="port.html">Would you like to know about</a>
+        </nav>
+        <div>
+          <p>Email: support@magneetoz.com</p>
+          <p>Support: +91-XXXXXXXXXX</p>
+          <p>© 2026 MAGNEETOZ. All rights reserved.</p>
+        </div>
+      </div>
+
+    </footer>
+
+    <nav class="bottom-nav">
+      <button type="button" data-scroll-target=".hero">⌂<span>Home</span></button>
+      <button type="button" data-scroll-target="#menuSection">☰<span>Menu</span></button>
+      <button type="button" id="bottomSearchBtn">✕<span>Search</span></button>
+      <button type="button" onclick="toggleCart()">🛒<span>Cart</span></button>
+      <button type="button" id="profileBtn">♡<span>Profile</span></button>
+    </nav>
+
+    <!-- FLOATING CART -->
+
+    <div
+      class="cart-wrapper"
+      onclick="toggleCart()"
+      role="button"
+      aria-label="Open cart"
+      tabindex="0">
+
+      <div class="cart-circle">
+
+        🛒
+
+        <span
+          id="cartCount"
+          class="cart-badge">
+
+          0
+        </span>
+
+      </div>
+
+    </div>
+
+    <!-- CART PANEL -->
+
+    <div
+      class="cart-backdrop"
+      id="cartBackdrop"
+      onclick="toggleCart(false)"
+      hidden></div>
+
+    <aside
+      class="cart-panel"
+      id="cartPanel"
+      aria-label="Shopping cart"
+      aria-hidden="true">
+
+      <div class="cart-header">
+
+        <button
+          type="button"
+          onclick="toggleCart()">
+
+          ← Back
+        </button>
+
+        <h3>Your Cart</h3>
+
+      </div>
+
+      <div id="cartItems"></div>
+
+      <div class="total">
+        Total: <span id="total">₹0</span>
+      </div>
+
+      <div id="freeDeliveryHint"></div>
+
+      <section class="coupon-box" aria-label="Coupons">
+        <div class="coupon-entry">
+          <input
+            type="text"
+            id="couponInput"
+            placeholder="Enter Coupon"
+            autocomplete="off" />
+          <button type="button" onclick="applyCoupon()">Apply</button>
+        </div>
+        <div id="appliedCoupon" class="applied-coupon"></div>
+        <div id="availableCoupons" class="available-coupons"></div>
+        <div id="cartPriceBreakdown" class="cart-price-breakdown"></div>
+      </section>
+
+      <!-- CUSTOMER DETAILS -->
+
+      <section class="saved-address-box" aria-label="Saved delivery address">
+        <label for="savedAddressSelect">Delivery Address</label>
+        <select id="savedAddressSelect">
+          <option value="">Add new address</option>
+        </select>
+        <div class="address-actions">
+          <button type="button" id="useCurrentLocationBtn">📍 Use Current Location</button>
+          <button type="button" id="editSavedAddressBtn">Edit</button>
+          <button type="button" id="deleteSavedAddressBtn">Delete</button>
+        </div>
+        <div class="address-search-row">
+          <input id="addressSearchInput" type="search" placeholder="Search address / area" autocomplete="off">
+          <button type="button" id="searchAddressBtn">Find</button>
+        </div>
+        <small>Saved addresses auto-fill with GPS coordinates for delivery tracking.</small>
+      </section>
+
+      <input
+        type="text"
+        id="customerName"
+        placeholder="Your Name"
+        autocomplete="name" />
+
+      <input
+        type="tel"
+        id="customerPhone"
+        placeholder="Mobile Number"
+        autocomplete="tel"
+        inputmode="tel"
+        maxlength="16" />
+
+      <textarea
+        id="customerAddress"
+        placeholder="Full Address"
+        rows="3"
+        autocomplete="street-address"></textarea>
+
+      <input
+        type="text"
+        id="customerLandmark"
+        placeholder="Landmark (Optional)" />
+
+      <input type="hidden" id="customerLat">
+      <input type="hidden" id="customerLng">
+
+      <!-- ORDER -->
+
+      <button
+        type="button"
+        aria-label="Place order"
+        onclick="placeOrder()">
+
+        Place Order 🍕
+      </button>
+
+    </aside>
+
+    <!-- ORDER SUCCESS -->
+
+    <div
+      id="orderPopup"
+      role="dialog"
+      aria-modal="true"
+      style="display:none;">
+
+      <div>
+
+        <h2>🎉 Order Placed!</h2>
+
+        <p>
+          Thank you for ordering from
+          <b>MAGNEETOZ</b> 🍕
+        </p>
+
+        <p>
+          Your delicious pizza is being prepared.
+        </p>
+
+        <div id="displayOrderId">—</div>
+
+        <button
+          type="button"
+          onclick="closeOrderPopup()"
+          style="background:var(--red);color:white;">
+
+          Close
+        </button>
+
+      </div>
+
+    </div>
+
+    <!-- PAYMENT -->
+
+    <div
+      id="paymentMethodPopup"
+      role="dialog"
+      aria-modal="true"
+      style="display:none;">
+
+      <div>
+
+        <h3>Select Payment</h3>
+
+        <div id="orderSummaryBox">
+
+          <strong>Order Summary</strong>
+
+          <div id="summaryDetails"></div>
+
+          <div
+            id="summaryFreeDelivery"
+            style="
+              margin-top:8px;
+              font-weight:600;
+              color:#22c55e;
+            ">
+
+          </div>
+
+        </div>
+
+        <button
+          id="codBtn"
+          type="button"
+          onclick="codOrder()"
+          style="background:var(--red);color:white;">
+
+          🛵 Cash on Delivery
+        </button>
+
+        <button
+          id="upiBtn"
+          type="button"
+          onclick="upiOrder()"
+          style="background:var(--dark);color:white;">
+
+          📱 UPI Payment
+        </button>
+
+        <button
+          type="button"
+          onclick="closePaymentPopup()"
+          style="
+            background:none;
+            color:var(--red);
+            box-shadow:none;
+            margin-top:4px;
+          ">
+
+          Cancel
+        </button>
+
+      </div>
+
+    </div>
+
+    <div
+      id="minOrderPopup"
+      role="dialog"
+      aria-modal="true"
+      style="display:none;">
+
+      <div>
+
+        <h2>Minimum Order</h2>
+
+        <p id="minOrderText">
+          Add more items to place order.
+        </p>
+
+        <button
+          type="button"
+          onclick="closeMinOrderPopup()">
+
+          Continue Shopping
+        </button>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <div class="smart-search-overlay" id="smartSearchOverlay" aria-hidden="true">
+    <div class="smart-search-card">
+      <div class="search-top">
+        <input id="smartSearchInput" type="search" placeholder="Search MAGNEETOZ menu" autocomplete="off" />
+        <button type="button" id="voiceSearchBtn">🎙</button>
+        <button type="button" id="closeSmartSearch">×</button>
+      </div>
+      <div class="search-section">
+        <p>Trending</p>
+        <div class="search-chips" id="trendingSearches">
+          <button>Pizza</button>
+          <button>Cheese Burst</button>
+          <button>Combo</button>
+          <button>Garlic Bread</button>
+        </div>
+      </div>
+      <div class="search-section" id="recentSearchSection">
+        <p>Recent</p>
+        <div class="search-chips" id="recentSearches"></div>
+      </div>
+      <div class="search-results" id="smartSearchResults"></div>
+    </div>
+  </div>
+
+  <div class="quick-preview" id="quickPreview" aria-hidden="true">
+    <div class="quick-preview-card">
+      <button type="button" id="closeQuickPreview">×</button>
+      <img id="previewImage" src="logo_tran1.png" alt="Food preview" />
+      <div>
+        <p id="previewTag">Most loved</p>
+        <h3 id="previewTitle">MAGNEETOZ special</h3>
+        <span id="previewDesc">Fresh, hot, and made for cravings.</span>
+      </div>
+    </div>
+  </div>
+
+  <aside class="profile-drawer" id="profileDrawer">
+    <div class="profile-card-premium">
+      <button type="button" id="closeProfile">×</button>
+      <div class="profile-avatar">M</div>
+      <h3>MAGNEETOZ Club</h3>
+      <p>Loyalty points, saved addresses, coupons wallet, favourites, and delivery preferences are ready for the next product phase.</p>
+      <div class="profile-stats">
+        <span><b>120</b>Points</span>
+        <span><b>3</b>Coupons</span>
+        <span><b>8</b>Orders</span>
+      </div>
+    </div>
+  </aside>
+
+  <div class="install-app-prompt" id="installAppPrompt">
+    <div>
+      <strong>Install MAGNEETOZ</strong>
+      <span>Faster ordering, app-like feel, quick access.</span>
+    </div>
+    <button type="button" id="installAppBtn">Install</button>
+    <button type="button" id="dismissInstallPrompt">×</button>
+  </div>
+
+  <div id="premiumToastHost" class="premium-toast-host" aria-live="polite"></div>
+
+  <!-- ================= ORDER TRACKING OVERLAY ================= -->
+
+<div id="trackingOverlay" class="tracking-overlay">
+
+  <div class="tracking-container">
+
+    <!-- TOPBAR -->
+    <div class="tracking-topbar">
+
+      <div>
+        <h2>🍕 Live Orders</h2>
+        <p>Track your MAGNEETOZ orders</p>
+      </div>
+
+      <button id="closeTracking">
+        ✕
+      </button>
+
+    </div>
+
+    <!-- FILTERS -->
+    <div class="tracking-filters">
+
+      <button class="filter-btn active" data-filter="active">
+        Active Orders
+      </button>
+
+      <button class="filter-btn" data-filter="delivered">
+        Delivered Orders
+      </button>
+
+      <button class="filter-btn" data-filter="cancelled">
+        Cancelled Orders
+      </button>
+
+    </div>
+
+    <!-- LOADING -->
+    <div id="trackingLoader" class="tracking-loader">
+
+      <div class="skeleton-card"></div>
+      <div class="skeleton-card"></div>
+
+    </div>
+
+    <!-- EMPTY -->
+    <div id="emptyOrders" class="empty-orders">
+
+      <img src="logo_tran1.png">
+
+      <h3>No Orders Yet 🍕</h3>
+
+      <p>Your delicious pizzas will appear here.</p>
+
+    </div>
+
+    <!-- ORDERS -->
+    <div id="ordersContainer" class="orders-container"></div>
+
+  </div>
+
+</div>
+
+<div id="trackingToastHost" class="tracking-toast-host" aria-live="polite"></div>
+
+<!-- =========================================
+     SERVICE AREA POPUP
+========================================= -->
+
+<div
+  class="service-popup-overlay"
+  id="serviceUnavailablePopup">
+
+  <div class="service-popup-card">
+
+    <div class="service-icon">
+      🚫
+    </div>
+
+    <h2>
+      Service Not Available
+    </h2>
+
+    <p>
+
+      Sorry 😔<br>
+
+      MAGNEETOZ is currently unavailable
+      at your location.
+
+    </p>
+
+    <div class="distance-badge">
+
+      📍 Delivery Radius:
+      <span id="deliveryLimitText">
+        6 KM
+      </span>
+
+    </div>
+
+    <button
+      class="service-popup-btn"
+      onclick="contactOutsideDeliveryArea()">
+
+      Contact on WhatsApp
+
+    </button>
+
+    <button
+      class="service-popup-btn"
+      onclick="closeServicePopup()">
+
+      Got It
+
+    </button>
+
+  </div>
+
+</div>
+
+  <!-- FIREBASE FIX -->
+  <script>
+    window.global = window;
+  </script>
+
+  <!-- OTP ENTER KEY -->
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+
+      document
+        .getElementById("otp")
+        ?.addEventListener("keypress", (e) => {
+
+          if (e.key === "Enter") {
+            verifyOTP();
+          }
+
+        });
+
+    });
+  </script>
+
+  <!-- RAZORPAY -->
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <!-- MODULES -->
+  <script type="module" src="./firebase.js?v=20260524-restaurant-location"></script>
+<script type="module" src="./auth.js?v=20260524-restaurant-location"></script>
+<script type="module" src="./script.js?v=20260524-restaurant-location"></script>
+
+<script>
+
+if("serviceWorker" in navigator){
+
+  window.addEventListener("load", async ()=>{
+
+    const registrations =
+      await navigator.serviceWorker.getRegistrations();
+
+    for(const reg of registrations){
+
+      reg.update();
+
+    }
+
+    navigator.serviceWorker.register("./sw.js");
+
+  });
+
+}
+
+</script>
+
+<script>
+
+window.addEventListener("error", (e) => {
+
+  console.error("GLOBAL ERROR:", e.message);
+
+});
+
+window.addEventListener("unhandledrejection", (e) => {
+
+  console.error("PROMISE ERROR:", e.reason);
+
+});
+
+</script>
+
+
+<script type="module" src="premium-ui.js"></script>
+
+
+
+  <script src="app-notifications.js"></script>
+</body>
+
+</html>

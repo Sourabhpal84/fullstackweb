@@ -1,0 +1,171 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAGNEETOZ Delivery Logic</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;font-family:Poppins,system-ui,sans-serif;color:#fff;background:radial-gradient(circle at 15% 0%,rgba(34,197,94,.16),transparent 28%),linear-gradient(145deg,#080c12,#121821);padding:18px}
+.admin-auth-checking body{display:none}
+.admin-logout-btn{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:12px;padding:10px 14px;font-weight:800}
+.wrap{width:min(1200px,100%);margin:auto}.head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px}
+h1{margin:0;color:#00ffcc;font-size:26px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.panel,.stat{background:linear-gradient(145deg,#111827,#182233);border:1px solid #263241;border-radius:20px;padding:16px;box-shadow:0 20px 70px rgba(0,0,0,.3)}
+.panel h2{font-size:17px;margin:0 0 12px;color:#ffd166}.fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label{display:block;color:#aeb8c7;font-size:11px;font-weight:800}input{width:100%;margin-top:5px;border-radius:12px;border:1px solid #334155;background:#0b0f14;color:#fff;padding:10px;font:700 13px Poppins}
+label.check{display:flex;align-items:center;gap:8px;margin-top:8px}label.check input{width:auto}
+button{border:0;border-radius:13px;min-height:44px;padding:0 14px;font:900 12px Poppins;cursor:pointer;background:linear-gradient(135deg,#00ffcc,#22c55e);color:#06110a;margin-top:12px}
+.analytics{margin-top:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}.stat b{display:block;font-size:24px;color:#00ffcc}.stat span{color:#aeb8c7;font-size:12px}
+@media(max-width:640px){.fields{grid-template-columns:1fr}.head{align-items:flex-start;flex-direction:column}}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header class="head">
+    <div>
+      <h1>Delivery Logic Engine</h1>
+      <p style="margin:4px 0 0;color:#aeb8c7">Configure payouts, incentives, loyalty rewards, and delivery operations.</p>
+    </div>
+  </header>
+  <section class="grid">
+    <form class="panel" id="pricingForm">
+      <h2>Rider Payout Rules</h2>
+      <div class="fields">
+        <label>Base Fare<input id="BASE_FARE" type="number"></label>
+        <label>Paid Per KM<input id="PAID_PER_KM" type="number"></label>
+        <label>Per KM Rate<input id="PER_KM_RATE" type="number"></label>
+        <label>Minimum Payout<input id="MIN_PAYOUT" type="number"></label>
+        <label>Exception Settlement Penalty<input id="exceptionSettlementPenalty" type="number" min="0" step="1"></label>
+        <label>GST Percentage<input id="gstPercent" type="number" min="0" step="0.01"></label>
+        <label>Handling Charge<input id="handlingCharge" type="number" min="0" step="1"></label>
+        <label>Distance Bonus After KM<input id="DISTANCE_BONUS_AFTER_KM" type="number"></label>
+        <label>Distance Bonus Per KM<input id="DISTANCE_BONUS_PER_KM" type="number"></label>
+      </div>
+      <label class="check"><input id="NIGHT_BONUS_ENABLED" type="checkbox"> Night bonus</label>
+      <label>Night Bonus Amount<input id="NIGHT_BONUS_AMOUNT" type="number"></label>
+      <label class="check"><input id="PEAK_BONUS_ENABLED" type="checkbox"> Peak hour bonus</label>
+      <label>Peak Bonus Amount<input id="PEAK_BONUS_AMOUNT" type="number"></label>
+      <label class="check"><input id="RAIN_BONUS_ENABLED" type="checkbox"> Rain bonus</label>
+      <label>Rain Bonus Amount<input id="RAIN_BONUS_AMOUNT" type="number"></label>
+      <button type="submit">Save Payout Logic</button>
+    </form>
+    <form class="panel" id="rewardForm">
+      <h2>Loyalty Reward Rules</h2>
+      <label class="check"><input id="rewardEnabled" type="checkbox"> Enable loyalty rewards</label>
+      <label>Reward Type<input id="rewardType" placeholder="Free Pizza"></label>
+      <label>Required Orders<input id="requiredOrders" type="number"></label>
+      <label>Coupon Code Prefix<input id="couponCode" placeholder="FREEPIZZA10"></label>
+      <label>Discount Value<input id="discountValue" type="number"></label>
+      <button type="submit">Save Reward Rules</button>
+    </form>
+    <form class="panel" id="deliveryForm">
+      <h2>Road Distance Settings</h2>
+      <label>Google Maps API Key<input id="googleMapsApiKey" placeholder="Maps JavaScript API key"></label>
+      <label>Max Delivery Distance KM<input id="maxDistance" type="number"></label>
+      <label>Delivery Radius KM<input id="maxDeliveryDistanceKm" type="number"></label>
+      <label class="check"><input id="allIndia" type="checkbox"> Allow all-distance delivery</label>
+      <label class="check"><input id="vipDeliveryEnabled" type="checkbox"> VIP delivery override</label>
+      <button type="submit">Save Distance Settings</button>
+    </form>
+  </section>
+  <section class="analytics">
+    <div class="stat"><b id="topRiders">0</b><span>Active riders</span></div>
+    <div class="stat"><b id="rewardCount">0</b><span>Rewards generated</span></div>
+    <div class="stat"><b id="incentivePayouts">â‚¹0</b><span>Incentive payouts</span></div>
+    <div class="stat"><b id="freePizzaClaims">0</b><span>Free pizza coupons</span></div>
+  </section>
+</main>
+<script type="module">
+import { protectAdminPage, mountAdminLogout } from "./admin-guard.js";
+import { db } from "./firebase-config.js";
+import { collection, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+protectAdminPage();
+mountAdminLogout(document.querySelector(".head"));
+
+const pricingKeys = ["BASE_FARE","PAID_PER_KM","PER_KM_RATE","MIN_PAYOUT","exceptionSettlementPenalty","DISTANCE_BONUS_AFTER_KM","DISTANCE_BONUS_PER_KM","NIGHT_BONUS_AMOUNT","PEAK_BONUS_AMOUNT","RAIN_BONUS_AMOUNT"];
+const pricingChecks = ["NIGHT_BONUS_ENABLED","PEAK_BONUS_ENABLED","RAIN_BONUS_ENABLED"];
+const money = amount => new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0}).format(Number(amount)||0);
+
+onSnapshot(doc(db,"settings","pricing"), snap => {
+  const data = snap.exists() ? snap.data() : {};
+  pricingKeys.forEach(key => document.getElementById(key).value = data[key] ?? "");
+  pricingChecks.forEach(key => document.getElementById(key).checked = data[key] === true);
+  gstPercent.value = data.gstPercent ?? 0;
+  handlingCharge.value = data.handlingCharge ?? 0;
+});
+
+onSnapshot(doc(db,"settings","rewards"), snap => {
+  const data = snap.exists() ? snap.data() : {};
+  rewardEnabled.checked = data.enabled !== false;
+  rewardType.value = data.rewardType || "Free Pizza";
+  requiredOrders.value = data.requiredOrders || 10;
+  couponCode.value = data.couponCode || "FREEPIZZA10";
+  discountValue.value = data.discountValue || 199;
+});
+
+onSnapshot(doc(db,"settings","delivery"), snap => {
+  const data = snap.exists() ? snap.data() : {};
+  googleMapsApiKey.value = data.googleMapsApiKey || data.mapsApiKey || "";
+  maxDistance.value = data.maxDeliveryDistanceKm || data.maxDistance || 6;
+  maxDeliveryDistanceKm.value = data.maxDeliveryDistanceKm || data.maxDistance || 6;
+  allIndia.checked = data.allIndia === true;
+  vipDeliveryEnabled.checked = data.vipDeliveryEnabled === true;
+});
+
+pricingForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  const data = {};
+  pricingKeys.forEach(key => data[key] = Number(document.getElementById(key).value) || 0);
+  pricingChecks.forEach(key => data[key] = document.getElementById(key).checked);
+  data.gstPercent = Number(gstPercent.value) || 0;
+  data.handlingCharge = Number(handlingCharge.value) || 0;
+  await setDoc(doc(db,"settings","pricing"), data, { merge:true });
+  alert("Payout logic saved.");
+});
+
+rewardForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  await setDoc(doc(db,"settings","rewards"), {
+    enabled:rewardEnabled.checked,
+    rewardType:rewardType.value || "Free Pizza",
+    requiredOrders:Number(requiredOrders.value) || 10,
+    couponCode:couponCode.value || "FREEPIZZA10",
+    discountValue:Number(discountValue.value) || 199,
+    couponGenerated:true
+  }, { merge:true });
+  alert("Reward rules saved.");
+});
+
+deliveryForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  await setDoc(doc(db,"settings","delivery"), {
+    googleMapsApiKey:googleMapsApiKey.value.trim(),
+    maxDistance:Number(maxDeliveryDistanceKm.value || maxDistance.value) || 6,
+    maxDeliveryDistanceKm:Number(maxDeliveryDistanceKm.value || maxDistance.value) || 6,
+    allIndia:allIndia.checked,
+    vipDeliveryEnabled:vipDeliveryEnabled.checked
+  }, { merge:true });
+  alert("Distance settings saved.");
+});
+
+onSnapshot(collection(db,"riders"), snap => {
+  topRiders.textContent = snap.docs.filter(item => item.data().approved === true).length;
+});
+onSnapshot(collection(db,"rewardRedemptions"), snap => {
+  rewardCount.textContent = snap.size;
+});
+onSnapshot(collection(db,"orders"), snap => {
+  let incentive = 0;
+  snap.forEach(item => incentive += item.data().riderIncentiveBonus || 0);
+  incentivePayouts.textContent = money(incentive);
+});
+onSnapshot(collection(db,"coupons"), snap => {
+  freePizzaClaims.textContent = snap.docs.filter(item => item.data().generatedBy === "loyalty_reward").length;
+});
+</script>
+  <script src="app-notifications.js"></script>
+</body>
+</html>

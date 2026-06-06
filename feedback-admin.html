@@ -1,0 +1,108 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MAGNEETOZ Feedback Admin</title>
+  <style>
+    :root{--bg:#f6f7fb;--panel:#fff;--text:#111827;--muted:#64748b;--line:#e5e7eb;--accent:#0ea5e9;--bad:#dc2626;--good:#16a34a}
+    body.dark{--bg:#0b0f14;--panel:#121821;--text:#f8fafc;--muted:#94a3b8;--line:#263241}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,Segoe UI,sans-serif}.admin-auth-checking body{display:none}
+    header{position:sticky;top:0;z-index:2;background:var(--panel);border-bottom:1px solid var(--line);padding:16px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+    h1{margin:0;font-size:22px}.wrap{padding:20px;display:grid;gap:18px}.toolbar{display:flex;flex-wrap:wrap;gap:10px}input,select,button{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--panel);color:var(--text);font:inherit}button{cursor:pointer;font-weight:800}.primary{background:var(--accent);border-color:var(--accent);color:white}
+    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px}.card,.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;box-shadow:0 12px 35px rgba(15,23,42,.08)}.card span{color:var(--muted);font-size:13px;font-weight:800}.card strong{display:block;font-size:28px;margin-top:8px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.list{display:grid;gap:10px}.item{display:grid;grid-template-columns:1fr auto;gap:10px;border:1px solid var(--line);border-radius:8px;padding:12px}.item.high{border-color:rgba(220,38,38,.7);background:rgba(220,38,38,.08)}.pill{border-radius:999px;padding:4px 9px;font-size:12px;font-weight:900}.positive{background:rgba(22,163,74,.15);color:var(--good)}.negative{background:rgba(220,38,38,.15);color:var(--bad)}.neutral{background:rgba(100,116,139,.15);color:var(--muted)}
+    .bar{display:grid;grid-template-columns:110px 1fr 55px;align-items:center;gap:10px}.track{height:12px;background:var(--bg);border-radius:999px;overflow:hidden}.fill{height:100%;background:linear-gradient(90deg,#0ea5e9,#16a34a)}.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.actions button{font-size:12px;padding:7px 9px}.qrbox img{width:150px;height:150px;border:1px solid var(--line);border-radius:8px;background:white}
+    @media(max-width:900px){.grid{grid-template-columns:1fr}.bar{grid-template-columns:90px 1fr}}
+  </style>
+</head>
+<body>
+  <header><h1>Feedback Intelligence</h1><div class="toolbar"><button id="themeBtn">Theme</button><button class="primary" id="csvBtn">Export CSV</button></div></header>
+  <main class="wrap">
+    <section class="toolbar">
+      <input id="search" type="search" placeholder="Search name, phone, order, message">
+      <select id="sentimentFilter"><option value="all">All Sentiment</option><option value="positive">Positive</option><option value="neutral">Neutral</option><option value="negative">Negative</option></select>
+      <select id="priorityFilter"><option value="all">All Priority</option><option value="high">High Priority</option></select>
+    </section>
+    <section class="stats" id="stats"></section>
+    <section class="grid">
+      <div class="panel"><h2>AI Analytics</h2><div class="list" id="analytics"></div></div>
+      <div class="panel"><h2>QR Feedback Link</h2><div class="list qrbox"><strong id="qrLink"></strong><img id="qrImg" alt="Feedback QR code"><small>Use this for table, delivery, and general business feedback.</small></div></div>
+    </section>
+    <section class="panel"><h2>Charts</h2><div class="list" id="charts"></div></section>
+    <section class="panel"><h2>Feedback Inbox</h2><div class="list" id="feedbackList"></div></section>
+  </main>
+  <script type="module">
+    import { protectAdminPage, mountAdminLogout } from "./admin-guard.js";
+    import { db } from "./firebase-config.js";
+    import { collection, doc, onSnapshot, query, orderBy, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    protectAdminPage(); mountAdminLogout(document.querySelector("header"));
+    let rows = [];
+    const stats = document.getElementById("stats"), feedbackList = document.getElementById("feedbackList"), analytics = document.getElementById("analytics"), charts = document.getElementById("charts");
+    const esc = value => String(value ?? "").replace(/[&<>"']/g, ch => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[ch]));
+    function pct(part,total){ return total ? Math.round((part/total)*100) : 0; }
+    function render(){
+      const search = document.getElementById("search").value.toLowerCase();
+      const sf = document.getElementById("sentimentFilter").value;
+      const pf = document.getElementById("priorityFilter").value;
+      const filtered = rows.filter(f => {
+        const sentiment = String(f.sentiment || f.ai?.sentiment || "neutral").toLowerCase();
+        const hay = `${f.customerName||""} ${f.phone||""} ${f.orderId||""} ${f.orderNumber||""} ${f.message||""} ${f.comment||""}`.toLowerCase();
+        return (!search || hay.includes(search)) && (sf === "all" || sentiment === sf) && (pf === "all" || f.highPriority === true || f.ai?.highPriority === true);
+      });
+      const total = rows.length, avg = total ? rows.reduce((s,f)=>s+Number(f.rating||0),0)/total : 0;
+      const positive = rows.filter(f => (f.sentiment || f.ai?.sentiment) === "positive").length;
+      const negative = rows.filter(f => (f.sentiment || f.ai?.sentiment) === "negative").length;
+      const neutral = Math.max(0,total-positive-negative);
+      const high = rows.filter(f => f.highPriority || f.ai?.highPriority).length;
+      stats.innerHTML = [["Total Feedbacks",total],["Average Rating", `â­ ${avg.toFixed(1)}/5`],["Positive %",`${pct(positive,total)}%`],["Negative %",`${pct(negative,total)}%`],["Neutral %",`${pct(neutral,total)}%`],["High Priority",high]].map(([k,v])=>`<div class="card"><span>${k}</span><strong>${v}</strong></div>`).join("");
+      renderAnalytics(filtered); renderCharts(filtered, { positive, negative, neutral, total });
+      feedbackList.innerHTML = filtered.map(f => {
+        const sentiment = String(f.sentiment || f.ai?.sentiment || "neutral").toLowerCase();
+        const highPriority = f.highPriority || f.ai?.highPriority;
+        return `<article class="item ${highPriority ? "high" : ""}"><div><strong>${esc(f.customerName || "Customer")} - ${esc(f.phone || "")}</strong><p>${esc(f.message || f.comment || "No message")}</p><small>Type: ${esc(f.feedbackType || "order_feedback")} | Order: ${esc(f.orderId || f.orderNumber || "-")} | Food ${stars(f.foodQuality)} Delivery ${stars(f.delivery)} Service ${stars(f.service)} Value ${stars(f.valueForMoney)}</small><div class="actions"><button onclick="setReviewStatus('${f.id}','approved')">Approve</button><button onclick="setReviewStatus('${f.id}','rejected')">Reject</button><button onclick="featureReview('${f.id}',${f.featured === true ? "false" : "true"})">${f.featured ? "Unfeature" : "Feature"}</button></div></div><div><span class="pill ${sentiment}">${sentiment}</span><br><small>${esc(f.reviewStatus || "pending")}${f.featured ? " - Featured" : ""}</small><br><strong style="color:#f59e0b;font-size:18px">
+${"â­".repeat(Number(f.rating || 0))}
+${"â˜†".repeat(5 - Number(f.rating || 0))}
+</strong>${highPriority ? "<br><span class='pill negative'>Alert</span>" : ""}</div></article>`;
+      }).join("") || "<p>No feedback found.</p>";
+    }
+    function renderAnalytics(data){
+      const text = data.map(f => `${f.message || f.comment || ""} ${f.ai?.complaintType || ""}`).join(" ").toLowerCase();
+      const terms = ["refund","late delivery","bad food","poor service","cold","wrong","missing","burger","pizza","fries","delivery","taste"].map(term => [term, (text.match(new RegExp(term.replace(" ","\\s+"), "g")) || []).length]).filter(([,n])=>n>0).sort((a,b)=>b[1]-a[1]).slice(0,8);
+      const happy = data.filter(f => Number(f.rating || 0) >= 4 && !(f.highPriority || f.ai?.highPriority)).length;
+      const risk = data.filter(f => Number(f.rating || 0) <= 2 || f.highPriority || f.ai?.highPriority).length;
+      analytics.innerHTML = [
+        ["Most Common Mentions", terms.map(t=>`${t[0]} (${t[1]})`).join(", ") || "No repeated terms yet"],
+        ["Customer Mood", `${happy} happy, ${risk} at risk`],
+        ["Retention Recommendation", risk ? "Contact at-risk customers and offer apology coupon." : "Send loyalty offers to happy customers."]
+      ].map(([a,b])=>`<div class="item"><strong>${a}</strong><span>${b}</span></div>`).join("");
+    }
+
+    
+    function renderCharts(data, totals){
+      const ratingCounts = [5,4,3,2,1].map(r => [r, data.filter(f => Number(f.rating) === r).length]);
+      charts.innerHTML = [
+        ...ratingCounts.map(([label,value]) => bar(`${label} Star`, value, Math.max(1,data.length))),
+        bar("Positive", totals.positive, Math.max(1,totals.total)),
+        bar("Neutral", totals.neutral, Math.max(1,totals.total)),
+        bar("Negative", totals.negative, Math.max(1,totals.total))
+      ].join("");
+    }
+    function bar(label,value,max){ return `<div class="bar"><b>${label}</b><div class="track"><div class="fill" style="width:${Math.max(4,(value/max)*100)}%"></div></div><span>${value}</span></div>`; }
+    function stars(value){ const n = Math.max(0, Math.min(5, Number(value || 0))); return "★".repeat(n) + "☆".repeat(5 - n); }
+    window.setReviewStatus = async (id, reviewStatus) => updateDoc(doc(db, "feedback", id), { reviewStatus, reviewedAt:serverTimestamp() });
+    window.featureReview = async (id, featured) => updateDoc(doc(db, "feedback", id), { featured, reviewStatus:featured ? "approved" : "pending", reviewedAt:serverTimestamp() });
+    const feedbackUrl = `${location.origin}/givefeedback.html?source=qr&mode=general`;
+    document.getElementById("qrLink").textContent = feedbackUrl;
+    document.getElementById("qrImg").src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(feedbackUrl)}`;
+    onSnapshot(query(collection(db,"feedback"), orderBy("createdAt","desc")), snap => { rows = snap.docs.map(d => ({ id:d.id, ...d.data() })); render(); });
+    ["search","sentimentFilter","priorityFilter"].forEach(id => document.getElementById(id).addEventListener("input", render));
+    document.getElementById("themeBtn").onclick = () => document.body.classList.toggle("dark");
+    document.getElementById("csvBtn").onclick = () => {
+      const csv = ["Name,Phone,Order,Rating,Sentiment,High Priority,Message", ...rows.map(f => [f.customerName,f.phone,f.orderId||f.orderNumber,f.rating,f.sentiment||f.ai?.sentiment,f.highPriority||f.ai?.highPriority,`"${String(f.message||f.comment||"").replace(/"/g,'""')}"`].join(","))].join("\n");
+      const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type:"text/csv" })); a.download = "magneetoz_feedback_report.csv"; a.click();
+    };
+  </script>
+</body>
+</html>
+

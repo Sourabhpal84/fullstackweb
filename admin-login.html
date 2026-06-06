@@ -1,0 +1,92 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAGNEETOZ Admin Login</title>
+<link rel="manifest" href="manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#080c12;--card:rgba(18,24,33,.82);--line:rgba(255,255,255,.12);--accent:#00ffcc;--orange:#ff7b00;--red:#ef4444}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;padding:20px;font-family:Poppins,system-ui,sans-serif;color:white;background:radial-gradient(circle at 20% 10%,rgba(0,255,204,.18),transparent 30%),radial-gradient(circle at 85% 0%,rgba(255,123,0,.16),transparent 28%),linear-gradient(145deg,#070b10,#121a24)}
+.card{width:min(430px,100%);padding:24px;border-radius:26px;background:var(--card);border:1px solid var(--line);box-shadow:0 28px 90px rgba(0,0,0,.5);backdrop-filter:blur(18px);animation:rise .45s ease both}
+@keyframes rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+.logo{width:58px;height:58px;border-radius:20px;display:grid;place-items:center;background:linear-gradient(135deg,var(--accent),#7dfbe5);color:#06110f;font-weight:900;font-size:24px;margin-bottom:14px}
+h1{margin:0;font-size:25px}p{margin:6px 0 20px;color:#aeb8c7;font-size:13px;line-height:1.6}
+label{display:block;margin:13px 0 7px;color:#aeb8c7;font-size:12px;font-weight:700}
+input{width:100%;height:52px;border-radius:16px;border:1px solid var(--line);background:rgba(255,255,255,.07);color:white;padding:0 14px;font:700 14px Poppins}
+input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 4px rgba(0,255,204,.1)}
+button{width:100%;min-height:52px;margin-top:16px;border:0;border-radius:16px;background:linear-gradient(135deg,var(--accent),#22c55e);color:#03110e;font:900 14px Poppins;cursor:pointer}
+button:disabled{opacity:.65;cursor:not-allowed}
+.error{display:none;margin-top:12px;padding:12px;border-radius:14px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.28);color:#fecaca;font-size:12px}
+.error.show{display:block}
+</style>
+</head>
+<body>
+<main class="card">
+  <div class="logo">M</div>
+  <h1>Admin Operations Login</h1>
+  <p>Secure access for orders, riders, coupons, sales, and restaurant availability controls.</p>
+  <label for="email">Admin email</label>
+  <input id="email" type="email" autocomplete="username" value="magneeto73@gmail.com">
+  <label for="password">Password</label>
+  <input id="password" type="password" autocomplete="current-password" placeholder="Enter admin password">
+  <button id="loginBtn">Login Securely</button>
+  <div class="error" id="errorBox"></div>
+</main>
+<script type="module">
+import { auth } from "./firebase-config.js";
+import { ADMIN_EMAIL } from "./admin-guard.js";
+import {
+  browserLocalPersistence,
+  onAuthStateChanged,
+  setPersistence,
+  signInWithEmailAndPassword,
+  signOut
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+const email = document.getElementById("email");
+const password = document.getElementById("password");
+const button = document.getElementById("loginBtn");
+const errorBox = document.getElementById("errorBox");
+const next = new URLSearchParams(location.search).get("next") || "8423order9839status.html";
+
+function showError(message){
+  errorBox.textContent = message;
+  errorBox.classList.add("show");
+}
+
+await setPersistence(auth, browserLocalPersistence);
+
+onAuthStateChanged(auth, user => {
+  if(user?.email?.toLowerCase() === ADMIN_EMAIL){
+    location.replace(next);
+  }
+});
+
+button.addEventListener("click", async () => {
+  errorBox.classList.remove("show");
+  button.disabled = true;
+  button.textContent = "Checking...";
+  try{
+    const cred = await signInWithEmailAndPassword(auth, email.value.trim(), password.value);
+    if(cred.user.email.toLowerCase() !== ADMIN_EMAIL){
+      await signOut(auth);
+      throw new Error("This account is not allowed for admin access.");
+    }
+    location.replace(next);
+  }catch(error){
+    showError(error.message || "Unable to login.");
+    button.disabled = false;
+    button.textContent = "Login Securely";
+  }
+});
+
+password.addEventListener("keyup", event => {
+  if(event.key === "Enter") button.click();
+});
+</script>
+  <script src="app-notifications.js"></script>
+</body>
+</html>

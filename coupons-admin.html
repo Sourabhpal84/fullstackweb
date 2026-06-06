@@ -1,0 +1,178 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Magneetoz Coupons Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;font-family:Poppins,system-ui,sans-serif;color:#fff;background:linear-gradient(145deg,#070b10,#141a22);padding:20px}
+.wrap{width:min(1160px,100%);margin:auto}
+h1{color:#00ffcc;margin:0 0 18px}
+.grid{display:grid;grid-template-columns:360px 1fr;gap:18px}
+.panel,.card{background:#121821;border:1px solid #263241;border-radius:18px;padding:16px;box-shadow:0 20px 60px rgba(0,0,0,.28)}
+label{display:block;font-size:12px;color:#94a3b8;margin:10px 0 5px}
+input,select,textarea{width:100%;min-height:42px;border-radius:12px;border:1px solid #334155;background:#0b0f14;color:white;padding:10px;font:600 13px Poppins}
+button{border:0;border-radius:12px;min-height:42px;padding:0 14px;font:800 12px Poppins;cursor:pointer}
+.admin-auth-checking body{display:none}
+.admin-logout-btn{width:auto;margin:0 0 14px;background:#263241;color:white}
+.save{width:100%;margin-top:14px;background:linear-gradient(135deg,#00ffcc,#22c55e);color:#05100d}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.card h3{margin:0;color:#ffd166}
+.meta{color:#cbd5e1;font-size:12px;margin:8px 0}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.danger{background:#ef4444;color:white}.soft{background:#263241;color:white}.ok{background:#22c55e;color:#06110a}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+.stat{background:#0b0f14;border:1px solid #263241;border-radius:14px;padding:12px}.stat b{display:block;font-size:20px;color:#00ffcc}.stat span{font-size:11px;color:#94a3b8}
+@media(max-width:860px){.grid{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Coupon Management</h1>
+  <div class="stats">
+    <div class="stat"><b id="totalCoupons">0</b><span>Total coupons</span></div>
+    <div class="stat"><b id="totalUsage">0</b><span>Total usage</span></div>
+    <div class="stat"><b id="discountGiven">₹0</b><span>Discount given</span></div>
+    <div class="stat"><b id="freeDeliveryCount">0</b><span>Free delivery offers</span></div>
+  </div>
+  <div class="grid">
+    <form class="panel" id="couponForm">
+      <input type="hidden" id="couponId">
+      <label>Code</label><input id="code" placeholder="MAGNEETOZ50" required>
+      <label>Type</label>
+      <select id="type">
+        <option value="percentage">Percentage Discount</option>
+        <option value="flat">Flat Discount</option>
+        <option value="freeDelivery">Free Delivery</option>
+        <option value="freeItem">Free Item</option>
+      </select>
+      <label>Discount Value</label><input id="discountValue" type="number" min="0" value="0">
+      <label>Minimum Order Amount</label><input id="minOrderAmount" type="number" min="0" value="0">
+      <label>Max Discount</label><input id="maxDiscount" type="number" min="0" value="0">
+      <label>Usage Limit</label><input id="usageLimit" type="number" min="0" value="1000">
+      <label>Expiry Date</label><input id="expiryDate" type="datetime-local">
+      <label>Applicable Categories (comma separated)</label><input id="applicableCategories" placeholder="Pizza, Burger">
+      <label>Allowed User IDs (comma separated)</label><input id="allowedUsers" placeholder="optional">
+      <label>Visibility</label>
+      <select id="visibility">
+        <option value="public">Public</option>
+        <option value="hidden">Hidden manual code</option>
+        <option value="vip-only">VIP only</option>
+      </select>
+      <label>Free Item Name</label><input id="freeItem" placeholder="Coke">
+      <label><input id="active" type="checkbox" checked style="width:auto;min-height:auto"> Active</label>
+      <label><input id="hiddenCoupon" type="checkbox" style="width:auto;min-height:auto"> Hidden VIP coupon</label>
+      <label><input id="firstOrderOnly" type="checkbox" style="width:auto;min-height:auto"> First order only</label>
+      <button class="save" type="submit">Save Coupon</button>
+    </form>
+    <section class="cards" id="coupons"></section>
+  </div>
+</div>
+
+<script type="module">
+import { protectAdminPage, mountAdminLogout } from "./admin-guard.js";
+import { db } from "./firebase-config.js";
+import { collection, addDoc, deleteDoc, doc, onSnapshot, serverTimestamp, Timestamp, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+const form = document.getElementById("couponForm");
+const list = document.getElementById("coupons");
+protectAdminPage();
+mountAdminLogout(document.querySelector(".wrap"));
+const money = amount => new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0}).format(Number(amount)||0);
+let coupons = [];
+function splitList(value){return String(value||"").split(",").map(v=>v.trim()).filter(Boolean)}
+function expiryInput(ts){return ts?.seconds ? new Date(ts.seconds*1000).toISOString().slice(0,16) : ""}
+function readForm(){
+  const type = document.getElementById("type").value;
+  const expiry = document.getElementById("expiryDate").value;
+  const visibility = document.getElementById("visibility").value;
+  const data = {
+    code:document.getElementById("code").value.trim().toUpperCase(),
+    type:type === "freeDelivery" ? "flat" : type === "freeItem" ? "flat" : type,
+    discountValue:Number(document.getElementById("discountValue").value)||0,
+    active:document.getElementById("active").checked,
+    minOrderAmount:Number(document.getElementById("minOrderAmount").value)||0,
+    maxDiscount:Number(document.getElementById("maxDiscount").value)||0,
+    usageLimit:Number(document.getElementById("usageLimit").value)||0,
+    usedCount:0,
+    expiryDate:expiry ? Timestamp.fromDate(new Date(expiry)) : null,
+    applicableCategories:splitList(document.getElementById("applicableCategories").value),
+    freeItem:document.getElementById("freeItem").value.trim() || null,
+    freeDelivery:type === "freeDelivery",
+    visibility,
+    hiddenCoupon:visibility === "hidden" || document.getElementById("hiddenCoupon").checked,
+    vipOnly:visibility === "vip-only",
+    firstOrderOnly:document.getElementById("firstOrderOnly").checked,
+    allowedUsers:splitList(document.getElementById("allowedUsers").value),
+    usageByUser:{},
+    usedByUsers:[],
+    createdAt:serverTimestamp()
+  };
+  return data;
+}
+form.addEventListener("submit", async event => {
+  event.preventDefault();
+  const id = document.getElementById("couponId").value;
+  const data = readForm();
+  if(id){
+    delete data.usedCount;
+    delete data.createdAt;
+    await updateDoc(doc(db,"coupons",id), data);
+  }else{
+    await addDoc(collection(db,"coupons"), data);
+  }
+  form.reset();
+  document.getElementById("active").checked = true;
+  document.getElementById("hiddenCoupon").checked = false;
+  document.getElementById("couponId").value = "";
+});
+window.editCoupon = id => {
+  const c = coupons.find(item => item.id === id);
+  if(!c) return;
+  document.getElementById("couponId").value = id;
+  document.getElementById("code").value = c.code || "";
+  document.getElementById("type").value = c.freeDelivery ? "freeDelivery" : c.freeItem ? "freeItem" : c.type || "percentage";
+  document.getElementById("discountValue").value = c.discountValue || 0;
+  document.getElementById("minOrderAmount").value = c.minOrderAmount || 0;
+  document.getElementById("maxDiscount").value = c.maxDiscount || 0;
+  document.getElementById("usageLimit").value = c.usageLimit || 0;
+  document.getElementById("expiryDate").value = expiryInput(c.expiryDate);
+  document.getElementById("applicableCategories").value = (c.applicableCategories || []).join(", ");
+  document.getElementById("allowedUsers").value = (c.allowedUsers || []).join(", ");
+  document.getElementById("visibility").value = c.visibility || (c.vipOnly ? "vip-only" : c.hiddenCoupon ? "hidden" : "public");
+  document.getElementById("freeItem").value = c.freeItem?.name || c.freeItem || "";
+  document.getElementById("active").checked = c.active === true;
+  document.getElementById("hiddenCoupon").checked = c.hiddenCoupon === true;
+  document.getElementById("firstOrderOnly").checked = c.firstOrderOnly === true;
+};
+window.toggleCoupon = async id => {
+  const c = coupons.find(item => item.id === id);
+  await updateDoc(doc(db,"coupons",id), { active:!(c.active === true) });
+};
+window.deleteCoupon = async id => {
+  if(await window.MagneetozNotify.confirm("Delete this coupon?", { title:"Delete coupon", okText:"Delete" })) await deleteDoc(doc(db,"coupons",id));
+};
+onSnapshot(collection(db,"coupons"), snap => {
+  coupons = snap.docs.map(item => ({ id:item.id, ...item.data() }));
+  document.getElementById("totalCoupons").textContent = coupons.length;
+  document.getElementById("totalUsage").textContent = coupons.reduce((s,c)=>s+(c.usedCount||0),0);
+  document.getElementById("discountGiven").textContent = money(coupons.reduce((s,c)=>s+(c.totalDiscountGiven||0),0));
+  document.getElementById("freeDeliveryCount").textContent = coupons.filter(c=>c.freeDelivery).length;
+  list.innerHTML = coupons.map(c => `
+    <article class="card">
+      <h3>${c.code}</h3>
+      <div class="meta">${c.freeDelivery ? "Free Delivery" : c.freeItem ? "Free Item" : c.type} | Used ${c.usedCount || 0}/${c.usageLimit || "∞"}</div>
+      <div class="meta">Min ${money(c.minOrderAmount)} | Max ${money(c.maxDiscount)} | ${c.active ? "Active" : "Paused"} | ${c.visibility || (c.vipOnly ? "vip-only" : c.hiddenCoupon ? "hidden" : "public")}</div>
+      <div class="actions">
+        <button class="ok" onclick="editCoupon('${c.id}')">Edit</button>
+        <button class="soft" onclick="toggleCoupon('${c.id}')">${c.active ? "Disable" : "Enable"}</button>
+        <button class="danger" onclick="deleteCoupon('${c.id}')">Delete</button>
+      </div>
+    </article>
+  `).join("");
+});
+</script>
+  <script src="app-notifications.js"></script>
+</body>
+</html>

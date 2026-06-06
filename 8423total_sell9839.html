@@ -1,0 +1,766 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+
+<title>Magneetoz Online Dashboard</title>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+
+/* ===== GLOBAL ===== */
+body{
+  font-family:'Poppins','Inter',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  margin:0;
+  padding:20px;
+  background:#0b0f14;
+  color:#fff;
+}
+.admin-auth-checking body{display:none}
+.admin-logout-btn{background:#121821;color:#00ffcc;border:1px solid #1e2933;margin:0 8px 12px 0;border-radius:12px;padding:10px 14px;cursor:pointer;font-weight:800}
+
+/* ===== HEADER ===== */
+h1{
+  text-align:center;
+  font-size:30px;
+  font-weight:700;
+  margin-bottom:25px;
+  letter-spacing:1px;
+  color:#ffffff;
+}
+
+/* ===== TOP BAR ===== */
+.top-bar{
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:center;
+  gap:10px;
+  margin-bottom:20px;
+}
+
+input{
+  padding:10px 12px;
+  border-radius:8px;
+  border:1px solid #2a2a2a;
+  background:#121821;
+  color:#fff;
+}
+
+button{
+  padding:10px 16px;
+  border:none;
+  border-radius:8px;
+  background:linear-gradient(45deg,#00c3ff,#00ffcc);
+  color:#000;
+  font-weight:600;
+  cursor:pointer;
+  transition:0.3s;
+}
+
+button:hover{
+  transform:scale(1.05);
+  box-shadow:0 5px 20px rgba(0,255,200,0.4);
+}
+
+/* ===== STATS ===== */
+.stats{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:18px;
+  margin-top:25px;
+}
+
+/* ===== CARD ===== */
+.card{
+  background:#121821;
+  padding:22px;
+  border-radius:16px;
+  text-align:center;
+  cursor:pointer;
+  transition:0.3s;
+  position:relative;
+  overflow:hidden;
+}
+
+/* glow effect */
+.card::before{
+  content:"";
+  position:absolute;
+  top:0;
+  left:-100%;
+  width:100%;
+  height:100%;
+  background:linear-gradient(120deg,transparent,rgba(0,255,200,0.3),transparent);
+  transition:0.5s;
+}
+
+.card:hover::before{
+  left:100%;
+}
+
+.card:hover{
+  transform:translateY(-6px);
+  box-shadow:0 10px 30px rgba(0,0,0,0.5);
+}
+
+.card h3{
+  font-size:14px;
+  color:#aaa;
+  margin-bottom:10px;
+}
+
+.card h2{
+  font-size:32px;
+  margin:0;
+  color:#00ffcc;
+  font-weight:700;
+}
+
+/* active */
+.card.active{
+  border:1px solid #00ffcc;
+  box-shadow:0 0 15px rgba(0,255,200,0.5);
+}
+
+/* ===== TABLE ===== */
+table{
+  width:100%;
+  margin-top:30px;
+  border-collapse:collapse;
+  border-radius:14px;
+  overflow:hidden;
+  background:#121821;
+}
+
+/* header */
+th{
+  background:#00ffcc;
+  color:#000;
+  font-weight:600;
+}
+
+/* cells */
+th,td{
+  padding:14px;
+  font-size:14px;
+}
+
+/* rows */
+tr{
+  border-bottom:1px solid #1e2933;
+  transition:0.2s;
+}
+
+tr:hover{
+  background:#1a2330;
+}
+
+tr:nth-child(even){
+  background:#0f1620;
+}
+
+/* ===== SCROLL ===== */
+table{
+  display:block;
+  overflow-x:auto;
+  white-space:nowrap;
+}
+.analytics-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:18px;margin-top:22px}
+.chart-card,.top-items{background:linear-gradient(145deg,#121821,#182235);border:1px solid #263241;border-radius:18px;padding:16px;box-shadow:0 18px 60px rgba(0,0,0,.28)}
+.chart-card h2,.top-items h2{margin:0 0 12px;font-size:18px;color:#00ffcc}
+.bars{display:grid;gap:10px}.bar-row{display:grid;grid-template-columns:84px 1fr 80px;gap:10px;align-items:center;font-size:12px;color:#cbd5e1}.bar-track{height:12px;background:#0b0f14;border-radius:999px;overflow:hidden}.bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#00ffcc,#22c55e)}
+.top-list{display:grid;gap:10px}.top-list div{display:flex;justify-content:space-between;gap:12px;background:#0b0f14;border:1px solid #263241;border-radius:12px;padding:10px;color:#cbd5e1}
+.growth{font-size:12px;color:#86efac;margin-top:8px;font-weight:800}
+@media(max-width:900px){.analytics-grid{grid-template-columns:1fr}.bar-row{grid-template-columns:72px 1fr}}
+
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar{
+  height:6px;
+}
+::-webkit-scrollbar-thumb{
+  background:#00ffcc;
+  border-radius:10px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>🌐 MAGNEETOZ ONLINE DASHBOARD</h1>
+
+<div class="top-bar">
+<input type="date" id="dateFrom" aria-label="From date">
+<input type="date" id="dateTo" aria-label="To date">
+<input type="search" id="orderSearch" placeholder="Search order, customer, phone">
+<button onclick="applyDashboardFilters()">Apply Filters</button>
+<button onclick="clearDashboardFilters()">Clear</button>
+<button onclick="downloadCSV()">Download Orders</button>
+<button onclick="downloadRevenueReport()">Revenue Report</button>
+<button onclick="downloadCustomerReport()">Customer Report</button>
+</div>
+
+
+<div class="stats">
+
+<div class="card" onclick="filterType('all')">
+<h3>Total Orders</h3>
+<h2 id="totalOrders">0</h2>
+</div>
+
+<div class="card" onclick="filterType('sales')">
+<h3>Net Revenue</h3>
+<h2 id="totalSales">₹0</h2>
+</div>
+
+<div class="card">
+<h3>Gross Revenue</h3>
+<h2 id="grossRevenue">₹0</h2>
+</div>
+
+<div class="card" onclick="filterType('pending')">
+<h3>Pending / Unpaid Orders</h3>
+<h2 id="pendingRevenue">₹0</h2>
+</div>
+
+<div class="card" onclick="filterType('lost')">
+<h3>Cancelled / Rejected</h3>
+<h2 id="lostRevenue">₹0</h2>
+</div>
+
+<div class="card">
+<h3>Refunded Revenue</h3>
+<h2 id="refundedRevenue">₹0</h2>
+</div>
+
+<div class="card" onclick="filterType('new')">
+<h3>New Customers</h3>
+<h2 id="newCustomers">0</h2>
+</div>
+
+<div class="card" onclick="filterType('repeat')">
+<h3>Repeat Customers</h3>
+<h2 id="repeatCustomers">0</h2>
+</div>
+
+<div class="card">
+<h3>Online Revenue</h3>
+<h2 id="onlineRevenue">₹0</h2>
+</div>
+
+<div class="card">
+<h3>COD Received</h3>
+<h2 id="cashRevenue">₹0</h2>
+</div>
+
+<div class="card">
+<h3>Today's Orders</h3>
+<h2 id="todayOrders">0</h2>
+</div>
+
+<div class="card">
+<h3>Delivered Orders</h3>
+<h2 id="deliveredOrders">0</h2>
+</div>
+
+<div class="card">
+<h3>Today's Revenue</h3>
+<h2 id="todayRevenue">₹0</h2>
+</div>
+
+<div class="card">
+<h3>Pending Settlements</h3>
+<h2 id="pendingSettlement">₹0</h2>
+</div>
+
+<div class="card">
+<h3>Average Order Value</h3>
+<h2 id="avgOrderValue">₹0</h2>
+<div class="growth" id="growthIndicator">Growth: 0%</div>
+</div>
+
+</div>
+
+<section class="analytics-grid">
+  <div class="chart-card">
+    <h2>Daily / Weekly / Monthly Sales</h2>
+    <div class="bars" id="salesBars"></div>
+  </div>
+  <div class="top-items">
+    <h2>Top Selling Items</h2>
+    <div class="top-list" id="topItems"></div>
+  </div>
+</section>
+
+<section class="analytics-grid">
+  <div class="chart-card">
+    <h2>Customer Analytics</h2>
+    <div class="top-list" id="topCustomers"></div>
+  </div>
+  <div class="top-items">
+    <h2>AI Business Insights</h2>
+    <div class="top-list" id="businessInsights"></div>
+    <button type="button" onclick="generateAiInsights()">Generate AI Insights</button>
+  </div>
+</section>
+
+
+<table>
+
+<thead>
+
+<tr>
+<th>Order</th>
+<th>Name</th>
+<th>Phone</th>
+<th>Amount</th>
+<th>Payment</th>
+<th>Coupon</th>
+</tr>
+
+</thead>
+
+<tbody id="ordersTable"></tbody>
+
+</table>
+
+
+<script type="module">
+
+import { protectAdminPage, mountAdminLogout } from "./admin-guard.js";
+import { db } from "./firebase-config.js";
+import { auth } from "./firebase-config.js";
+import { getIdToken } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+import {
+collection,
+onSnapshot,
+query,
+where
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const ordersTable = document.getElementById("ordersTable");
+protectAdminPage();
+mountAdminLogout(document.body);
+
+function formatCurrency(amount){
+  return new Intl.NumberFormat("en-IN", {
+    style:"currency",
+    currency:"INR",
+    maximumFractionDigits:0
+  }).format(Number(amount) || 0);
+}
+
+let orders = [];
+let customersMap = {};
+
+function orderAmount(o){
+return Number(o.totalAmount || o.grandTotal || o.finalAmount || 0);
+}
+
+function orderStatus(o){
+return String(o.status || o.orderStatus || "").toLowerCase();
+}
+
+function isCancelledOrRejected(o){
+const status = orderStatus(o);
+return ["cancelled","canceled","rejected","failed"].includes(status) || o.cancelledAt || o.rejectedAt;
+}
+
+function isDelivered(o){
+return orderStatus(o) === "delivered";
+}
+
+function isRefunded(o){
+const status = orderStatus(o);
+const payment = String(o.paymentStatus || "").toLowerCase();
+return status === "refunded" || status === "returned" || payment === "refunded" || o.refundStatus === "refunded";
+}
+
+function isPaidOnline(o){
+const method = String(o.paymentMethod || o.paymentMode || "").toLowerCase();
+const payment = String(o.paymentStatus || "").toLowerCase();
+return (method === "upi" || method === "online") && (payment === "paid" || payment === "success" || o.paymentCaptured === true || !!o.razorpayPaymentId);
+}
+
+function isOnlineMethod(o){
+const method = String(o.paymentMethod || o.paymentMode || "").toLowerCase();
+return method === "upi" || method === "online";
+}
+
+function isCodMethod(o){
+const method = String(o.paymentMethod || o.paymentMode || "").toLowerCase();
+return method === "cash" || method === "cod";
+}
+
+function isCodReceived(o){
+return isCodMethod(o) && isDelivered(o);
+}
+
+function isRealRevenueOrder(o){
+
+  const status = String(
+    o.status || o.orderStatus || ""
+  ).toUpperCase();
+
+  const paymentMethod = String(
+    o.paymentMethod || o.paymentMode || ""
+  ).toUpperCase();
+
+  const paymentStatus = String(
+    o.paymentStatus || ""
+  ).toUpperCase();
+
+  // Never count these
+  if (
+    [
+      "PENDING",
+      "CANCELLED",
+      "CANCELED",
+      "REJECTED",
+      "FAILED",
+      "RETURNED",
+      "REFUNDED"
+    ].includes(status)
+  ) {
+    return false;
+  }
+
+  // COD Revenue
+  if (
+    paymentMethod === "COD" ||
+    paymentMethod === "CASH"
+  ) {
+    return status === "DELIVERED";
+  }
+
+  // Online Revenue
+  return (
+    status === "DELIVERED" &&
+    (
+      paymentStatus === "SUCCESS" ||
+      paymentStatus === "PAID"
+    )
+  );
+}
+
+function isPendingPaymentOrder(o){
+return !isCancelledOrRejected(o) && !isRefunded(o) && !isRealRevenueOrder(o);
+}
+
+const q = query(
+collection(db,"orders"),
+where("orderSource","==","online")
+);
+
+// ================= LIVE DATA =================
+
+onSnapshot(q,(snapshot)=>{
+
+orders = [];
+customersMap = {};
+
+snapshot.forEach(doc=>{
+
+const o = doc.data();
+orders.push(o);
+
+// customer count
+if(!customersMap[o.phone]){
+customersMap[o.phone] = 1;
+}else{
+customersMap[o.phone]++;
+}
+
+});
+
+// default load
+renderOrders("all");
+updateStats();
+
+});
+
+// ================= RENDER =================
+
+function renderOrders(type){
+
+ordersTable.innerHTML="";
+
+filteredOrders(type).forEach(o=>addRow(o));
+
+}
+
+function passesSearchAndDate(o){
+const search = document.getElementById("orderSearch")?.value.toLowerCase().trim() || "";
+const hay = `${o.orderNumber || ""} ${o.customerName || ""} ${o.phone || ""} ${o.status || ""} ${o.paymentMethod || ""}`.toLowerCase();
+if(search && !hay.includes(search)) return false;
+const from = document.getElementById("dateFrom")?.value ? new Date(document.getElementById("dateFrom").value).getTime() : 0;
+const to = document.getElementById("dateTo")?.value ? new Date(document.getElementById("dateTo").value).getTime() + 86400000 - 1 : Number.MAX_SAFE_INTEGER;
+const time = o.createdAt?.toDate ? o.createdAt.toDate().getTime() : 0;
+return !time || (time >= from && time <= to);
+}
+
+function filteredOrders(type = "all"){
+return orders.filter(o => {
+if(!passesSearchAndDate(o)) return false;
+if(type==="new") return customersMap[o.phone]===1;
+if(type==="repeat") return customersMap[o.phone]>1;
+if(type==="sales") return isRealRevenueOrder(o);
+if(type==="pending") return isPendingPaymentOrder(o);
+if(type==="lost") return isCancelledOrRejected(o);
+return true;
+});
+}
+function addRow(o){
+
+ordersTable.innerHTML+=`
+<tr>
+<td>${o.orderNumber || "-"}</td>
+<td>${o.customerName || "-"}</td>
+<td>${o.phone || "-"}</td>
+<td>${formatCurrency(orderAmount(o))}</td>
+<td>${o.paymentMethod || "-"} / ${o.paymentStatus || "Pending"}</td>
+<td>${o.couponCode || "-"} ${o.couponDiscount ? `(-${formatCurrency(o.couponDiscount)})` : ""}</td>
+</tr>
+`;
+
+}
+
+// ================= STATS =================
+
+function updateStats(){
+
+let totalOrders = orders.length;
+let realRevenue = 0;
+let pendingRevenue = 0;
+let lostRevenue = 0;
+let refundedRevenue = 0;
+let onlineRevenue = 0;
+let cashRevenue = 0;
+let pendingSettlement = 0;
+let todayOrders = 0;
+let deliveredOrders = 0;
+let todayRevenue = 0;
+const customerStats = {};
+
+let newCustomers = 0;
+let repeatCustomers = 0;
+const todayStart = startOfDay(new Date()).getTime();
+
+orders.forEach(o=>{
+const amount = orderAmount(o);
+const time = o.createdAt?.toDate ? o.createdAt.toDate().getTime() : 0;
+if(time >= todayStart) todayOrders++;
+if(isDelivered(o)) deliveredOrders++;
+if(o.phone){
+  customerStats[o.phone] = customerStats[o.phone] || { name:o.customerName || "Customer", phone:o.phone, orders:0, revenue:0 };
+  customerStats[o.phone].orders++;
+}
+if(isCancelledOrRejected(o)){
+lostRevenue += amount;
+return;
+}
+if(isRefunded(o)){
+refundedRevenue += amount;
+return;
+}
+if(isOnlineMethod(o)){
+if(isPaidOnline(o) && isDelivered(o)){
+  onlineRevenue += amount;
+  realRevenue += amount;
+  if(time >= todayStart) todayRevenue += amount;
+  if(o.phone) customerStats[o.phone].revenue += amount;
+}else{
+  pendingRevenue += amount;
+}
+}else if(isCodReceived(o)){
+cashRevenue += amount;
+realRevenue += amount;
+if(time >= todayStart) todayRevenue += amount;
+if(o.phone) customerStats[o.phone].revenue += amount;
+}else{
+pendingRevenue += amount;
+}
+if(o.cashSettlementPending){
+pendingSettlement += amount;
+}
+});
+
+for(let phone in customersMap){
+if(customersMap[phone]===1){
+newCustomers++;
+}else{
+repeatCustomers++;
+}
+}
+
+document.getElementById("totalOrders").innerText = totalOrders;
+document.getElementById("totalSales").innerText = formatCurrency(realRevenue);
+document.getElementById("grossRevenue").innerText = formatCurrency(realRevenue + refundedRevenue);
+document.getElementById("pendingRevenue").innerText = formatCurrency(pendingRevenue);
+document.getElementById("lostRevenue").innerText = formatCurrency(lostRevenue);
+document.getElementById("refundedRevenue").innerText = formatCurrency(refundedRevenue);
+document.getElementById("newCustomers").innerText = newCustomers;
+document.getElementById("repeatCustomers").innerText = repeatCustomers;
+document.getElementById("onlineRevenue").innerText = formatCurrency(onlineRevenue);
+document.getElementById("cashRevenue").innerText = formatCurrency(cashRevenue);
+document.getElementById("pendingSettlement").innerText = formatCurrency(pendingSettlement);
+document.getElementById("todayOrders").innerText = todayOrders;
+document.getElementById("deliveredOrders").innerText = deliveredOrders;
+document.getElementById("todayRevenue").innerText = formatCurrency(todayRevenue);
+const paidCount = orders.filter(isRealRevenueOrder).length;
+document.getElementById("avgOrderValue").innerText = formatCurrency(paidCount ? realRevenue / paidCount : 0);
+renderCustomers(customerStats);
+renderAnalytics();
+
+}
+
+function startOfDay(date){ return new Date(date.getFullYear(), date.getMonth(), date.getDate()); }
+function renderAnalytics(){
+const now = new Date();
+const todayStart = startOfDay(now).getTime();
+const weekStart = todayStart - 6 * 86400000;
+const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+let daily = 0, weekly = 0, monthly = 0;
+let previousWeek = 0;
+const items = {};
+orders.forEach(o=>{
+if(!isRealRevenueOrder(o)) return;
+const time = o.createdAt?.toDate ? o.createdAt.toDate().getTime() : 0;
+const amount = orderAmount(o);
+if(time >= todayStart) daily += amount;
+if(time >= weekStart) weekly += amount;
+if(time >= monthStart) monthly += amount;
+if(time >= weekStart - 7 * 86400000 && time < weekStart) previousWeek += amount;
+(o.items || []).forEach(item => {
+items[item.name || "Item"] = (items[item.name || "Item"] || 0) + (item.qty || 1);
+});
+});
+const max = Math.max(daily, weekly, monthly, 1);
+document.getElementById("salesBars").innerHTML = [
+["Daily", daily], ["Weekly", weekly], ["Monthly", monthly]
+].map(([label,value])=>`<div class="bar-row"><b>${label}</b><div class="bar-track"><div class="bar-fill" style="width:${Math.max(4,(value/max)*100)}%"></div></div><span>${formatCurrency(value)}</span></div>`).join("");
+document.getElementById("topItems").innerHTML = Object.entries(items).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([name,qty])=>`<div><span>${name}</span><b>${qty}</b></div>`).join("") || "<div><span>No item sales yet</span><b>0</b></div>";
+const growth = previousWeek ? ((weekly - previousWeek) / previousWeek) * 100 : (weekly ? 100 : 0);
+document.getElementById("growthIndicator").innerText = `Weekly Growth: ${growth.toFixed(1)}%`;
+}
+
+function renderCustomers(customerStats){
+document.getElementById("topCustomers").innerHTML = Object.values(customerStats)
+.sort((a,b)=>b.revenue-a.revenue || b.orders-a.orders)
+.slice(0,8)
+.map(c=>`<div><span>${c.name}<br><small>${c.phone} • ${c.orders} orders</small></span><b>${formatCurrency(c.revenue)}</b></div>`)
+.join("") || "<div><span>No customers yet</span><b>0</b></div>";
+}
+
+window.generateAiInsights = async function(){
+const box = document.getElementById("businessInsights");
+box.innerHTML = "<div><span>Generating startup insights...</span><b>AI</b></div>";
+try{
+  const user = auth.currentUser;
+  const token = user ? await getIdToken(user, true) : "";
+  const summary = {
+    orders:orders.length,
+    delivered:orders.filter(isDelivered).length,
+    realRevenue:document.getElementById("totalSales").innerText,
+    pendingRevenue:document.getElementById("pendingRevenue").innerText,
+    repeatCustomers:document.getElementById("repeatCustomers").innerText,
+    topItems:[...document.querySelectorAll("#topItems div")].map(el=>el.innerText)
+  };
+  const response = await fetch("https://asia-south1-magneetoz.cloudfunctions.net/generateBusinessInsightsAI", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json", ...(token ? { Authorization:`Bearer ${token}` } : {}) },
+    body:JSON.stringify({ summary })
+  });
+  const data = await response.json();
+  const insights = [...(data.insights || []), ...(data.risks || []), ...(data.actions || [])].slice(0,8);
+  box.innerHTML = insights.map((item,index)=>`<div><span>${item}</span><b>${index+1}</b></div>`).join("");
+}catch(error){
+  box.innerHTML = "<div><span>AI insights unavailable. Check OpenAI key / functions deploy.</span><b>!</b></div>";
+}
+};
+
+// ================= CARD FILTER =================
+
+window.filterType = function(type, event){
+
+renderOrders(type);
+
+// active highlight
+document.querySelectorAll(".card").forEach(c=>c.classList.remove("active"));
+
+if(event){
+event.currentTarget.classList.add("active");
+}
+
+}
+
+// ================= DATE FILTER =================
+
+window.applyDashboardFilters = function(){ renderOrders("all"); };
+window.clearDashboardFilters = function(){
+["dateFrom","dateTo","orderSearch"].forEach(id => { const el = document.getElementById(id); if(el) el.value = ""; });
+renderOrders("all");
+};
+
+// ================= CSV =================
+
+window.downloadCSV=function(){
+
+let csv="OrderID,Name,Phone,Amount,Payment,Status,RevenueCounted\n";
+
+filteredOrders("all").forEach(o=>{
+csv+=`${o.orderNumber},${o.customerName},${o.phone},${orderAmount(o)},${o.paymentMethod || ""}/${o.paymentStatus || ""},${o.status || o.orderStatus || ""},${isRealRevenueOrder(o) ? "YES" : "NO"}\n`;
+});
+
+const blob=new Blob([csv]);
+const url=URL.createObjectURL(blob);
+
+const a=document.createElement("a");
+a.href=url;
+a.download="online_orders.csv";
+a.click();
+
+}
+
+window.downloadRevenueReport=function(){
+let csv="Metric,Amount\n";
+csv+=`Net Revenue,${document.getElementById("totalSales").innerText}\n`;
+csv+=`Gross Revenue,${document.getElementById("grossRevenue").innerText}\n`;
+csv+=`Pending Revenue,${document.getElementById("pendingRevenue").innerText}\n`;
+csv+=`Cancelled Revenue,${document.getElementById("lostRevenue").innerText}\n`;
+csv+=`Refunded Revenue,${document.getElementById("refundedRevenue").innerText}\n`;
+csv+=`Today Revenue,${document.getElementById("todayRevenue").innerText}\n`;
+const blob=new Blob([csv],{type:"text/csv"});
+const a=document.createElement("a");
+a.href=URL.createObjectURL(blob);
+a.download="magneetoz_revenue_report.csv";
+a.click();
+};
+
+window.downloadCustomerReport=function(){
+const map = {};
+orders.forEach(o => {
+if(!o.phone) return;
+map[o.phone] = map[o.phone] || { name:o.customerName || "Customer", phone:o.phone, orders:0, revenue:0 };
+map[o.phone].orders++;
+if(isRealRevenueOrder(o)) map[o.phone].revenue += orderAmount(o);
+});
+let csv="Name,Phone,Orders,CLV\n";
+Object.values(map).sort((a,b)=>b.revenue-a.revenue).forEach(c => {
+csv+=`${c.name},${c.phone},${c.orders},${c.revenue}\n`;
+});
+const blob=new Blob([csv],{type:"text/csv"});
+const a=document.createElement("a");
+a.href=URL.createObjectURL(blob);
+a.download="magneetoz_customer_report.csv";
+a.click();
+};
+
+</script>
+
+  <script src="app-notifications.js"></script>
+</body>
+</html>

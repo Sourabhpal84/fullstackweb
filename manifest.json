@@ -1,0 +1,25 @@
+﻿{
+  "name": "MAGNEETOZ",
+  "short_name": "MAGNEETOZ",
+  "description": "Premium food delivery by MAGNEETOZ.",
+  "start_url": "/index.html",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#090d13",
+  "theme_color": "#ff7b00",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "logo_tran.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "logo_tran.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
