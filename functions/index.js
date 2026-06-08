@@ -912,11 +912,12 @@ async function completeDeliveryTransaction({ orderId, rider, mode, codeRef, code
     const settlementDone = !!order.codSettlementStatus && order.cashSettlementPending === false;
     const exceptionDelivery = mode === "exception_code";
     const prepaidOtpDelivery = mode === "prepaid_customer_otp";
+    const riderCollectedOnline = onlinePaid && order.paymentCollectedBy === rider.riderId;
     if (cashOrder && !settlementDone && !exceptionDelivery) {
       throw Object.assign(new Error("Cash order requires company settlement or customer delivery code"), { status: 409 });
     }
     if (!cashOrder && !onlinePaid) throw Object.assign(new Error("Online payment is not verified"), { status: 409 });
-    if (!cashOrder && onlinePaid && !prepaidOtpDelivery) {
+    if (!cashOrder && onlinePaid && !prepaidOtpDelivery && !riderCollectedOnline) {
       throw Object.assign(new Error("Customer delivery OTP is required for prepaid order"), { status: 409 });
     }
 

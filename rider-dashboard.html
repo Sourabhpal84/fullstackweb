@@ -634,16 +634,20 @@ messagingReady.then(messaging => {
 
 function calcFinancials(order, distance){
   const km = Math.max(1, Math.ceil(Number(distance) || 1));
+  const baseFare = Number(PRICING.BASE_FARE ?? PRICING.baseFare ?? 25);
+  const paidPerKm = Number(PRICING.PAID_PER_KM ?? PRICING.paidPerKm ?? 5);
+  const perKmRate = Number(PRICING.PER_KM_RATE ?? PRICING.perKmRate ?? 5);
+  const minPayout = Number(PRICING.MIN_PAYOUT ?? PRICING.minPayout ?? baseFare);
   let riderEarning = 0;
   let companyProfit = 0;
   let bonus = 0;
   if(order.deliveryCharge && order.deliveryCharge > 0){
-    const base = PRICING.BASE_FARE || 25;
-    const variable = Math.max(0, km - 3) * (PRICING.PAID_PER_KM || 5);
+    const base = baseFare;
+    const variable = Math.max(0, km - 3) * paidPerKm;
     riderEarning = base + variable;
     companyProfit = order.deliveryCharge - riderEarning;
   }else{
-    riderEarning = km * (PRICING.PER_KM_RATE || 5);
+    riderEarning = km * perKmRate;
     companyProfit = -riderEarning;
   }
   const hour = new Date().getHours();
@@ -653,11 +657,11 @@ function calcFinancials(order, distance){
   if(km > (Number(PRICING.DISTANCE_BONUS_AFTER_KM) || 8)){
     bonus += (km - (Number(PRICING.DISTANCE_BONUS_AFTER_KM) || 8)) * (Number(PRICING.DISTANCE_BONUS_PER_KM) || 0);
   }
-  riderEarning = Math.max(riderEarning, PRICING.MIN_PAYOUT || 25);
+  riderEarning = Math.max(riderEarning, minPayout);
   riderEarning += bonus;
   companyProfit -= PRICING.PLATFORM_FEE || 0;
   companyProfit -= bonus;
-  return { riderEarning, companyProfit, distance:km, bonus };
+  return { riderEarning, companyProfit, distance:km, bonus, baseFare, minPayout };
 }
 
 function statusGroup(status){
@@ -766,6 +770,9 @@ function renderOrders(){
     const settlementNetPaid = Number(order.companySettlementNetPaid ?? order.companyRazorpaySettlementAmount ?? 0);
     const amountToCollect = prepaidOnline ? 0 : Number(order.amountToCollect ?? order.totalAmount ?? order.finalAmount ?? order.total ?? 0);
     const activeLocked = !!rider.currentActiveOrderId && rider.currentActiveOrderId !== order.id;
+    const isDelivered = order.status === "Delivered";
+    const riderCollectedOnline = prepaidOnline && order.paymentCollectedBy === rider.riderId;
+    const canDeliver = !isDelivered && paymentReady && (!isCashOrder || cashSettlementDone) && (!prepaidOnline || prepaidOtpDone || riderCollectedOnline);
     const badgeClass = group === "Requests" ? "request" : group === "Delivered" ? "delivered" : group === "Out For Delivery" ? "out" : "assigned";
     return `
       <article class="glass order">
@@ -779,6 +786,7 @@ function renderOrders(){
         <div class="details">
           <div class="detail"><span>Distance</span><b>${dist ? `${dist} km` : "Pending"}</b></div>
           <div class="detail"><span>Earning</span><b>${formatCurrency(financials.riderEarning)}</b></div>
+          <div class="detail"><span>Base Rule</span><b>${formatCurrency(financials.baseFare)}</b></div>
           <div class="detail"><span>Payment</span><b>${order.paymentMethod || order.paymentMode || "Order"}</b></div>
           <div class="detail"><span>Payment Status</span><b>${prepaidOnline ? "Payment Received ✅" : unpaidOnline ? "Online Payment Pending" : (order.paymentStatus || "Pending")}</b></div>
           <div class="detail"><span>Amount To Collect</span><b>${formatCurrency(amountToCollect)}</b></div>
@@ -786,18 +794,20 @@ function renderOrders(){
           ${isCashOrder && (cashSettlementDone || settlementAdjusted) ? `<div class="detail"><span>Payout Adjusted</span><b>${formatCurrency(settlementAdjusted)}</b></div><div class="detail"><span>Company Paid</span><b>${formatCurrency(settlementNetPaid)}</b></div>` : ""}
         </div>
         <div class="actions">
-          ${order.location?.lat ? `<button class="btn-soft" onclick="openCustomer(${order.location.lat},${order.location.lng})">Navigate</button>` : ""}
-          ${order.phone ? `<button class="btn-soft" onclick="callUser('${order.phone}')">Call</button>` : ""}
+          ${!isDelivered && order.location?.lat ? `<button class="btn-soft" onclick="openCustomer(${order.location.lat},${order.location.lng})">Navigate</button>` : ""}
+          ${!isDelivered && order.phone ? `<button class="btn-soft" onclick="callUser('${order.phone}')">Call</button>` : ""}
           ${group === "Requests" ? `<button class="btn-green" ${activeLocked ? "disabled" : ""} onclick="acceptRequest('${order.id}')">${activeLocked ? "Complete current delivery first" : "Accept"}</button><button class="btn-red" onclick="rejectRequest('${order.id}')">Reject</button>` : ""}
           ${group === "Assigned" ? `<button class="btn-blue" onclick="pickupOrder('${order.id}')">Picked Up</button>` : ""}
           ${order.status === "Picked Up" ? `<button class="btn-blue" onclick="startDelivery('${order.id}')">Out For Delivery</button>` : ""}
           ${order.status === "Out For Delivery" ? `<button class="btn-green" onclick="reachNearby('${order.id}')">Reached Nearby</button>` : ""}
+          ${order.status === "Out For Delivery" && riderCollectedOnline ? `<button class="btn-green" onclick="deliver('${order.id}', ${dist || 1})">Delivered</button>` : ""}
           ${(order.status === "Reached Nearby" || order.status === "Collect Payment") && !prepaidOnline && !unpaidOnline ? `<button class="btn-soft" onclick="markCashReceived('${order.id}')">Cash Received</button><button class="btn-blue" onclick="collectOnline('${order.id}')">Online Payment</button>` : ""}
           ${(order.status === "Reached Nearby" || order.status === "Collect Payment") && prepaidOnline && !prepaidOtpActive && !prepaidOtpDone ? `<button class="btn-blue" onclick="requestPrepaidDeliveryOtp('${order.id}')">Request Delivery OTP</button>` : ""}
           ${prepaidOtpActive ? `<button class="btn-green" onclick="completeWithCustomerCode('${order.id}')">Enter Delivery OTP</button>` : ""}
           ${isCashOrder && String(order.paymentStatus || "").toLowerCase() === "collected" && !cashSettlementDone ? `<button class="btn-blue" onclick="payCompanyAndDeliver('${order.id}', ${dist || 1}, this)">Settle Company</button><button class="btn-soft" onclick="requestExceptionCode('${order.id}')">Use Customer Code</button>` : ""}
           ${order.status === "Delivery Code Pending" ? `<button class="btn-green" onclick="completeWithCustomerCode('${order.id}')">Enter Customer Code</button>` : ""}
-          ${paymentReady && (!isCashOrder || cashSettlementDone) && !prepaidOnline ? `<button class="btn-green" onclick="deliver('${order.id}', ${dist || 1})">Delivered</button>` : ""}
+          ${canDeliver && order.status !== "Out For Delivery" ? `<button class="btn-green" onclick="deliver('${order.id}', ${dist || 1})">Delivered</button>` : ""}
+          ${isDelivered ? `<button class="btn-green" disabled>Delivered</button>` : ""}
         </div>
       </article>
     `;

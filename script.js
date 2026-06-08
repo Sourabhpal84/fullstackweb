@@ -4481,6 +4481,13 @@ function startCountdownTicker(){
 function ensureFeedbackPopup(){
   let popup = document.getElementById("deliveryFeedbackPopup");
   if(popup) return popup;
+  const starGroup = (key, label, required = false) => `
+    <div class="feedback-rating-row">
+      <span>${label}${required ? " *" : ""}</span>
+      <div class="feedback-stars" data-feedback-stars="${key}" aria-label="${label} rating">
+        ${[1,2,3,4,5].map(i => `<button type="button" data-rating="${i}" aria-label="${i} star">★</button>`).join("")}
+      </div>
+    </div>`;
   popup = document.createElement("div");
   popup.id = "deliveryFeedbackPopup";
   popup.className = "delivery-feedback-popup";
@@ -4488,16 +4495,23 @@ function ensureFeedbackPopup(){
     <div class="delivery-feedback-card" role="dialog" aria-modal="true" aria-labelledby="deliveryFeedbackTitle">
       <button type="button" class="feedback-close" aria-label="Close">x</button>
       <h2 id="deliveryFeedbackTitle">How was your MAGNEETOZ order?</h2>
-      <div class="feedback-stars" aria-label="Star rating">
-        ${[1,2,3,4,5].map(i => `<button type="button" data-rating="${i}">★</button>`).join("")}
+      <p class="feedback-step-label">Step 1 - Overall Rating</p>
+      <div class="feedback-stars feedback-overall-stars" data-feedback-stars="overall" aria-label="Overall rating">
+        ${[1,2,3,4,5].map(i => `<button type="button" data-rating="${i}" aria-label="${i} star">★</button>`).join("")}
       </div>
-      <div class="feedback-mini-grid">
-        <label>Food <input id="feedbackFoodQuality" type="number" min="1" max="5" placeholder="1-5"></label>
-        <label>Delivery <input id="feedbackDelivery" type="number" min="1" max="5" placeholder="1-5"></label>
-        <label>Service <input id="feedbackService" type="number" min="1" max="5" placeholder="1-5"></label>
-        <label>Value <input id="feedbackValue" type="number" min="1" max="5" placeholder="1-5"></label>
+      <p class="feedback-step-label">Step 2 - Optional details</p>
+      <div class="feedback-detail-list">
+        ${starGroup("foodQuality", "🍕 Food Quality", true)}
+        ${starGroup("taste", "😋 Taste")}
+        ${starGroup("freshness", "🔥 Freshness")}
+        ${starGroup("delivery", "🚚 Delivery Speed")}
+        ${starGroup("service", "🤝 Service")}
+        ${starGroup("valueForMoney", "💰 Value for Money")}
       </div>
-      <textarea id="deliveryFeedbackText" placeholder="Tell us about food, delivery, service or refund issue" rows="4"></textarea>
+      <div class="feedback-chips" aria-label="Quick feedback">
+        ${["Great Taste","Fast Delivery","Good Service","Fresh Food","Value For Money"].map(label => `<button type="button" data-feedback-chip="${label}">${label}</button>`).join("")}
+      </div>
+      <textarea id="deliveryFeedbackText" placeholder="Optional comment" rows="3"></textarea>
       <button type="button" class="feedback-submit">Submit Feedback</button>
     </div>`;
   document.body.appendChild(popup);
@@ -4505,15 +4519,45 @@ function ensureFeedbackPopup(){
   popup.addEventListener("click", event => {
     if(event.target === popup) popup.classList.remove("show");
   });
-  popup.querySelectorAll("[data-rating]").forEach(button => {
-    button.addEventListener("click", () => {
-      popup.dataset.rating = button.dataset.rating;
-      popup.querySelectorAll("[data-rating]").forEach(star => {
-        star.classList.toggle("active", Number(star.dataset.rating) <= Number(button.dataset.rating));
+  popup.querySelectorAll("[data-feedback-stars]").forEach(group => {
+    group.dataset.value = "0";
+    group.querySelectorAll("[data-rating]").forEach(button => {
+      button.addEventListener("mouseenter", () => paintFeedbackStars(group, Number(button.dataset.rating), "preview"));
+      button.addEventListener("focus", () => paintFeedbackStars(group, Number(button.dataset.rating), "preview"));
+      button.addEventListener("click", () => {
+        group.dataset.value = button.dataset.rating;
+        paintFeedbackStars(group, Number(button.dataset.rating));
       });
+    });
+    group.addEventListener("mouseleave", () => paintFeedbackStars(group, Number(group.dataset.value || 0)));
+    group.addEventListener("focusout", () => paintFeedbackStars(group, Number(group.dataset.value || 0)));
+  });
+  popup.querySelectorAll("[data-feedback-chip]").forEach(chip => {
+    chip.addEventListener("click", () => {
+      chip.classList.toggle("active");
+      chip.setAttribute("aria-pressed", chip.classList.contains("active") ? "true" : "false");
     });
   });
   return popup;
+}
+
+function paintFeedbackStars(group, value, mode = "selected"){
+  group.querySelectorAll("[data-rating]").forEach(star => {
+    const active = Number(star.dataset.rating) <= value;
+    star.classList.toggle("active", active && mode === "selected");
+    star.classList.toggle("preview", active && mode === "preview");
+  });
+}
+
+function feedbackStarValue(popup, key){
+  return Number(popup.querySelector(`[data-feedback-stars="${key}"]`)?.dataset.value || 0);
+}
+
+function resetFeedbackStarValue(popup, key){
+  const group = popup.querySelector(`[data-feedback-stars="${key}"]`);
+  if(!group) return;
+  group.dataset.value = "0";
+  paintFeedbackStars(group, 0);
 }
 
 function markFeedbackPrompted(orderId){
@@ -4556,25 +4600,31 @@ async function analyzeFeedbackWithAI(feedbackId, payload){
 function showDeliveryFeedbackPopup(order){
   const popup = ensureFeedbackPopup();
   popup.dataset.orderId = order.id;
-  popup.dataset.rating = "0";
-  popup.querySelectorAll("[data-rating]").forEach(star => star.classList.remove("active"));
+  ["overall","foodQuality","taste","freshness","delivery","service","valueForMoney"].forEach(key => resetFeedbackStarValue(popup, key));
   const text = popup.querySelector("#deliveryFeedbackText");
   if(text) text.value = "";
-  ["feedbackFoodQuality","feedbackDelivery","feedbackService","feedbackValue"].forEach(id => {
-    const input = popup.querySelector(`#${id}`);
-    if(input) input.value = "";
+  popup.querySelectorAll("[data-feedback-chip]").forEach(chip => {
+    chip.classList.remove("active");
+    chip.setAttribute("aria-pressed", "false");
   });
   popup.querySelector(".feedback-submit").onclick = async () => {
-    const rating = Number(popup.dataset.rating || 0);
+    const rating = feedbackStarValue(popup, "overall");
     const comment = normalizeUnicodeText(popup.querySelector("#deliveryFeedbackText")?.value || "");
-    const foodQuality = Number(popup.querySelector("#feedbackFoodQuality")?.value || 0);
-    const delivery = Number(popup.querySelector("#feedbackDelivery")?.value || 0);
-    const service = Number(popup.querySelector("#feedbackService")?.value || 0);
-    const valueForMoney = Number(popup.querySelector("#feedbackValue")?.value || 0);
-    if([rating, foodQuality, delivery, service, valueForMoney].some(score => score < 1 || score > 5)){
-      toastError("Please select all feedback ratings.");
+    const foodQuality = feedbackStarValue(popup, "foodQuality");
+    if(rating < 1 || rating > 5){
+      toastError("Please select overall rating.");
       return;
     }
+    if(foodQuality < 1 || foodQuality > 5){
+      toastError("Please select food quality rating.");
+      return;
+    }
+    const taste = feedbackStarValue(popup, "taste") || rating;
+    const freshness = feedbackStarValue(popup, "freshness") || rating;
+    const delivery = feedbackStarValue(popup, "delivery") || rating;
+    const service = feedbackStarValue(popup, "service") || rating;
+    const valueForMoney = feedbackStarValue(popup, "valueForMoney") || rating;
+    const quickFeedback = [...popup.querySelectorAll("[data-feedback-chip].active")].map(chip => chip.dataset.feedbackChip);
     const localAi = feedbackLocalAnalysis({ rating, message:comment });
     try{
       const feedbackRef = await addDoc(collection(db, "feedback"), {
@@ -4585,9 +4635,16 @@ function showDeliveryFeedbackPopup(order){
         phone:order.phone || "",
         rating,
         foodQuality,
+        foodRating:foodQuality,
+        taste,
+        freshness,
         delivery,
+        deliveryRating:delivery,
         service,
+        serviceRating:service,
         valueForMoney,
+        quickFeedback,
+        feedbackTags:quickFeedback,
         comment,
         message:comment,
         sentiment:localAi.sentiment,
@@ -4605,9 +4662,12 @@ function showDeliveryFeedbackPopup(order){
         message:comment,
         rating,
         foodQuality,
+        taste,
+        freshness,
         delivery,
         service,
-        valueForMoney
+        valueForMoney,
+        quickFeedback
       });
       await updateDoc(doc(db, "orders", order.id), {
         feedbackSubmitted:true,

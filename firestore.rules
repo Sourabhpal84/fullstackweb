@@ -75,7 +75,13 @@ service cloud.firestore {
         "featured",
         "reviewedAt",
         "rateLimitKey",
-        "createdAt"
+        "createdAt",
+        "foodRating",
+        "deliveryRating",
+        "freshness",
+        "serviceRating",
+        "quickFeedback",
+        "feedbackTags"
       ])
       && (!("userId" in request.resource.data)
         || request.resource.data.userId == ""
@@ -220,10 +226,10 @@ service cloud.firestore {
     }
 
     match /counters/{counterId} {
-  allow read: if signedIn();
-  allow create, update: if signedIn();
-  allow delete: if isAdmin();
-}
+      allow read: if signedIn();
+      allow create, update: if signedIn();
+      allow delete: if isAdmin();
+    }
 
     match /users/{userId} {
       allow read, update, create: if isOwner(userId) || isAdmin();
@@ -371,6 +377,12 @@ service cloud.firestore {
       allow read: if owns(resource.data.userId);
       allow create: if owns(request.resource.data.userId);
       allow update, delete: if owns(resource.data.userId);
+    }
+
+    match /auditLogs/{documentId} {
+      allow read: if isAdmin();
+      allow create: if signedIn();
+      allow update, delete: if false;
     }
   }
 }
