@@ -75,13 +75,7 @@ service cloud.firestore {
         "featured",
         "reviewedAt",
         "rateLimitKey",
-        "createdAt",
-        "foodRating",
-        "deliveryRating",
-        "freshness",
-        "serviceRating",
-        "quickFeedback",
-        "feedbackTags"
+        "createdAt"
       ])
       && (!("userId" in request.resource.data)
         || request.resource.data.userId == ""

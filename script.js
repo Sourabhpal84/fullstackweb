@@ -863,12 +863,24 @@ async function retryAsync(fn, attempts = 3, baseDelay = 450){
 }
 
 function checkoutSignature(paymentMethod = "COD"){
+  const subtotal = getCartSubtotal();
+  const pricing = calculateInvoicePricing(subtotal);
+  const fields = getCheckoutFields();
   return JSON.stringify({
     paymentMethod,
     items:cart.map(item => `${item.name}:${item.qty}:${item.price}`).join("|"),
     coupon:activeCoupon?.code || "",
-    total:getCartSubtotal(),
-    phone:getCheckoutFields().phone
+    subtotal,
+    deliveryCharge:pricing.deliveryCharge,
+    couponDiscount:pricing.couponDiscount,
+    freeDeliveryDiscount:pricing.freeDeliveryDiscount,
+    gstAmount:pricing.gstAmount,
+    handlingCharge:pricing.handlingCharge,
+    total:pricing.grandTotal,
+    distance:Number(deliveryDistance || 0),
+    addressLat:fields.lat || userLocation?.lat || "",
+    addressLng:fields.lng || userLocation?.lng || "",
+    phone:fields.phone
   });
 }
 
@@ -3433,10 +3445,15 @@ const finalTotal = pricing.grandTotal;
 setCheckoutLoading(true, "Creating secure payment session...");
 const orderDraftPayload = await timedStep("upiOrder:buildPaidOnlineOrderDraft", () => buildPaidOnlineOrderDraft());
 const paymentSession = await timedStep("upiOrder:createPaymentSession", () => callPaymentFunction("createPaymentSession", orderDraftPayload, 12000));
+const sessionAmount = Number(paymentSession.amount);
+const sessionAmountPaise = Math.round(sessionAmount * 100);
+if(!paymentSession.razorpayOrderId || !paymentSession.paymentSessionId || !Number.isFinite(sessionAmount) || sessionAmount <= 0){
+  throw new Error("Payment session was not created correctly. Please try again.");
+}
 rememberPaymentSessionRecovery({
   paymentSessionId:paymentSession.paymentSessionId,
   razorpayOrderId:paymentSession.razorpayOrderId,
-  amount:paymentSession.amount
+  amount:sessionAmount
 });
 setCheckoutLoading(false);
 
@@ -3444,7 +3461,7 @@ const options = {
 
 key: paymentSession.keyId || "rzp_live_SVyEXhZPb4HTJf",
 
-amount: Math.round(finalTotal * 100),
+amount: sessionAmountPaise,
 
 currency: "INR",
 
@@ -3474,7 +3491,7 @@ rememberPaymentSessionRecovery({
   razorpayOrderId:response.razorpay_order_id,
   razorpaySignature:response.razorpay_signature,
   paymentSessionId:paymentSession.paymentSessionId,
-  amount:finalTotal,
+  amount:sessionAmount,
 });
 setCheckoutLoading(true, "Verifying payment and placing your order...");
 const verifiedOrder = await timedStep("upiOrder.handler:verifyPaymentAndCreateOrder", () => callPaymentFunction("verifyPaymentAndCreateOrder", {
