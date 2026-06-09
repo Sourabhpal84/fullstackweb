@@ -1244,6 +1244,7 @@ exports.verifyRiderPayment = onRequest(
       await db.runTransaction(async transaction => {
         const orderSnap = await transaction.get(orderRef);
         if (!orderSnap.exists) throw Object.assign(new Error("Order not found"), { status: 404 });
+        const autoDeliverCustomerOnline = session.type !== "cod_company_settlement";
         const update = session.type === "cod_company_settlement" ? {
           status: "Payment Settled",
           orderStatus: "Payment Settled",
@@ -1258,8 +1259,11 @@ exports.verifyRiderPayment = onRequest(
           companyRazorpayPaidAt: FieldValue.serverTimestamp(),
           companyRazorpayPaidBy: rider.riderId
         } : {
-          status: "Payment Completed",
-          orderStatus: "Payment Completed",
+          status: "Delivered",
+          orderStatus: "Delivered",
+          deliveredAt: FieldValue.serverTimestamp(),
+          deliveredBy: rider.riderId,
+          deliveryCompletionMode: "rider_online_payment_auto_delivered",
           paymentStatus: "paid",
           paymentMethod: "online",
           amountToCollect: 0,
@@ -1298,7 +1302,8 @@ exports.verifyRiderPayment = onRequest(
           amount: session.amount,
           grossCompanyDue: Number(session.grossCompanyDue || session.amount || 0),
           payoutAdjusted: Number(session.payoutAdjusted || 0),
-          razorpayPaymentId: razorpay_payment_id
+          razorpayPaymentId: razorpay_payment_id,
+          autoDelivered: autoDeliverCustomerOnline
         });
       });
       return sendJson(res, 200, { ok: true });
