@@ -466,11 +466,11 @@ function escapeHTML(value = ""){
 
 function normalizeImageUrl(value){
   const image = String(value || "").trim();
-  if(!image) return "logo_tran.png";
+  if(!image) return "logo_tran1.png";
   if(image.startsWith("http://") || image.startsWith("https://") || image.startsWith("data:") || image.startsWith("blob:")){
     return image;
   }
-  return image.replace(/^\.?\//, "") || "logo_tran.png";
+  return image.replace(/^\.?\//, "") || "logo_tran1.png";
 }
 
 function formatCurrency(amount){
@@ -645,7 +645,7 @@ function cleanInvoiceItemName(value = ""){
 }
 
 function imageMarkup(src, alt){
-  return `<img src="${escapeHTML(normalizeImageUrl(src))}" alt="${escapeHTML(alt || "Magneetoz dish")}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='logo_tran.png';">`;
+  return `<img src="${escapeHTML(normalizeImageUrl(src))}" alt="${escapeHTML(alt || "Magneetoz dish")}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='logo_tran1.png';">`;
 }
 
 function dishDataAttrs(d = {}){
@@ -765,7 +765,7 @@ function renderSmartAssistant(intent = smartAssistantIntent){
     const variant = dishLowestVariant(dish);
     return `
       <article class="smart-result-card">
-        <img src="${escapeHTML(normalizeImageUrl(dish.image))}" alt="${escapeHTML(dish.name || "MAGNEETOZ item")}" loading="lazy" onerror="this.onerror=null;this.src='logo_tran.png';">
+        <img src="${escapeHTML(normalizeImageUrl(dish.image))}" alt="${escapeHTML(dish.name || "MAGNEETOZ item")}" loading="lazy" onerror="this.onerror=null;this.src='logo_tran1.png';">
         <div>
           <span>${index === 0 ? "Top pick" : escapeHTML(dish.category || "Recommended")}</span>
           <strong>${escapeHTML(dish.name || "MAGNEETOZ Item")}</strong>
@@ -1407,8 +1407,8 @@ messagingReady.then(messaging => {
     if(Notification.permission === "granted"){
       new Notification(payload.notification?.title || data.title || (data.type === "order_status" ? "Order Update" : "MAGNEETOZ Offer"), {
         body:payload.notification?.body || data.body || "A fresh MAGNEETOZ update is live.",
-        icon:"logo_tran.png",
-        badge:"logo_tran.png",
+        icon:"logo_tran1.png",
+        badge:"logo_tran1.png",
         tag:data.orderId || data.offerId || data.type,
         vibrate:data.type === "order_status" ? [160,80,160] : [140,70,180]
       });
@@ -2339,7 +2339,7 @@ registerGlobalSnapshot(onSnapshot(query(collection(db, "offers"), orderBy("creat
     .slice(0, 8);
   host.innerHTML = offers.map(offer => `
     <article class="offer-card">
-      <img src="${escapeHTML(normalizeImageUrl(offer.image))}" alt="${escapeHTML(offer.title || "Offer")}" onerror="this.onerror=null;this.src='logo_tran.png';">
+      <img src="${escapeHTML(normalizeImageUrl(offer.image))}" alt="${escapeHTML(offer.title || "Offer")}" onerror="this.onerror=null;this.src='logo_tran1.png';">
       <div>
         <span>${offer.couponCode ? "Use code" : "Magneetoz offer"}</span>
         <h3>${escapeHTML(offer.title || "Special Offer")}</h3>
@@ -2364,7 +2364,7 @@ registerGlobalSnapshot(onSnapshot(query(collection(db, "combos"), orderBy("creat
     .slice(0, 10);
   host.innerHTML = combos.map(combo => `
     <article class="combo-card">
-      <img src="${escapeHTML(normalizeImageUrl(combo.image))}" alt="${escapeHTML(combo.name || "Combo")}" onerror="this.onerror=null;this.src='logo_tran.png';">
+      <img src="${escapeHTML(normalizeImageUrl(combo.image))}" alt="${escapeHTML(combo.name || "Combo")}" onerror="this.onerror=null;this.src='logo_tran1.png';">
       <div>
         <span>Combo deal</span>
         <h3>${escapeHTML(combo.name || "MAGNEETOZ Combo")}</h3>
@@ -2829,7 +2829,7 @@ function updateCart() {
     total += item.price;
     itemsHTML += `
   <div class="cart-item cart-item-pro">
-    <img src="${escapeHTML(normalizeImageUrl(item.image))}" alt="${escapeHTML(item.name)}" onerror="this.onerror=null;this.src='logo_tran.png';">
+    <img src="${escapeHTML(normalizeImageUrl(item.image))}" alt="${escapeHTML(item.name)}" onerror="this.onerror=null;this.src='logo_tran1.png';">
     <div>
       <strong>${escapeHTML(item.name)}</strong><br>
       <small>${escapeHTML(item.size || "Regular")} x ${item.qty}</small>
@@ -3007,7 +3007,7 @@ function addToCartFull(btn, name){
     size,
     qty,
     category: card.dataset.dishCategory || "",
-    image: card.dataset.dishImage || card.querySelector("img")?.getAttribute("src") || "logo_tran.png",
+    image: card.dataset.dishImage || card.querySelector("img")?.getAttribute("src") || "logo_tran1.png",
     unitPrice: price,
     price: price * qty
   });
@@ -3041,7 +3041,7 @@ function addToCartSimple(btn, name){
     size:"Regular",
     qty,
     category: card.dataset.dishCategory || "",
-    image: card.dataset.dishImage || card.querySelector("img")?.getAttribute("src") || "logo_tran.png",
+    image: card.dataset.dishImage || card.querySelector("img")?.getAttribute("src") || "logo_tran1.png",
     unitPrice: qty ? price / qty : price,
     price
   });
@@ -3070,7 +3070,7 @@ window.addComboToCart = function(id){
     size:"Combo",
     qty:1,
     category:"Combo",
-    image:combo.image || "logo_tran.png",
+    image:combo.image || "logo_tran1.png",
     unitPrice:price,
     price,
     comboId:id,
@@ -3448,6 +3448,7 @@ const paymentSession = await timedStep("upiOrder:createPaymentSession", () => ca
 const sessionAmount = Number(paymentSession.amount);
 const sessionAmountPaise = Number(paymentSession.amountPaise || Math.round(sessionAmount * 100));
 const sessionCurrency = String(paymentSession.currency || "INR").toUpperCase();
+const checkoutFields = getCheckoutFields();
 if(!paymentSession.razorpayOrderId || !paymentSession.paymentSessionId || !paymentSession.keyId || !Number.isFinite(sessionAmount) || sessionAmount <= 0 || !Number.isFinite(sessionAmountPaise) || sessionAmountPaise <= 0){
   throw new Error("Payment session was not created correctly. Please try again.");
 }
@@ -3470,10 +3471,16 @@ name: "Magneetoz",
 
 description:"Magneetoz order payment",
 order_id:paymentSession.razorpayOrderId,
-notes:{
-  paymentSessionId:paymentSession.paymentSessionId,
-  checkoutId:String(orderDraftPayload.orderDraft?.checkoutId || ""),
-  source:"customer_checkout"
+prefill:{
+  name:checkoutFields.name || "",
+  contact:String(checkoutFields.phone || "").replace(/\D/g, "").slice(-10)
+},
+theme:{
+  color:"#ff7b00"
+},
+retry:{
+  enabled:true,
+  max_count:2
 },
 
 handler: async function (response){
