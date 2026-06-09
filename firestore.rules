@@ -69,6 +69,7 @@ service cloud.firestore {
         "emotion",
         "highPriority",
         "ai",
+        "feedbackTags",
         "feedbackType",
         "publicReviewOptIn",
         "reviewStatus",

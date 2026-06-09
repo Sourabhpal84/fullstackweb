@@ -3447,7 +3447,7 @@ const orderDraftPayload = await timedStep("upiOrder:buildPaidOnlineOrderDraft", 
 const paymentSession = await timedStep("upiOrder:createPaymentSession", () => callPaymentFunction("createPaymentSession", orderDraftPayload, 12000));
 const sessionAmount = Number(paymentSession.amount);
 const sessionAmountPaise = Math.round(sessionAmount * 100);
-if(!paymentSession.razorpayOrderId || !paymentSession.paymentSessionId || !Number.isFinite(sessionAmount) || sessionAmount <= 0){
+if(!paymentSession.razorpayOrderId || !paymentSession.paymentSessionId || !paymentSession.keyId || !Number.isFinite(sessionAmount) || sessionAmount <= 0){
   throw new Error("Payment session was not created correctly. Please try again.");
 }
 rememberPaymentSessionRecovery({
@@ -3459,7 +3459,7 @@ setCheckoutLoading(false);
 
 const options = {
 
-key: paymentSession.keyId || "rzp_live_SVyEXhZPb4HTJf",
+key: paymentSession.keyId,
 
 amount: sessionAmountPaise,
 

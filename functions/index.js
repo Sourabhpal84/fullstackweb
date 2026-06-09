@@ -419,6 +419,8 @@ exports.createPaymentSession = onRequest(
       const amount = normalizeAmount(body.amount);
       const idempotencyKey = String(body.idempotencyKey || "").slice(0, 160);
       if (!idempotencyKey) throw Object.assign(new Error("Missing idempotency key"), { status: 400 });
+      const razorpayKeyId = env("RAZORPAY_KEY_ID");
+      if (!razorpayKeyId) throw Object.assign(new Error("Razorpay key is not configured"), { status: 500 });
       const draft = body.orderDraft || {};
       if (draft.restaurantLocation && draft.location) {
         const route = await calculateGoogleRouteDistance({
@@ -444,7 +446,7 @@ exports.createPaymentSession = onRequest(
           paymentSessionId: sessionId,
           razorpayOrderId: data.razorpayOrderId,
           amount: data.amount,
-          keyId: env("RAZORPAY_KEY_ID")
+          keyId: razorpayKeyId
         });
       }
 
@@ -493,7 +495,7 @@ exports.createPaymentSession = onRequest(
         paymentSessionId: sessionId,
         razorpayOrderId: razorpayOrder.id,
         amount,
-        keyId: env("RAZORPAY_KEY_ID")
+        keyId: razorpayKeyId
       });
     } catch (error) {
       logger.error("createPaymentSession failed", { error: error.message });
