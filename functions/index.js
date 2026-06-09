@@ -417,6 +417,7 @@ exports.createPaymentSession = onRequest(
       const user = await requireAuth(req);
       const body = req.body || {};
       const amount = normalizeAmount(body.amount);
+      const amountPaise = Math.round(amount * 100);
       const idempotencyKey = String(body.idempotencyKey || "").slice(0, 160);
       if (!idempotencyKey) throw Object.assign(new Error("Missing idempotency key"), { status: 400 });
       const razorpayKeyId = env("RAZORPAY_KEY_ID");
@@ -436,23 +437,29 @@ exports.createPaymentSession = onRequest(
           throw Object.assign(new Error("Delivery is not available for this road route distance."), { status: 409 });
         }
       }
-      const sessionId = crypto.createHash("sha256").update(`${user.uid}:${idempotencyKey}`).digest("hex");
+      const sessionId = crypto.createHash("sha256").update(`${user.uid}:${idempotencyKey}:${amountPaise}`).digest("hex");
       const sessionRef = db.collection("paymentSessions").doc(sessionId);
       const existing = await sessionRef.get();
       if (existing.exists && existing.data().razorpayOrderId) {
         const data = existing.data();
+        const existingAmountPaise = Number(data.amountPaise || Math.round(Number(data.amount || 0) * 100));
+        if (existingAmountPaise !== amountPaise) {
+          throw Object.assign(new Error("Payment amount changed. Please reopen checkout and try again."), { status: 409 });
+        }
         return sendJson(res, 200, {
           ok: true,
           paymentSessionId: sessionId,
           razorpayOrderId: data.razorpayOrderId,
           amount: data.amount,
+          amountPaise: existingAmountPaise,
+          currency: data.currency || "INR",
           keyId: razorpayKeyId
         });
       }
 
       const orderId = db.collection("orders").doc().id;
       const razorpayOrder = await getRazorpay().orders.create({
-        amount: Math.round(amount * 100),
+        amount: amountPaise,
         currency: "INR",
         receipt: sessionId.slice(0, 40),
         notes: {
@@ -469,7 +476,7 @@ exports.createPaymentSession = onRequest(
         userId: user.uid,
         orderId,
         amount,
-        amountPaise: Math.round(amount * 100),
+        amountPaise,
         currency: "INR",
         cart: Array.isArray(body.cart) ? body.cart : [],
         orderDraft: draft,
@@ -495,6 +502,8 @@ exports.createPaymentSession = onRequest(
         paymentSessionId: sessionId,
         razorpayOrderId: razorpayOrder.id,
         amount,
+        amountPaise,
+        currency: "INR",
         keyId: razorpayKeyId
       });
     } catch (error) {

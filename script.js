@@ -3446,8 +3446,9 @@ setCheckoutLoading(true, "Creating secure payment session...");
 const orderDraftPayload = await timedStep("upiOrder:buildPaidOnlineOrderDraft", () => buildPaidOnlineOrderDraft());
 const paymentSession = await timedStep("upiOrder:createPaymentSession", () => callPaymentFunction("createPaymentSession", orderDraftPayload, 12000));
 const sessionAmount = Number(paymentSession.amount);
-const sessionAmountPaise = Math.round(sessionAmount * 100);
-if(!paymentSession.razorpayOrderId || !paymentSession.paymentSessionId || !paymentSession.keyId || !Number.isFinite(sessionAmount) || sessionAmount <= 0){
+const sessionAmountPaise = Number(paymentSession.amountPaise || Math.round(sessionAmount * 100));
+const sessionCurrency = String(paymentSession.currency || "INR").toUpperCase();
+if(!paymentSession.razorpayOrderId || !paymentSession.paymentSessionId || !paymentSession.keyId || !Number.isFinite(sessionAmount) || sessionAmount <= 0 || !Number.isFinite(sessionAmountPaise) || sessionAmountPaise <= 0){
   throw new Error("Payment session was not created correctly. Please try again.");
 }
 rememberPaymentSessionRecovery({
@@ -3463,7 +3464,7 @@ key: paymentSession.keyId,
 
 amount: sessionAmountPaise,
 
-currency: "INR",
+currency: sessionCurrency,
 
 name: "Magneetoz",
 
@@ -3473,13 +3474,6 @@ notes:{
   paymentSessionId:paymentSession.paymentSessionId,
   checkoutId:String(orderDraftPayload.orderDraft?.checkoutId || ""),
   source:"customer_checkout"
-},
-
-method:{
-  upi:true,
-  card:true,
-  netbanking:true,
-  wallet:true
 },
 
 handler: async function (response){
