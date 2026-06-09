@@ -216,7 +216,12 @@ function resetRazorpayCheckoutState(){
 }
 
 function hasVisibleRazorpayCheckout(){
-  return !!document.querySelector(".razorpay-container, iframe[src*='razorpay'], iframe[name*='razorpay']");
+  return [...document.querySelectorAll(".razorpay-container, iframe[src*='razorpay'], iframe[name*='razorpay']")]
+    .some(node => {
+      const style = window.getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+    });
 }
 
 function armRazorpayOpenWatchdog(){
@@ -232,7 +237,11 @@ function armRazorpayOpenWatchdog(){
       setCheckoutLoading(false);
       clearInterval(timer);
     }
-    if(checks >= 300) clearInterval(timer);
+    if(checks >= 12 && razorpayInFlight){
+      resetRazorpayCheckoutState();
+      setCheckoutLoading(false);
+      clearInterval(timer);
+    }
   }, 1000);
 }
 
@@ -3410,8 +3419,11 @@ return;
 }
 
 if (isOrderProcessing || razorpayInFlight) {
+if(hasVisibleRazorpayCheckout()){
 alert("Payment is already opening. Please wait.");
 return;
+}
+resetRazorpayCheckoutState();
 }
 
 const signature = checkoutSignature("Online");
@@ -3447,8 +3459,6 @@ const orderDraftPayload = await timedStep("upiOrder:buildPaidOnlineOrderDraft", 
 const paymentSession = await timedStep("upiOrder:createPaymentSession", () => callPaymentFunction("createPaymentSession", orderDraftPayload, 12000));
 const sessionAmount = Number(paymentSession.amount);
 const sessionAmountPaise = Number(paymentSession.amountPaise || Math.round(sessionAmount * 100));
-const sessionCurrency = String(paymentSession.currency || "INR").toUpperCase();
-const checkoutFields = getCheckoutFields();
 if(!paymentSession.razorpayOrderId || !paymentSession.paymentSessionId || !paymentSession.keyId || !Number.isFinite(sessionAmount) || sessionAmount <= 0 || !Number.isFinite(sessionAmountPaise) || sessionAmountPaise <= 0){
   throw new Error("Payment session was not created correctly. Please try again.");
 }
@@ -3463,24 +3473,12 @@ const options = {
 
 key: paymentSession.keyId,
 
-amount: sessionAmountPaise,
-
-currency: sessionCurrency,
-
 name: "Magneetoz",
 
 description:"Magneetoz order payment",
 order_id:paymentSession.razorpayOrderId,
-prefill:{
-  name:checkoutFields.name || "",
-  contact:String(checkoutFields.phone || "").replace(/\D/g, "").slice(-10)
-},
 theme:{
   color:"#ff7b00"
-},
-retry:{
-  enabled:true,
-  max_count:2
 },
 
 handler: async function (response){
