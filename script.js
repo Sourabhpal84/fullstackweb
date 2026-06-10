@@ -3462,6 +3462,9 @@ const sessionAmountPaise = Number(paymentSession.amountPaise || Math.round(sessi
 if(!paymentSession.razorpayOrderId || !paymentSession.paymentSessionId || !paymentSession.keyId || !Number.isFinite(sessionAmount) || sessionAmount <= 0 || !Number.isFinite(sessionAmountPaise) || sessionAmountPaise <= 0){
   throw new Error("Payment session was not created correctly. Please try again.");
 }
+if(Math.round(Number(orderDraftPayload.amount || 0) * 100) !== sessionAmountPaise){
+  throw new Error("Payment amount changed. Please close checkout and try again.");
+}
 rememberPaymentSessionRecovery({
   paymentSessionId:paymentSession.paymentSessionId,
   razorpayOrderId:paymentSession.razorpayOrderId,
@@ -3473,10 +3476,14 @@ const options = {
 
 key: paymentSession.keyId,
 
+amount: sessionAmountPaise,
+
+currency: String(paymentSession.currency || "INR").toUpperCase(),
+
 name: "Magneetoz",
 
 description:"Magneetoz order payment",
-order_id:paymentSession.razorpayOrderId,
+order_id:String(paymentSession.razorpayOrderId),
 theme:{
   color:"#ff7b00"
 },
