@@ -446,6 +446,15 @@ exports.createPaymentSession = onRequest(
         if (existingAmountPaise !== amountPaise) {
           throw Object.assign(new Error("Payment amount changed. Please reopen checkout and try again."), { status: 409 });
         }
+        logger.info("ORDER_RESPONSE", {
+          paymentSessionId: sessionId,
+          razorpayOrderId: data.razorpayOrderId,
+          amount: existingAmountPaise,
+          currency: data.currency || "INR",
+          status: data.status || "created",
+          reused: true,
+          keyId: razorpayKeyId
+        });
         return sendJson(res, 200, {
           ok: true,
           paymentSessionId: sessionId,
@@ -468,6 +477,15 @@ exports.createPaymentSession = onRequest(
           userId: user.uid,
           source: "customer_checkout"
         }
+      });
+      logger.info("ORDER_RESPONSE", {
+        paymentSessionId: sessionId,
+        razorpayOrderId: razorpayOrder.id,
+        amount: razorpayOrder.amount,
+        currency: razorpayOrder.currency,
+        status: razorpayOrder.status,
+        receipt: razorpayOrder.receipt,
+        keyId: razorpayKeyId
       });
 
       await sessionRef.set({

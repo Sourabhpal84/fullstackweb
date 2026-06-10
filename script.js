@@ -378,6 +378,18 @@ async function callPaymentFunction(name, payload, timeoutMs = 25000){
     clearTimeout(timer);
   }
   const data = await response.json().catch(() => ({}));
+  if(name === "createPaymentSession"){
+    console.log("CREATE_SESSION_RESPONSE", {
+      status:response.status,
+      ok:response.ok,
+      paymentSessionId:data.paymentSessionId || "",
+      razorpayOrderId:data.razorpayOrderId || "",
+      amount:data.amount,
+      amountPaise:data.amountPaise,
+      currency:data.currency,
+      keyId:data.keyId || ""
+    });
+  }
   if(!response.ok || data.ok === false) throw new Error(data.error || "Payment service failed.");
   return data;
 }
@@ -3554,11 +3566,22 @@ resetRazorpayCheckoutState();
 
 };
 
+console.log("RAZORPAY_OPTIONS", {
+  key:options.key,
+  amount:options.amount,
+  currency:options.currency,
+  order_id:options.order_id,
+  name:options.name,
+  hasHandler:typeof options.handler === "function",
+  hasCallbackUrl:!!options.callback_url,
+  paymentSessionId:paymentSession.paymentSessionId
+});
 const rzp = new Razorpay(options);
 
 rzp.on('payment.failed', function (response){
 
 resetRazorpayCheckoutState();
+console.log("PAYMENT_ERROR", response?.error || response);
 alert(response?.error?.description || "Payment failed. Please try again.");
 
 });
@@ -3570,6 +3593,7 @@ try{
 }catch(error){
   razorpayOpened = false;
   resetRazorpayCheckoutState();
+  console.log("PAYMENT_ERROR", error);
   alert(error?.message || "Payment gateway could not open. Please try again.");
 }
 
