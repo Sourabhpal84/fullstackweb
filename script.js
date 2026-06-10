@@ -3499,6 +3499,11 @@ return;
 }
 const pricing = calculateInvoicePricing(subtotal);
 const finalTotal = pricing.grandTotal;
+if(finalTotal < 10){
+  resetRazorpayCheckoutState();
+  alert("Online payment is available for orders of ₹10 or more. Please add more items or choose Cash on Delivery.");
+  return;
+}
 setCheckoutLoading(true, "Creating secure payment session...");
 const orderDraftPayload = await timedStep("upiOrder:buildPaidOnlineOrderDraft", () => buildPaidOnlineOrderDraft());
 const paymentSession = await timedStep("upiOrder:createPaymentSession", () => callPaymentFunction("createPaymentSession", orderDraftPayload, 12000));

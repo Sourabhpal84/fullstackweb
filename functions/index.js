@@ -426,6 +426,7 @@ exports.createPaymentSession = onRequest(
       const user = await requireAuth(req);
       const body = req.body || {};
       const amount = normalizeAmount(body.amount);
+      if (amount < 10) throw Object.assign(new Error("Online payment is available for orders of ₹10 or more."), { status: 400 });
       const amountPaise = Math.round(amount * 100);
       const idempotencyKey = String(body.idempotencyKey || "").slice(0, 160);
       if (!idempotencyKey) throw Object.assign(new Error("Missing idempotency key"), { status: 400 });
@@ -1086,12 +1087,17 @@ async function completeDeliveryTransaction({ orderId, rider, mode, codeRef, code
     const settlementDone = !!order.codSettlementStatus && order.cashSettlementPending === false;
     const exceptionDelivery = mode === "exception_code";
     const prepaidOtpDelivery = mode === "prepaid_customer_otp";
-    const riderCollectedOnline = onlinePaid && order.paymentCollectedBy === rider.riderId;
+    const doorstepOnlinePaid = onlinePaid && (
+      order.paymentCollectedBy === rider.riderId
+      || String(order.paymentStage || "").toLowerCase() === "payment completed"
+      || String(order.status || "").toLowerCase() === "payment completed"
+      || Number(order.amountToCollect || 0) === 0
+    );
     if (cashOrder && !settlementDone && !exceptionDelivery) {
       throw Object.assign(new Error("Cash order requires company settlement or customer delivery code"), { status: 409 });
     }
     if (!cashOrder && !onlinePaid) throw Object.assign(new Error("Online payment is not verified"), { status: 409 });
-    if (!cashOrder && onlinePaid && !prepaidOtpDelivery && !riderCollectedOnline) {
+    if (!cashOrder && onlinePaid && !prepaidOtpDelivery && !doorstepOnlinePaid) {
       throw Object.assign(new Error("Customer delivery OTP is required for prepaid order"), { status: 409 });
     }
 
