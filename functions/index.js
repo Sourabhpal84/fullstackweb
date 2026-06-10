@@ -1447,6 +1447,27 @@ exports.verifyRiderPayment = onRequest(
             lastCodSettlementAt: FieldValue.serverTimestamp()
           });
         }
+        if (autoDeliverCustomerOnline) {
+          const riderEarning = Number(session.riderEarning || 0);
+          transaction.update(riderRef, {
+            totalOrders: FieldValue.increment(1),
+            totalEarnings: FieldValue.increment(riderEarning),
+            todayEarnings: FieldValue.increment(riderEarning),
+            weeklyEarnings: FieldValue.increment(riderEarning),
+            monthlyEarnings: FieldValue.increment(riderEarning),
+            pendingSettlement: FieldValue.increment(riderEarning),
+            currentActiveOrderId: FieldValue.delete(),
+            lastDeliveryAt: FieldValue.serverTimestamp()
+          });
+          transaction.set(db.collection("riderWalletTransactions").doc(), {
+            riderId: rider.riderId,
+            orderId: session.orderId,
+            type: "delivery_earning_customer_online_auto_delivered",
+            amount: riderEarning,
+            razorpayPaymentId: razorpay_payment_id,
+            createdAt: FieldValue.serverTimestamp()
+          });
+        }
         if (session.type === "cod_company_settlement") {
           transaction.set(db.collection("riderWalletTransactions").doc(), {
             riderId: rider.riderId,
