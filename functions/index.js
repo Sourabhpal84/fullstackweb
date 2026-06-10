@@ -478,13 +478,14 @@ exports.createPaymentSession = onRequest(
           source: "customer_checkout"
         }
       });
+      const verifiedRazorpayOrder = await getRazorpay().orders.fetch(razorpayOrder.id);
       logger.info("ORDER_RESPONSE", {
         paymentSessionId: sessionId,
         razorpayOrderId: razorpayOrder.id,
-        amount: razorpayOrder.amount,
-        currency: razorpayOrder.currency,
-        status: razorpayOrder.status,
-        receipt: razorpayOrder.receipt,
+        amount: verifiedRazorpayOrder.amount,
+        currency: verifiedRazorpayOrder.currency,
+        status: verifiedRazorpayOrder.status,
+        receipt: verifiedRazorpayOrder.receipt,
         keyId: razorpayKeyId
       });
 
@@ -522,6 +523,7 @@ exports.createPaymentSession = onRequest(
         amount,
         amountPaise,
         currency: "INR",
+        orderStatus: verifiedRazorpayOrder.status,
         keyId: razorpayKeyId
       });
     } catch (error) {

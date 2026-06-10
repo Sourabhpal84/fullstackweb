@@ -387,6 +387,7 @@ async function callPaymentFunction(name, payload, timeoutMs = 25000){
       amount:data.amount,
       amountPaise:data.amountPaise,
       currency:data.currency,
+      orderStatus:data.orderStatus,
       keyId:data.keyId || ""
     });
   }
