@@ -180,6 +180,15 @@ function verifyCheckoutSignature({ razorpayOrderId, razorpayPaymentId, razorpayS
   return crypto.timingSafeEqual(Buffer.from(String(razorpaySignature || "")), Buffer.from(expected));
 }
 
+function verifyPaymentLinkSignature({ paymentLinkId, paymentLinkReferenceId, paymentLinkStatus, razorpayPaymentId, razorpaySignature }) {
+  const secret = env("RAZORPAY_KEY_SECRET");
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(`${paymentLinkId}|${paymentLinkReferenceId}|${paymentLinkStatus}|${razorpayPaymentId}`)
+    .digest("hex");
+  return crypto.timingSafeEqual(Buffer.from(String(razorpaySignature || "")), Buffer.from(expected));
+}
+
 exports.calculateRouteDistance = onRequest(
   { region: "asia-south1", cors: true },
   async (req, res) => {
@@ -423,6 +432,9 @@ exports.createPaymentSession = onRequest(
       const razorpayKeyId = env("RAZORPAY_KEY_ID");
       if (!razorpayKeyId) throw Object.assign(new Error("Razorpay key is not configured"), { status: 500 });
       const draft = body.orderDraft || {};
+      const customerName = String(draft.customerName || body.customerName || "Magneetoz Customer").slice(0, 120);
+      const customerPhone = String(draft.phone || body.phone || "").replace(/\D/g, "").slice(-10);
+      const customerEmail = String(draft.email || body.email || "").trim();
       if (draft.restaurantLocation && draft.location) {
         const route = await calculateGoogleRouteDistance({
           origin: draft.restaurantLocation,
@@ -437,7 +449,7 @@ exports.createPaymentSession = onRequest(
           throw Object.assign(new Error("Delivery is not available for this road route distance."), { status: 409 });
         }
       }
-      const sessionId = crypto.createHash("sha256").update(`${user.uid}:${idempotencyKey}:${amountPaise}`).digest("hex");
+      const sessionId = crypto.createHash("sha256").update(`${user.uid}:${idempotencyKey}:${amountPaise}:payment-link-v1`).digest("hex");
       const sessionRef = db.collection("paymentSessions").doc(sessionId);
       const existing = await sessionRef.get();
       if (existing.exists && existing.data().razorpayOrderId) {
@@ -462,6 +474,8 @@ exports.createPaymentSession = onRequest(
           amount: data.amount,
           amountPaise: existingAmountPaise,
           currency: data.currency || "INR",
+          paymentLinkId: data.razorpayPaymentLinkId || "",
+          paymentLinkUrl: data.razorpayPaymentLinkUrl || "",
           keyId: razorpayKeyId
         });
       }
@@ -479,6 +493,31 @@ exports.createPaymentSession = onRequest(
         }
       });
       const verifiedRazorpayOrder = await getRazorpay().orders.fetch(razorpayOrder.id);
+      const paymentLink = await getRazorpay().paymentLink.create({
+        amount: amountPaise,
+        currency: "INR",
+        accept_partial: false,
+        reference_id: sessionId.slice(0, 40),
+        description: `Magneetoz order payment`,
+        customer: {
+          name: customerName,
+          contact: customerPhone || undefined,
+          email: customerEmail || undefined
+        },
+        notify: {
+          sms: false,
+          email: false
+        },
+        reminder_enable: false,
+        callback_url: `https://magneetoz.com/?paymentSessionId=${encodeURIComponent(sessionId)}`,
+        callback_method: "get",
+        notes: {
+          paymentSessionId: sessionId,
+          orderId,
+          userId: user.uid,
+          source: "customer_payment_link"
+        }
+      });
       logger.info("ORDER_RESPONSE", {
         paymentSessionId: sessionId,
         razorpayOrderId: razorpayOrder.id,
@@ -500,6 +539,8 @@ exports.createPaymentSession = onRequest(
         cart: Array.isArray(body.cart) ? body.cart : [],
         orderDraft: draft,
         razorpayOrderId: razorpayOrder.id,
+        razorpayPaymentLinkId: paymentLink.id,
+        razorpayPaymentLinkUrl: paymentLink.short_url,
         status: "created",
         lockState: "open",
         attempts: 0,
@@ -524,6 +565,8 @@ exports.createPaymentSession = onRequest(
         amountPaise,
         currency: "INR",
         orderStatus: verifiedRazorpayOrder.status,
+        paymentLinkId: paymentLink.id,
+        paymentLinkUrl: paymentLink.short_url,
         keyId: razorpayKeyId
       });
     } catch (error) {
@@ -634,6 +677,100 @@ exports.verifyPaymentAndCreateOrder = onRequest(
   }
 );
 
+exports.verifyPaymentLinkAndCreateOrder = onRequest(
+  {
+    region: "asia-south1",
+    cors: [
+      "https://magneetozonline.netlify.app",
+      "https://magneetoz.com"
+    ]
+  },
+  async (req, res) => {
+    if (req.method === "OPTIONS") return sendJson(res, 204, {});
+    if (req.method !== "POST") return sendJson(res, 405, { ok: false, error: "Method not allowed" });
+    let sessionRef;
+    try {
+      const user = await requireAuth(req);
+      const {
+        paymentSessionId,
+        razorpay_payment_id,
+        razorpay_payment_link_id,
+        razorpay_payment_link_reference_id,
+        razorpay_payment_link_status,
+        razorpay_signature
+      } = req.body || {};
+      if (!paymentSessionId || !razorpay_payment_id || !razorpay_payment_link_id || !razorpay_payment_link_reference_id || !razorpay_payment_link_status || !razorpay_signature) {
+        throw Object.assign(new Error("Missing payment link verification details"), { status: 400 });
+      }
+      if (!verifyPaymentLinkSignature({
+        paymentLinkId: razorpay_payment_link_id,
+        paymentLinkReferenceId: razorpay_payment_link_reference_id,
+        paymentLinkStatus: razorpay_payment_link_status,
+        razorpayPaymentId: razorpay_payment_id,
+        razorpaySignature: razorpay_signature
+      })) {
+        throw Object.assign(new Error("Invalid Razorpay payment link signature"), { status: 401 });
+      }
+
+      sessionRef = db.collection("paymentSessions").doc(String(paymentSessionId));
+      const sessionSnap = await sessionRef.get();
+      if (!sessionSnap.exists) throw Object.assign(new Error("Payment session not found"), { status: 404 });
+      const session = { id: sessionSnap.id, ...sessionSnap.data() };
+      if (session.userId !== user.uid) throw Object.assign(new Error("Payment session belongs to another user"), { status: 403 });
+      if (session.razorpayPaymentLinkId !== razorpay_payment_link_id) throw Object.assign(new Error("Payment link mismatch"), { status: 400 });
+      if (String(razorpay_payment_link_status).toLowerCase() !== "paid") throw Object.assign(new Error("Payment link is not paid"), { status: 402 });
+
+      const payment = await getRazorpay().payments.fetch(razorpay_payment_id);
+      const expectedPaise = Number(session.amountPaise);
+      if (Number(payment.amount) !== expectedPaise) throw Object.assign(new Error("Payment amount mismatch"), { status: 400 });
+      if (!["captured", "authorized"].includes(payment.status)) throw Object.assign(new Error(`Payment not captured: ${payment.status}`), { status: 402 });
+      if (payment.status === "authorized") {
+        await getRazorpay().payments.capture(razorpay_payment_id, expectedPaise, "INR");
+      }
+
+      await sessionRef.set({
+        status: "verifying",
+        lockState: "locked",
+        attempts: FieldValue.increment(1),
+        razorpayPaymentId: razorpay_payment_id,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      await db.collection("paidOrderRecovery").doc(session.id).set({
+        status: "payment_link_verified_order_pending",
+        paymentSessionId: session.id,
+        userId: session.userId,
+        orderId: session.orderId,
+        razorpayOrderId: session.razorpayOrderId,
+        razorpayPaymentId: razorpay_payment_id,
+        amount: session.amount,
+        orderDraft: session.orderDraft || {},
+        source: "razorpay_payment_link_return",
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      const result = await createOrderFromPaidSession({
+        sessionRef,
+        session,
+        payment: { ...payment, id: razorpay_payment_id },
+        source: "razorpay_payment_link_return"
+      });
+      return sendJson(res, 200, { ok: true, ...result });
+    } catch (error) {
+      logger.error("verifyPaymentLinkAndCreateOrder failed", { error: error.message });
+      if (sessionRef) {
+        await sessionRef.set({
+          status: "payment_link_verify_failed",
+          lastError: error.message,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true }).catch(() => {});
+      }
+      return sendJson(res, error.status || 500, { ok: false, error: error.message || "Payment link verification failed" });
+    }
+  }
+);
+
 function verifyRazorpayWebhook(req) {
   const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
   if (!secret) {
@@ -720,13 +857,19 @@ exports.razorpayWebhook = onRequest(
           const sessionSnap = await sessionRef.get();
           if (sessionSnap.exists) {
             const session = { id: sessionSnap.id, ...sessionSnap.data() };
-            if (session.razorpayOrderId === payment.order_id && Number(session.amountPaise) === Number(payment.amount)) {
+            const paymentMatchesSession = Number(session.amountPaise) === Number(payment.amount)
+              && (
+                session.razorpayOrderId === payment.order_id
+                || session.razorpayPaymentLinkId === payment.invoice_id
+                || notes.source === "customer_payment_link"
+              );
+            if (paymentMatchesSession) {
               await db.collection("paidOrderRecovery").doc(session.id).set({
                 status: "payment_verified_order_pending",
                 paymentSessionId: session.id,
                 userId: session.userId,
                 orderId: session.orderId,
-                razorpayOrderId: payment.order_id,
+                razorpayOrderId: payment.order_id || session.razorpayOrderId,
                 razorpayPaymentId: paymentId,
                 amount: session.amount,
                 orderDraft: session.orderDraft || {},

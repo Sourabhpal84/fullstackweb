@@ -321,6 +321,36 @@ async function retryCapturedPaymentRecovery(){
   }
 }
 
+async function handlePaymentLinkReturn(){
+  const params = new URLSearchParams(window.location.search || "");
+  const paymentSessionId = params.get("paymentSessionId") || "";
+  const razorpayPaymentId = params.get("razorpay_payment_id") || "";
+  const paymentLinkId = params.get("razorpay_payment_link_id") || "";
+  const paymentLinkReferenceId = params.get("razorpay_payment_link_reference_id") || "";
+  const paymentLinkStatus = params.get("razorpay_payment_link_status") || "";
+  const razorpaySignature = params.get("razorpay_signature") || "";
+  if(!paymentSessionId || !razorpayPaymentId || !paymentLinkId || !paymentLinkReferenceId || !paymentLinkStatus || !razorpaySignature) return false;
+  try{
+    setCheckoutLoading(true, "Verifying payment and placing your order...");
+    const verifiedOrder = await callPaymentFunction("verifyPaymentLinkAndCreateOrder", {
+      paymentSessionId,
+      razorpay_payment_id:razorpayPaymentId,
+      razorpay_payment_link_id:paymentLinkId,
+      razorpay_payment_link_reference_id:paymentLinkReferenceId,
+      razorpay_payment_link_status:paymentLinkStatus,
+      razorpay_signature:razorpaySignature
+    }, 35000);
+    clearRazorpayPaymentRecovery();
+    window.history.replaceState({}, document.title, window.location.pathname);
+    finishSuccessfulCheckout(verifiedOrder.orderNumber);
+    return true;
+  }catch(error){
+    console.warn("Payment link verification failed:", error);
+    setCheckoutRetry(error?.message || "Payment received. We are safely creating your order.", () => handlePaymentLinkReturn());
+    return true;
+  }
+}
+
 function clearRazorpayPaymentRecovery(){
   try{
     localStorage.removeItem(RAZORPAY_RECOVERY_KEY);
@@ -388,6 +418,7 @@ async function callPaymentFunction(name, payload, timeoutMs = 25000){
       amountPaise:data.amountPaise,
       currency:data.currency,
       orderStatus:data.orderStatus,
+      paymentLinkUrl:data.paymentLinkUrl || "",
       keyId:data.keyId || ""
     });
   }
@@ -2207,6 +2238,7 @@ document.getElementById("customerDistanceBanner")?.addEventListener("click", () 
   acceptLocation();
 });
 window.addEventListener("load", ()=>{
+  handlePaymentLinkReturn().catch(error => console.warn("Payment link return skipped:", error));
 
   const saved = normalizeCustomerLocation(readJSON(LOCATION_CACHE_KEY, null), "localStorage");
 
@@ -3484,6 +3516,16 @@ rememberPaymentSessionRecovery({
   amount:sessionAmount
 });
 setCheckoutLoading(false);
+
+if(paymentSession.paymentLinkUrl){
+  console.log("RAZORPAY_PAYMENT_LINK_REDIRECT", {
+    paymentSessionId:paymentSession.paymentSessionId,
+    paymentLinkUrl:paymentSession.paymentLinkUrl
+  });
+  resetRazorpayCheckoutState();
+  window.location.href = paymentSession.paymentLinkUrl;
+  return;
+}
 
 const options = {
 
