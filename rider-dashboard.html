@@ -940,6 +940,10 @@ window.startDelivery = async function(orderId){
   await updateAssignedOrderStatus(orderId, "Out For Delivery", {
     outForDeliveryAt:serverTimestamp()
   });
+  const order = orders.find(item => item.id === orderId);
+  if(order && isPaidOnlineOrder(order) && order.deliveryOtpStatus !== "active" && !prepaidOtpVerified(order)){
+    requestPrepaidDeliveryOtp(orderId).catch(error => console.warn("Auto delivery OTP request failed:", error));
+  }
 };
 
 window.pickupOrder = async function(orderId){
@@ -1016,6 +1020,10 @@ window.reachNearby = async function(orderId){
   await updateAssignedOrderStatus(orderId, "Reached Nearby", {
     reachedNearbyAt:serverTimestamp()
   });
+  const order = orders.find(item => item.id === orderId);
+  if(order && isPaidOnlineOrder(order) && order.deliveryOtpStatus !== "active" && !prepaidOtpVerified(order)){
+    requestPrepaidDeliveryOtp(orderId).catch(error => console.warn("Auto delivery OTP request failed:", error));
+  }
 };
 
 window.markCashReceived = async function(orderId){

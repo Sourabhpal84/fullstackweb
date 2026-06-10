@@ -3967,9 +3967,24 @@ document.getElementById("emptyOrders");
 /* STORE */
 
 let liveOrders = [];
+const CUSTOMER_LIVE_ORDERS_CACHE_KEY = "magneetozLiveOrdersCache";
 
 let currentFilter = "active";
 const feedbackPromptedOrders = new Set(JSON.parse(localStorage.getItem("magneetozFeedbackPromptedOrders") || "[]"));
+
+function cacheLiveOrdersForUser(userId, orders = []){
+  if(!userId) return;
+  writeJSON(`${CUSTOMER_LIVE_ORDERS_CACHE_KEY}:${userId}`, {
+    savedAt:Date.now(),
+    orders:orders.slice(0, 20)
+  });
+}
+
+function readCachedLiveOrdersForUser(userId){
+  if(!userId) return [];
+  const cached = readJSON(`${CUSTOMER_LIVE_ORDERS_CACHE_KEY}:${userId}`, null);
+  return Array.isArray(cached?.orders) ? cached.orders : [];
+}
 
 /* FILTER BUTTONS */
 
@@ -4015,17 +4030,13 @@ function startOrderTrackingListener(user){
   stopOrderTrackingListener();
   orderTrackingUserId = user.uid;
   if(trackingLoader) trackingLoader.style.display = "block";
+  const cachedOrders = readCachedLiveOrdersForUser(user.uid);
+  if(cachedOrders.length){
+    liveOrders = cachedOrders;
+    renderOrders();
+  }
 
-  const ordersQuery = query(
-
-    collection(db,"orders"),
-
-    where("userId","==",user.uid),
-
-    orderBy("createdAt","desc")
-
-  );
-
+  const attachOrdersListener = (ordersQuery, fallbackEnabled = true) => {
   orderTrackingUnsub = onSnapshot(ordersQuery,(snapshot)=>{
 
     if(trackingLoader) trackingLoader.style.display = "none";
@@ -4050,8 +4061,11 @@ function startOrderTrackingListener(user){
 
     });
 
+    nextOrders.sort((a,b) => timestampToMillis(b.createdAt) - timestampToMillis(a.createdAt));
     liveOrders = nextOrders;
+    cacheLiveOrdersForUser(user.uid, nextOrders);
     renderOrders();
+    hydrateDeliveryAuthorizationCodes(nextOrders).catch(error => console.warn("Delivery OTP hydrate failed:", error));
     logStructured("FIRESTORE LISTENER", { name:"customer-live-orders", count:nextOrders.length });
 
   }, error => {
@@ -4063,10 +4077,23 @@ function startOrderTrackingListener(user){
     orderTrackingUnsub = null;
     orderTrackingUserId = "";
     if(trackingLoader) trackingLoader.style.display = "none";
+    if(fallbackEnabled && auth.currentUser?.uid){
+      console.warn("Retrying live orders without createdAt ordering.");
+      orderTrackingUserId = auth.currentUser.uid;
+      attachOrdersListener(query(collection(db,"orders"), where("userId","==",auth.currentUser.uid)), false);
+      return;
+    }
     if(ordersContainer && liveOrders.length === 0){
       ordersContainer.innerHTML = `<div class="order-track-card"><p>Unable to load live order updates right now.</p></div>`;
     }
   });
+  };
+
+  attachOrdersListener(query(
+    collection(db,"orders"),
+    where("userId","==",user.uid),
+    orderBy("createdAt","desc")
+  ));
 
 }
 
