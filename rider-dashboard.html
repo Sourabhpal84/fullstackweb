@@ -1274,7 +1274,12 @@ window.completeWithCustomerCode = async function(orderId){
 
 window.deliver = async function(orderId){
   try{
-    await callRiderFunction("completeRiderDelivery", { orderId }, 25000);
+    const order = orders.find(item => item.id === orderId) || {};
+    const paidDoorstepOnline = isPaidOnlineOrder(order) && Number(order.amountToCollect || 0) === 0;
+    await callRiderFunction("completeRiderDelivery", {
+      orderId,
+      mode:paidDoorstepOnline ? "doorstep_online_paid" : "verified_payment"
+    }, 25000);
     alert("Delivery completed.");
   }catch(error){
     alert(error?.message || "Unable to mark delivered.");
