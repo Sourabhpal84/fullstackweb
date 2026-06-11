@@ -1107,7 +1107,7 @@ async function completeDeliveryTransaction({ orderId, rider, mode, codeRef, code
       || orderStatusText === "payment completed"
       || amountToCollect === 0
     );
-    if (cashOrder && !settlementDone && !exceptionDelivery) {
+    if (cashOrder && !settlementDone && !exceptionDelivery && !doorstepOnlineDelivery) {
       throw Object.assign(new Error("Cash order requires company settlement or customer delivery code"), { status: 409 });
     }
     if (!cashOrder && !onlinePaid) throw Object.assign(new Error("Online payment is not verified"), { status: 409 });
@@ -1118,7 +1118,8 @@ async function completeDeliveryTransaction({ orderId, rider, mode, codeRef, code
     const baseEarning = riderBaseEarning(order, pricing);
     const riderEarning = Math.max(0, exceptionDelivery ? baseEarning - penalty : baseEarning);
     const total = Number(order.totalAmount || order.finalAmount || 0);
-    const companyDue = cashOrder && exceptionDelivery ? Math.max(0, total - riderEarning) : 0;
+    const treatedAsCashSettlement = cashOrder && !doorstepOnlineDelivery;
+    const companyDue = treatedAsCashSettlement && exceptionDelivery ? Math.max(0, total - riderEarning) : 0;
     const update = {
       status: "Delivered",
       orderStatus: "Delivered",
@@ -1129,8 +1130,8 @@ async function completeDeliveryTransaction({ orderId, rider, mode, codeRef, code
       normalEarning: baseEarning,
       exceptionSettlementPenalty: exceptionDelivery ? penalty : 0,
       companyDue,
-      cashSettlementPending: cashOrder ? exceptionDelivery : false,
-      settlementState: cashOrder ? (exceptionDelivery ? "SETTLEMENT_PENDING" : "SETTLEMENT_COMPLETED") : "PAID_ONLINE",
+      cashSettlementPending: treatedAsCashSettlement ? exceptionDelivery : false,
+      settlementState: treatedAsCashSettlement ? (exceptionDelivery ? "SETTLEMENT_PENDING" : "SETTLEMENT_COMPLETED") : "PAID_ONLINE",
       deliveryOtpStatus: codeRef ? "verified" : (order.deliveryOtpStatus || FieldValue.delete()),
       lastStatusUpdatedAt: FieldValue.serverTimestamp()
     };
@@ -1147,8 +1148,8 @@ async function completeDeliveryTransaction({ orderId, rider, mode, codeRef, code
       todayEarnings: FieldValue.increment(riderEarning),
       weeklyEarnings: FieldValue.increment(riderEarning),
       monthlyEarnings: FieldValue.increment(riderEarning),
-      pendingSettlement: FieldValue.increment(cashOrder ? 0 : riderEarning),
-      totalCashCollected: FieldValue.increment(cashOrder ? total : 0),
+      pendingSettlement: FieldValue.increment(treatedAsCashSettlement ? 0 : riderEarning),
+      totalCashCollected: FieldValue.increment(treatedAsCashSettlement ? total : 0),
       pendingCashSubmission: FieldValue.increment(companyDue),
       companyDue: FieldValue.increment(companyDue),
       exceptionSettlementDeliveries: FieldValue.increment(exceptionDelivery ? 1 : 0),
@@ -1626,14 +1627,13 @@ exports.completeRiderDelivery = onRequest(
           const stageText = String(order.paymentStage || "").toLowerCase();
           const paymentStatusText = String(order.paymentStatus || "").toLowerCase();
           const amountToCollect = Number(order.amountToCollect || 0);
-          const paidDoorstepOnline = isOnlineMethod(methodText)
-            && amountToCollect === 0
+          const paidDoorstepOnline = amountToCollect === 0
             && (
-              statusText === "payment completed"
+              isOnlineMethod(methodText)
+              || statusText === "payment completed"
               || stageText === "payment completed"
               || paymentStatusText === "paid"
               || paymentStatusText === "success"
-              || paymentStatusText === "collected"
               || order.paymentCaptured === true
               || !!order.razorpayPaymentId
               || !!order.transactionId

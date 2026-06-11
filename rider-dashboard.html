@@ -465,8 +465,21 @@ function isOnlinePayment(method){
 function isPaidOnlineOrder(order = {}){
   const method = String(order.paymentMethod || order.paymentMode || "").toLowerCase();
   const status = String(order.paymentStatus || "").toLowerCase();
+  const stage = String(order.paymentStage || "").toLowerCase();
+  const orderStatus = String(order.status || order.orderStatus || "").toLowerCase();
+  const amountToCollect = Number(order.amountToCollect || 0);
   return (method === "online" || method === "upi")
-    && (status === "paid" || order.paymentCaptured === true || !!order.razorpayPaymentId);
+    && (
+      status === "paid"
+      || status === "success"
+      || status === "collected"
+      || stage === "payment completed"
+      || orderStatus === "payment completed"
+      || order.paymentCaptured === true
+      || !!order.razorpayPaymentId
+      || !!order.transactionId
+      || amountToCollect === 0
+    );
 }
 
 function isPaymentReady(order = {}){
