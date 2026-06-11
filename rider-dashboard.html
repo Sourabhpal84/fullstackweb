@@ -816,6 +816,12 @@ function renderOrders(){
   }).join("");
 }
 
+function findOrderById(orderId){
+  return Array.isArray(allOrders)
+    ? (allOrders.find(item => item.id === orderId) || null)
+    : null;
+}
+
 function listenOrders(){
 
   ordersUnsub?.();
@@ -943,7 +949,7 @@ window.startDelivery = async function(orderId){
   await updateAssignedOrderStatus(orderId, "Out For Delivery", {
     outForDeliveryAt:serverTimestamp()
   });
-  const order = orders.find(item => item.id === orderId);
+  const order = findOrderById(orderId);
   if(order && isPaidOnlineOrder(order) && order.deliveryOtpStatus !== "active" && !prepaidOtpVerified(order)){
     requestPrepaidDeliveryOtp(orderId).catch(error => console.warn("Auto delivery OTP request failed:", error));
   }
@@ -1023,7 +1029,7 @@ window.reachNearby = async function(orderId){
   await updateAssignedOrderStatus(orderId, "Reached Nearby", {
     reachedNearbyAt:serverTimestamp()
   });
-  const order = orders.find(item => item.id === orderId);
+  const order = findOrderById(orderId);
   if(order && isPaidOnlineOrder(order) && order.deliveryOtpStatus !== "active" && !prepaidOtpVerified(order)){
     requestPrepaidDeliveryOtp(orderId).catch(error => console.warn("Auto delivery OTP request failed:", error));
   }
@@ -1277,7 +1283,7 @@ window.completeWithCustomerCode = async function(orderId){
 
 window.deliver = async function(orderId){
   try{
-    const order = orders.find(item => item.id === orderId) || {};
+    const order = findOrderById(orderId) || {};
     const paidDoorstepOnline = isPaidOnlineOrder(order) && Number(order.amountToCollect || 0) === 0;
     await callRiderFunction("completeRiderDelivery", {
       orderId,
