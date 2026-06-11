@@ -4419,13 +4419,18 @@ function buildCancelWindowHTML(order){
 }
 
 function buildPaymentTrackingHTML(order){
-  if(!["Reached Nearby","Collect Payment","Cash Collected","Payment Settled","Payment Completed","Delivery Code Pending","Delivered"].includes(order.status)) return "";
+  if(!["Out For Delivery","Reached Nearby","Collect Payment","Cash Collected","Payment Settled","Payment Completed","Delivery Code Pending","Delivered"].includes(order.status)) return "";
   const paymentStatus = String(order.paymentStatus || "").toLowerCase();
   const paymentMethod = String(order.paymentMethod || order.paymentMode || "").toLowerCase();
   const paid = paymentStatus === "paid" || paymentStatus === "collected" || order.paymentCaptured === true || !!order.razorpayPaymentId;
   const methodLabel = paymentMethod === "online" || paymentMethod === "upi" ? "Online" : paymentMethod === "cod" || paymentMethod === "cash" ? "COD" : (order.paymentMethod || "CASH/UPI");
   const codeExpiresAt = timestampToMillis(order.deliveryAuthorizationCodeExpiresAt);
   const showDeliveryCode = (order.status === "Delivery Code Pending" || order.deliveryOtpStatus === "active") && (!codeExpiresAt || Date.now() < codeExpiresAt);
+  const prepaidOtpPending = paid
+    && (paymentMethod === "online" || paymentMethod === "upi")
+    && ["Out For Delivery","Reached Nearby"].includes(order.status)
+    && order.deliveryOtpStatus !== "verified"
+    && !showDeliveryCode;
   const codeHelp = paymentMethod === "online" || paymentMethod === "upi"
     ? "Share this OTP only with the rider after you receive your order."
     : "Share this code only after receiving your order.";
@@ -4435,6 +4440,7 @@ function buildPaymentTrackingHTML(order){
       <strong>${methodLabel}</strong>
       <p>Status: ${paid ? "paid" : (order.paymentStatus || "pending")}</p>
       ${showDeliveryCode ? `<p><strong>Delivery OTP: <span data-delivery-code-order="${escapeHTML(order.id)}">Loading</span></strong></p><p>${codeHelp}</p>` : ""}
+      ${prepaidOtpPending ? `<p><strong>Delivery OTP: generating...</strong></p><p>${codeHelp}</p>` : ""}
     </div>
   `;
 }

@@ -1057,6 +1057,56 @@ function createCustomerDeliveryCode({ transaction, orderRef, order, orderId, rid
   return { expiresAt };
 }
 
+exports.ensurePrepaidDeliveryOtp = onDocumentUpdated(
+  {
+    document: "orders/{orderId}",
+    region: "asia-south1"
+  },
+  async event => {
+    const before = event.data?.before?.data() || {};
+    const after = event.data?.after?.data() || {};
+    const orderId = event.params.orderId;
+    if (!["Out For Delivery", "Reached Nearby"].includes(after.status)) return;
+    if (after.deliveryOtpStatus === "active" || after.deliveryOtpStatus === "verified" || after.activeDeliveryCodeId) return;
+    const method = after.paymentMethod || after.paymentMode;
+    const paidOnline = isOnlineMethod(method) &&
+      (String(after.paymentStatus || "").toLowerCase() === "paid"
+        || String(after.paymentStage || "").toLowerCase() === "payment completed"
+        || after.paymentCaptured === true
+        || after.razorpayPaymentId
+        || after.transactionId);
+    if (!paidOnline) return;
+    const riderId = after.assignedRiderId || after.riderId || "";
+    if (!riderId) return;
+    const rider = {
+      riderId,
+      name: after.riderName || after.assignedRider?.name || "Magneetoz Rider",
+      phone: after.riderPhone || after.assignedRider?.phone || ""
+    };
+    const orderRef = db.collection("orders").doc(orderId);
+    await db.runTransaction(async transaction => {
+      const snap = await transaction.get(orderRef);
+      if (!snap.exists) return;
+      const locked = snap.data() || {};
+      if (locked.deliveryOtpStatus === "active" || locked.deliveryOtpStatus === "verified" || locked.activeDeliveryCodeId) return;
+      createCustomerDeliveryCode({
+        transaction,
+        orderRef,
+        order: locked,
+        orderId,
+        rider,
+        purpose: "prepaid_delivery"
+      });
+    });
+    logger.info("Auto-created prepaid delivery OTP", {
+      orderId,
+      riderId,
+      previousStatus: before.status || "",
+      status: after.status
+    });
+  }
+);
+
 async function completeDeliveryTransaction({ orderId, rider, mode, codeRef, codeHash }) {
   const orderRef = db.collection("orders").doc(String(orderId));
   const riderRef = db.collection("riders").doc(rider.riderId);
