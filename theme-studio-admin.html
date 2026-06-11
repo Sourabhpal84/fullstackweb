@@ -12,9 +12,9 @@
 <body>
 <main class="wrap">
   <header class="head"><div><h1>Advanced Theme Studio</h1><p style="color:#aeb8c7">Mobile-style theme switching for cart, cards, buttons, forms, header, footer, and page backgrounds.</p></div><button class="soft" onclick="location.href='offers-admin.html'">Live Offers</button></header>
-  <section class="grid" id="themes"></section>
   <section class="panel">
-    <h2>Website Mode & Hero Text</h2>
+    <h2>Hero Background Slider & Text</h2>
+    <p style="color:#aeb8c7">Paste multiple pizza image URLs below. One URL per line. These images slide in the homepage hero background.</p>
     <div class="form-grid">
       <label>User website mode
         <select id="siteMode"><option value="dark">Dark Mode</option><option value="light">Light Mode</option></select>
@@ -24,11 +24,20 @@
       <label>Hero subtitle<input id="heroSubtitle" value="Hot MAGNEETOZ favourites, cinematic tracking, and a checkout that feels effortless."></label>
       <label>Primary button text<input id="heroPrimaryButton" value="Explore Menu"></label>
       <label>Secondary button text<input id="heroSecondaryButton" value="Smart Search"></label>
+      <label>Kicker color<input id="heroKickerColor" type="color" value="#67e8f9"></label>
+      <label>Title color<input id="heroTitleColor" type="color" value="#ffffff"></label>
+      <label>Subtitle color<input id="heroSubtitleColor" type="color" value="#ffffff"></label>
+      <label>Primary text color<input id="heroPrimaryColor" type="color" value="#ffffff"></label>
+      <label>Secondary text color<input id="heroSecondaryColor" type="color" value="#ffffff"></label>
     </div>
+    <label style="margin-top:12px">Hero background image URLs
+      <textarea id="heroImages" placeholder="https://example.com/pizza-1.jpg&#10;https://example.com/pizza-2.jpg&#10;https://example.com/pizza-3.jpg"></textarea>
+    </label>
     <div class="actions" style="margin-top:14px">
       <button class="apply" id="applyModeHero">Apply Mode & Hero</button>
     </div>
   </section>
+  <section class="grid" id="themes"></section>
   <section class="panel builder">
     <div>
       <h2>Card Style Customizer</h2>
@@ -203,11 +212,18 @@ loadCurrentCardStyle.onclick=async()=>{
   const current=await readCurrentTheme();
   siteMode.value=current.mode || "dark";
   const hero=current.hero || {};
-  heroKicker.value=hero.kicker || heroKicker.value;
-  heroTitle.value=hero.title || heroTitle.value;
-  heroSubtitle.value=hero.subtitle || heroSubtitle.value;
-  heroPrimaryButton.value=hero.primaryButton || heroPrimaryButton.value;
-  heroSecondaryButton.value=hero.secondaryButton || heroSecondaryButton.value;
+  heroKicker.value=("kicker" in hero) ? hero.kicker : heroKicker.value;
+  heroTitle.value=("title" in hero) ? hero.title : heroTitle.value;
+  heroSubtitle.value=("subtitle" in hero) ? hero.subtitle : heroSubtitle.value;
+  heroPrimaryButton.value=("primaryButton" in hero) ? hero.primaryButton : heroPrimaryButton.value;
+  heroSecondaryButton.value=("secondaryButton" in hero) ? hero.secondaryButton : heroSecondaryButton.value;
+  const colors=hero.colors || {};
+  heroKickerColor.value=colors.kicker || heroKickerColor.value;
+  heroTitleColor.value=colors.title || heroTitleColor.value;
+  heroSubtitleColor.value=colors.subtitle || heroSubtitleColor.value;
+  heroPrimaryColor.value=colors.primaryButton || heroPrimaryColor.value;
+  heroSecondaryColor.value=colors.secondaryButton || heroSecondaryColor.value;
+  heroImages.value=Array.isArray(hero.images) ? hero.images.join("\n") : "";
   paintCardForm({...activeCardDefaults(),...(current.variables||{})});
 };
 resetCardStyle.onclick=()=>paintCardForm(activeCardDefaults());
@@ -227,7 +243,15 @@ applyModeHero.onclick=async()=>{
       title:heroTitle.value.trim(),
       subtitle:heroSubtitle.value.trim(),
       primaryButton:heroPrimaryButton.value.trim(),
-      secondaryButton:heroSecondaryButton.value.trim()
+      secondaryButton:heroSecondaryButton.value.trim(),
+      colors:{
+        kicker:heroKickerColor.value,
+        title:heroTitleColor.value,
+        subtitle:heroSubtitleColor.value,
+        primaryButton:heroPrimaryColor.value,
+        secondaryButton:heroSecondaryColor.value
+      },
+      images:heroImages.value.split(/\n+/).map(item => item.trim()).filter(Boolean).slice(0, 8)
     },
     updatedAt:serverTimestamp()
   },{merge:true});

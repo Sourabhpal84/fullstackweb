@@ -1,5 +1,5 @@
-const CACHE_NAME = "magneetoz-premium-v9";
-const RUNTIME_CACHE = "magneetoz-runtime-v3";
+const CACHE_NAME = "magneetoz-premium-v10";
+const RUNTIME_CACHE = "magneetoz-runtime-v4";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -11,7 +11,7 @@ const APP_SHELL = [
   "/about-us.html",
   "/theme-studio-admin.html",
   "/super-admin-dashboard.html",
-  "/logo_tran.png",
+  "/logo_tran1.png",
   "/manifest.json"
 ];
 
@@ -65,7 +65,7 @@ self.addEventListener("fetch", event => {
         cache.match(event.request).then(cached => cached || fetch(event.request).then(response => {
           if(response.ok) cache.put(event.request, response.clone());
           return response;
-        }).catch(() => caches.match("/logo_tran.png")))
+        }).catch(() => caches.match("/logo_tran1.png")))
       )
     );
     return;

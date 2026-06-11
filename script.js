@@ -224,6 +224,91 @@ function hasVisibleRazorpayCheckout(){
     });
 }
 
+function renderHeroPizzaSlider(images = []){
+  const slider = document.getElementById("heroPizzaSlider");
+  const bgSlider = document.getElementById("heroBgSlider");
+  const cleanImages = images
+    .map(image => normalizeImageUrl(image))
+    .filter(Boolean)
+    .slice(0, 8);
+  const slides = cleanImages.length ? cleanImages : ["logo_tran1.png"];
+  const markup = slides.map((image, index) => `
+    <img
+      src="${escapeHTML(image)}"
+      alt="MAGNEETOZ pizza slide ${index + 1}"
+      width="420"
+      height="420"
+      loading="${index === 0 ? "eager" : "lazy"}"
+      decoding="async"
+      style="--slide-index:${index};--slide-count:${slides.length};"
+      onerror="this.onerror=null;this.src='logo_tran1.png';"
+    >
+  `).join("");
+  if(slider){
+    slider.innerHTML = markup;
+    slider.style.setProperty("--slide-count", String(slides.length));
+  }
+  if(bgSlider){
+    bgSlider.innerHTML = slides.map((image, index) => `
+      <img
+        src="${escapeHTML(image)}"
+        alt=""
+        width="1200"
+        height="800"
+        loading="${index === 0 ? "eager" : "lazy"}"
+        decoding="async"
+        style="--slide-index:${index};--slide-count:${slides.length};"
+        onerror="this.remove();"
+      >
+    `).join("");
+    bgSlider.style.setProperty("--slide-count", String(slides.length));
+  }
+}
+
+function syncHeroEmptyState(hero = {}){
+  const heroSection = document.querySelector(".hero");
+  if(!heroSection) return;
+  const managedKeys = ["kicker", "title", "subtitle", "primaryButton", "secondaryButton"];
+  const isManaged = managedKeys.some(key => key in hero);
+  const fieldMap = {
+    kicker:document.getElementById("heroKickerText"),
+    title:document.getElementById("heroTitleText"),
+    subtitle:document.getElementById("heroSubtitleText")?.closest("p"),
+    primaryButton:document.getElementById("heroPrimaryBtnText"),
+    secondaryButton:document.getElementById("heroSecondaryBtnText")?.closest("button")
+  };
+  if(!isManaged){
+    Object.values(fieldMap).forEach(el => el?.classList.remove("hero-field-hidden"));
+    document.querySelector(".hero-local-line")?.classList.remove("hero-field-hidden");
+    heroSection.classList.remove("hero-empty-text");
+    return;
+  }
+  const textValues = Object.entries(fieldMap).map(([key, el]) => {
+    const value = String(hero[key] || "").trim();
+    el?.classList.toggle("hero-field-hidden", !value);
+    return value;
+  });
+  const isEmpty = textValues.every(value => !value);
+  heroSection.classList.toggle("hero-empty-text", isEmpty);
+  document.querySelector(".hero-local-line")?.classList.toggle("hero-field-hidden", isEmpty);
+}
+
+function applyHeroColors(hero = {}){
+  const colors = hero.colors || {};
+  const root = document.documentElement;
+  const colorMap = {
+    "--hero-kicker-color":colors.kicker,
+    "--hero-title-color":colors.title,
+    "--hero-subtitle-color":colors.subtitle,
+    "--hero-primary-text-color":colors.primaryButton,
+    "--hero-secondary-text-color":colors.secondaryButton
+  };
+  Object.entries(colorMap).forEach(([key, value]) => {
+    if(typeof value === "string" && value.trim()) root.style.setProperty(key, value.trim());
+    else root.style.removeProperty(key);
+  });
+}
+
 function armRazorpayOpenWatchdog(){
   let checks = 0;
   const timer = setInterval(() => {
@@ -569,17 +654,7 @@ function calculateInvoicePricing(subtotal, basePricing = calculateCouponPricing(
 }
 
 function ensureCustomerDistanceBanner(){
-  let banner = document.getElementById("customerDistanceBanner");
-  if(banner) return banner;
-  banner = document.createElement("button");
-  banner.type = "button";
-  banner.id = "customerDistanceBanner";
-  banner.className = "customer-distance-banner";
-  banner.textContent = "📍 Enable location to see your distance from our kitchen";
-  banner.addEventListener("click", () => acceptLocation());
-  const header = document.querySelector(".main-header");
-  header?.insertAdjacentElement("afterend", banner);
-  return banner;
+  return document.getElementById("customerDistanceBanner");
 }
 
 function updateCustomerDistanceGlobals(){
@@ -590,6 +665,7 @@ function updateCustomerDistanceGlobals(){
 
 function updateCustomerDistanceBanner(message){
   const banner = ensureCustomerDistanceBanner();
+  if(!banner) return;
   if(message){
     banner.textContent = message;
     banner.title = "Tap to refresh your current location";
@@ -698,7 +774,7 @@ function cleanInvoiceItemName(value = ""){
 }
 
 function imageMarkup(src, alt){
-  return `<img src="${escapeHTML(normalizeImageUrl(src))}" alt="${escapeHTML(alt || "Magneetoz dish")}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='logo_tran1.png';">`;
+  return `<img src="${escapeHTML(normalizeImageUrl(src))}" alt="${escapeHTML(alt || "Magneetoz dish")}" width="640" height="480" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='logo_tran1.png';">`;
 }
 
 function dishDataAttrs(d = {}){
@@ -1675,6 +1751,11 @@ function cacheCategoryScrollTargets(){
   cachedCategoryLinks = [...document.querySelectorAll(".category-nav a")];
 }
 
+function categoryImageMarkup(category = {}, label = "MAGNEETOZ category"){
+  const source = category.image || category.imageUrl || category.icon || category.photo || category.thumbnail || "logo_tran1.png";
+  return `<span class="category-tab-media"><img src="${escapeHTML(normalizeImageUrl(source))}" alt="${escapeHTML(label)}" width="72" height="72" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='logo_tran1.png';"></span>`;
+}
+
 function loadCategories(){
   const container = document.getElementById("categoryContainer");
   const nav = document.getElementById("categoryNav");
@@ -1690,13 +1771,27 @@ function loadCategories(){
       const selectHTML = [];
       const nextGridIds = new Set();
 
+      if(nav){
+        navHTML.push(`
+          <a href="#menuSection" class="category-tab active" data-category-tab="all">
+            ${categoryImageMarkup({ image:"logo_tran1.png" }, "All MAGNEETOZ items")}
+            <span class="category-tab-label">All</span>
+          </a>
+        `);
+      }
+
       snapshot.forEach(docSnap => {
         const c = docSnap.data();
         const id = normalizeCategoryId(c.name);
-        if(nav){
-          navHTML.push(`<a href="#${id}">${escapeHTML(c.name)}</a>`);
-        }
         if(!c.active) return;
+        if(nav){
+          navHTML.push(`
+            <a href="#${id}" class="category-tab" data-category-tab="${escapeHTML(id)}">
+              ${categoryImageMarkup(c, c.name || "MAGNEETOZ category")}
+              <span class="category-tab-label">${escapeHTML(c.name)}</span>
+            </a>
+          `);
+        }
         nextGridIds.add("grid-cat-" + id);
         selectHTML.push(`<option value="${escapeHTML(c.name)}">${escapeHTML(c.name)}</option>`);
         categoryHTML.push(`
@@ -1869,8 +1964,11 @@ registerGlobalSnapshot(onSnapshot(doc(db, "settings", "theme"), snap => {
   };
   Object.entries(heroTextMap).forEach(([id, text]) => {
     const el = document.getElementById(id);
-    if(el && typeof text === "string" && text.trim()) el.textContent = text.trim();
+    if(el && typeof text === "string") el.textContent = text.trim();
   });
+  applyHeroColors(hero);
+  syncHeroEmptyState(hero);
+  renderHeroPizzaSlider(Array.isArray(hero.images) ? hero.images : []);
   setThemeParticles(String(vars["--particle-bg"] || "").trim() === "founder-gold");
 }));
 
@@ -2013,16 +2111,18 @@ function loadMenu(){
       }
 
     });
-    htmlByGrid.forEach((html, gridId) => {
-      const grid = document.getElementById(gridId);
-      if(grid) grid.innerHTML = html;
-    });
+    requestAnimationFrame(() => {
+      htmlByGrid.forEach((html, gridId) => {
+        const grid = document.getElementById(gridId);
+        if(grid) grid.innerHTML = html;
+      });
 
-    notifyPremiumUI("magneetoz:menu-rendered", {
-      count: document.querySelectorAll(".new-card").length
+      notifyPremiumUI("magneetoz:menu-rendered", {
+        count: document.querySelectorAll(".new-card").length
+      });
+      renderSmartAssistant();
+      applyRestaurantAvailability();
     });
-    renderSmartAssistant();
-    applyRestaurantAvailability();
 
   }, error => {
     console.warn("Menu listener failed:", error);
@@ -3775,6 +3875,15 @@ document.addEventListener("DOMContentLoaded", () => {
     if(!button) return;
     renderSmartAssistant(button.dataset.aiIntent || "popular");
   });
+  document.querySelector(".hero")?.addEventListener("click", event => {
+    if(event.target.closest("button,a,select,input,textarea")) return;
+    document.getElementById("menuSection")?.scrollIntoView({ behavior:"smooth", block:"start" });
+  });
+  document.querySelector(".hero")?.addEventListener("keydown", event => {
+    if(event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    document.getElementById("menuSection")?.scrollIntoView({ behavior:"smooth", block:"start" });
+  });
   ["customerName","customerPhone","customerAddress","customerLandmark"].forEach(id => {
     document.getElementById(id)?.addEventListener("input", () => {
       setCheckoutFieldsCollapsed(false);
@@ -3789,7 +3898,7 @@ window.addEventListener("scroll", ()=>{
   categoryScrollRaf = true;
   requestAnimationFrame(() => {
     categoryScrollRaf = false;
-    let activeId = "";
+    let activeId = window.scrollY < 260 ? "menuSection" : "";
     for(const section of cachedCategorySections){
       const rect = section.getBoundingClientRect();
       if(rect.top < 200 && rect.bottom > 200){
@@ -3800,7 +3909,7 @@ window.addEventListener("scroll", ()=>{
     if(!activeId || activeId === activeCategoryId) return;
     activeCategoryId = activeId;
     cachedCategoryLinks.forEach(a=>{
-      a.classList.toggle("active", a.getAttribute("href") === "#"+activeId);
+      a.classList.toggle("active", a.getAttribute("href") === "#"+activeId || (activeId === "menuSection" && a.dataset.categoryTab === "all"));
     });
   });
 }, { passive:true });

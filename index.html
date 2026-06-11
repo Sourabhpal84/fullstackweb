@@ -152,6 +152,12 @@ base-uri 'self';
     rel="manifest"
     href="manifest.json" />
 
+  <link
+    rel="preload"
+    href="logo_tran1.png"
+    as="image"
+    fetchpriority="high" />
+
   <!-- PRECONNECT -->
   <link
     rel="preconnect"
@@ -433,14 +439,11 @@ Verify OTP
 </div>
 
     </header>
-    <button type="button" id="customerDistanceBanner" class="customer-distance-banner">
-      📍 Enable location to see your distance from our kitchen
-    </button>
-
     <!-- HERO -->
 
-    <section class="hero">
+    <section class="hero" id="homeHero" role="button" tabindex="0" aria-label="Go to menu">
 
+      <div class="hero-bg-slider" id="heroBgSlider" aria-hidden="true"></div>
       <div class="hero-bg bg1"></div>
       <div class="hero-bg bg2"></div>
       <div class="hero-bg bg3"></div>
@@ -451,29 +454,53 @@ Verify OTP
       <div class="floating-food food-c">🔥</div>
 
       <div class="hero-content">
-        <div class="hero-kicker" id="heroKickerText">MAGNEETOZ Greater Noida • Pizza • Burgers • Combos</div>
-        <h1 id="heroTitleText">MAGNEETOZ Pizza Delivery in Greater Noida</h1>
+        <div class="hero-copy">
+          <div class="hero-kicker" id="heroKickerText">MAGNEETOZ Greater Noida • Pizza • Burgers • Combos</div>
+          <h1 id="heroTitleText">MAGNEETOZ Pizza Delivery in Greater Noida</h1>
 
-        <p class="hero-local-line">Bhook lagi hai kya? Fresh fast food from MAGNEETOZ, Taste of Attraction.</p>
+          <p class="hero-local-line">Bhook lagi hai kya? Fresh fast food from MAGNEETOZ, Taste of Attraction.</p>
 
-        <p>
-          <span id="heroSubtitleText">Order pizza, burgers, fries, cold drinks, and combo offers online with secure checkout, COD, and realtime order tracking.</span>
-        </p>
+          <p>
+            <span id="heroSubtitleText">Order pizza, burgers, fries, cold drinks, and combo offers online with secure checkout, COD, and realtime order tracking.</span>
+          </p>
 
-        <a href="#menuSection" class="hero-btn" id="heroPrimaryBtnText">
-          Explore Menu
-        </a>
+          <div class="hero-actions">
+            <a href="#menuSection" class="hero-btn" id="heroPrimaryBtnText">
+              Explore Menu
+            </a>
 
-        <button type="button" class="hero-secondary magnetic-btn" id="openSearchBtn">
-          <span id="heroSecondaryBtnText">Smart Search</span>
-        </button>
+            <button type="button" class="hero-secondary magnetic-btn" id="openSearchBtn">
+              <span id="heroSecondaryBtnText">Smart Search</span>
+            </button>
+          </div>
 
-        <div class="hero-proof">
-          <span>4.8 rated</span>
-          <span>Secure payments</span>
-          <span>Realtime tracking</span>
+          <div class="hero-proof">
+            <span>4.8 rated</span>
+            <span>Secure payments</span>
+            <span>Realtime tracking</span>
+          </div>
         </div>
 
+        <aside class="hero-showcase" aria-label="MAGNEETOZ delivery preview">
+          <div class="hero-showcase-top">
+            <div class="hero-pizza-slider" id="heroPizzaSlider" aria-label="Featured pizza images">
+              <img src="logo_tran1.png" alt="MAGNEETOZ signature pizza preview" width="420" height="420" loading="eager" decoding="async">
+            </div>
+            <div class="hot-badge">Hot now</div>
+          </div>
+          <div class="hero-order-card">
+            <div>
+              <span>Kitchen status</span>
+              <strong>Fresh batch preparing</strong>
+            </div>
+            <b>18-30 min</b>
+          </div>
+          <div class="hero-mini-grid">
+            <span>COD</span>
+            <span>UPI</span>
+            <span>Live rider</span>
+          </div>
+        </aside>
       </div>
 
     </section>
@@ -1088,9 +1115,9 @@ Verify OTP
   </script>
 
   <!-- RAZORPAY -->
-  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://checkout.razorpay.com/v1/checkout.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 
   <!-- MODULES -->
   <script type="module" src="./firebase.js?v=20260524-restaurant-location"></script>
@@ -1141,7 +1168,7 @@ window.addEventListener("unhandledrejection", (e) => {
 
 
 
-  <script src="app-notifications.js"></script>
+  <script src="app-notifications.js" defer></script>
 </body>
 
 </html>

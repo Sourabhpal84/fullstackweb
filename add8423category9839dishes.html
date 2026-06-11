@@ -196,6 +196,17 @@
   <div id="categorySection" style="display:none;">
     <h3>Add Category</h3>
     <input id="catName" placeholder="Category Name">
+    <input id="catImage" placeholder="Category Image URL or upload below">
+    <div class="upload-box category-upload-box" id="categoryUploadBox">
+      <input id="categoryImageFile" type="file" accept="image/*" hidden>
+      <div id="categoryUploadPrompt">
+        <strong>Upload category image</strong>
+        <span>Shown in top category tabs</span>
+      </div>
+      <img id="categoryPreview" alt="Category preview" style="display:none">
+      <div class="upload-progress"><i id="categoryUploadProgress"></i></div>
+      <small id="categoryUploadStatus">Firebase Storage upload ready</small>
+    </div>
     <button class="btn-green" onclick="addCategory()">Add</button>
 
     <div id="categoryList" class="sortable"></div>
@@ -283,6 +294,7 @@ mountAdminLogout(document.body);
 
 let isSorting = false;
 let uploadedDishImageUrl = "";
+let uploadedCategoryImageUrl = "";
 let activeUploadTask = null;
 
 function formatCurrency(amount){
@@ -303,10 +315,21 @@ const preview = document.getElementById("dishPreview");
 const prompt = document.getElementById("uploadPrompt");
 const progress = document.getElementById("uploadProgress");
 const uploadStatus = document.getElementById("uploadStatus");
+const categoryUploadBox = document.getElementById("categoryUploadBox");
+const categoryFileInput = document.getElementById("categoryImageFile");
+const categoryPreview = document.getElementById("categoryPreview");
+const categoryPrompt = document.getElementById("categoryUploadPrompt");
+const categoryProgress = document.getElementById("categoryUploadProgress");
+const categoryUploadStatus = document.getElementById("categoryUploadStatus");
 
 function setUploadStatus(message, pct = null){
   uploadStatus.textContent = message;
   if(pct != null) progress.style.width = `${pct}%`;
+}
+
+function setCategoryUploadStatus(message, pct = null){
+  categoryUploadStatus.textContent = message;
+  if(pct != null) categoryProgress.style.width = `${pct}%`;
 }
 
 function compressImageToDataUrl(file, maxWidth = 900, quality = .78){
@@ -397,6 +420,42 @@ async function uploadDishImage(file){
   }
 }
 
+async function uploadCategoryImage(file){
+  if(!file || !file.type.startsWith("image/")){
+    alert("Please choose a valid image.");
+    return;
+  }
+  categoryPreview.src = URL.createObjectURL(file);
+  categoryPreview.style.display = "block";
+  categoryPrompt.style.display = "none";
+  setCategoryUploadStatus("Uploading image...", 4);
+  const cleanName = file.name.replace(/[^a-z0-9.]/gi, "-").toLowerCase();
+  const storageRef = ref(storage, `category-images/${Date.now()}-${cleanName}`);
+  const task = uploadBytesResumable(storageRef, file, { contentType:file.type });
+  try{
+    await new Promise((resolve, reject) => {
+      task.on("state_changed", snap => {
+        const pct = snap.totalBytes ? Math.round((snap.bytesTransferred / snap.totalBytes) * 100) : 0;
+        setCategoryUploadStatus(`Uploading ${pct}%`, pct);
+      }, reject, resolve);
+    });
+    uploadedCategoryImageUrl = await getDownloadURL(task.snapshot.ref);
+    document.getElementById("catImage").value = uploadedCategoryImageUrl;
+    setCategoryUploadStatus("Upload complete. Category image ready.", 100);
+  }catch(error){
+    console.error("Category image upload failed:", error);
+    try{
+      uploadedCategoryImageUrl = await compressImageToDataUrl(file, 420, .8);
+      document.getElementById("catImage").value = uploadedCategoryImageUrl;
+      setCategoryUploadStatus("Storage failed. Compressed image is ready.", 100);
+    }catch(_){
+      uploadedCategoryImageUrl = "";
+      setCategoryUploadStatus(`Upload failed: ${error?.message || "Please try again."}`, 0);
+      alert("Category image upload failed. You can paste an image URL instead.");
+    }
+  }
+}
+
 uploadBox.addEventListener("click", () => fileInput.click());
 fileInput.addEventListener("change", () => uploadDishImage(fileInput.files?.[0]));
 ["dragenter","dragover"].forEach(name => uploadBox.addEventListener(name, event => {
@@ -409,6 +468,18 @@ fileInput.addEventListener("change", () => uploadDishImage(fileInput.files?.[0])
 }));
 uploadBox.addEventListener("drop", event => uploadDishImage(event.dataTransfer.files?.[0]));
 
+categoryUploadBox.addEventListener("click", () => categoryFileInput.click());
+categoryFileInput.addEventListener("change", () => uploadCategoryImage(categoryFileInput.files?.[0]));
+["dragenter","dragover"].forEach(name => categoryUploadBox.addEventListener(name, event => {
+  event.preventDefault();
+  categoryUploadBox.classList.add("dragover");
+}));
+["dragleave","drop"].forEach(name => categoryUploadBox.addEventListener(name, event => {
+  event.preventDefault();
+  categoryUploadBox.classList.remove("dragover");
+}));
+categoryUploadBox.addEventListener("drop", event => uploadCategoryImage(event.dataTransfer.files?.[0]));
+
 /* 🔁 TYPE */
 window.toggleType = function(){
   simpleBox.style.display = type.value==="simple"?"block":"none";
@@ -418,17 +489,24 @@ window.toggleType = function(){
 /* ➕ CATEGORY */
 window.addCategory = async function(){
   const cleanName = normalizeUnicodeText(catName.value);
+  const image = normalizeUnicodeText(uploadedCategoryImageUrl || catImage.value);
   if(!cleanName) return alert("Enter name ❌");
 
   const snap = await getDocs(collection(db,"categories"));
 
 await addDoc(collection(db,"categories"),{
   name: cleanName,
+  image,
   active:true,
   order: snap.size + 1   // ⭐ IMPORTANT
 });
 
   catName.value="";
+  catImage.value="";
+  uploadedCategoryImageUrl = "";
+  categoryPreview.style.display = "none";
+  categoryPrompt.style.display = "block";
+  setCategoryUploadStatus("Firebase Storage upload ready", 0);
 }
 
 /* 📋 CATEGORY LIST */
@@ -458,7 +536,10 @@ onSnapshot(collection(db,"categories"), snap=>{
     <!-- CONTENT -->
     <div style="flex:1;">
 
-    <b>${c.name}</b><br>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+      <img src="${c.image || c.imageUrl || c.icon || c.photo || c.thumbnail || 'logo_tran1.png'}" alt="${c.name}" style="width:48px;height:48px;border-radius:50%;object-fit:cover;background:#fff;" onerror="this.onerror=null;this.src='logo_tran1.png';">
+      <b>${c.name}</b>
+    </div>
 
     <span style="color:${c.active ? '#22c55e' : '#ef4444'};">
       ${c.active ? "● Active" : "● Disabled"}

@@ -177,7 +177,9 @@ function verifyCheckoutSignature({ razorpayOrderId, razorpayPaymentId, razorpayS
     .createHmac("sha256", secret)
     .update(`${razorpayOrderId}|${razorpayPaymentId}`)
     .digest("hex");
-  return crypto.timingSafeEqual(Buffer.from(String(razorpaySignature || "")), Buffer.from(expected));
+  const received = Buffer.from(String(razorpaySignature || ""), "utf8");
+  const expectedBuffer = Buffer.from(expected, "utf8");
+  return received.length === expectedBuffer.length && crypto.timingSafeEqual(received, expectedBuffer);
 }
 
 function verifyPaymentLinkSignature({ paymentLinkId, paymentLinkReferenceId, paymentLinkStatus, razorpayPaymentId, razorpaySignature }) {
@@ -186,7 +188,9 @@ function verifyPaymentLinkSignature({ paymentLinkId, paymentLinkReferenceId, pay
     .createHmac("sha256", secret)
     .update(`${paymentLinkId}|${paymentLinkReferenceId}|${paymentLinkStatus}|${razorpayPaymentId}`)
     .digest("hex");
-  return crypto.timingSafeEqual(Buffer.from(String(razorpaySignature || "")), Buffer.from(expected));
+  const received = Buffer.from(String(razorpaySignature || ""), "utf8");
+  const expectedBuffer = Buffer.from(expected, "utf8");
+  return received.length === expectedBuffer.length && crypto.timingSafeEqual(received, expectedBuffer);
 }
 
 exports.calculateRouteDistance = onRequest(
