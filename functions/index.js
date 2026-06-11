@@ -1101,16 +1101,29 @@ async function completeDeliveryTransaction({ orderId, rider, mode, codeRef, code
     const exceptionDelivery = mode === "exception_code";
     const prepaidOtpDelivery = mode === "prepaid_customer_otp";
     const doorstepOnlineDelivery = mode === "doorstep_online_paid";
+    const doorstepOnlinePaymentProof = doorstepOnlineDelivery && (
+      amountToCollect === 0
+      || paymentStageText === "payment completed"
+      || orderStatusText === "payment completed"
+      || paymentStatusText === "paid"
+      || paymentStatusText === "success"
+      || order.paymentCaptured === true
+      || !!order.razorpayPaymentId
+      || !!order.transactionId
+    );
     const doorstepOnlinePaid = onlinePaid && (
       order.paymentCollectedBy === rider.riderId
       || paymentStageText === "payment completed"
       || orderStatusText === "payment completed"
       || amountToCollect === 0
     );
+    if (doorstepOnlineDelivery && !doorstepOnlinePaymentProof) {
+      throw Object.assign(new Error("Doorstep online payment is not verified"), { status: 409 });
+    }
     if (cashOrder && !settlementDone && !exceptionDelivery && !doorstepOnlineDelivery) {
       throw Object.assign(new Error("Cash order requires company settlement or customer delivery code"), { status: 409 });
     }
-    if (!cashOrder && !onlinePaid) throw Object.assign(new Error("Online payment is not verified"), { status: 409 });
+    if (!cashOrder && !onlinePaid && !doorstepOnlineDelivery) throw Object.assign(new Error("Online payment is not verified"), { status: 409 });
     if (!cashOrder && onlinePaid && !prepaidOtpDelivery && !doorstepOnlineDelivery && !doorstepOnlinePaid) {
       throw Object.assign(new Error("Customer delivery OTP is required for prepaid order"), { status: 409 });
     }
