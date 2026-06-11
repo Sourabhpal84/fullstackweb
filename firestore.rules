@@ -152,6 +152,8 @@ service cloud.firestore {
           "riderPhone",
           "assignedRider",
           "riderStatus",
+          "riderLocation",
+          "riderLocationUpdatedAt",
           "riderRequest",
           "assignedAt",
           "lastStatusUpdatedAt"
@@ -172,6 +174,8 @@ service cloud.firestore {
           "pickedUpAt",
           "outForDeliveryAt",
           "reachedNearbyAt",
+          "riderLocation",
+          "riderLocationUpdatedAt",
           "riderStatus"
         ])
         && request.resource.data.status in ["Picked Up", "Out For Delivery", "Reached Nearby"]

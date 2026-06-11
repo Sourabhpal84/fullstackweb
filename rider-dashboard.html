@@ -383,6 +383,8 @@ let allOrders = [];
 let assignedOrderDocs = [];
 let requestOrderDocs = [];
 let currentFilter = "Requests";
+let riderLocationWatchId = null;
+let lastRiderLocationWriteAt = 0;
 let riderRazorpayInFlight = false;
 let PRICING = {
   BASE_FARE:25,
@@ -897,12 +899,61 @@ async function getRiderLocation(){
       pos => resolve({
         lat:pos.coords.latitude,
         lng:pos.coords.longitude,
+        accuracy:Number(pos.coords.accuracy || 0),
         updatedAt:new Date().toISOString()
       }),
       () => resolve(null),
       { enableHighAccuracy:true, timeout:8000, maximumAge:60000 }
     );
   });
+}
+
+function activeDeliveryOrder(){
+  return allOrders.find(order =>
+    order.id === rider?.currentActiveOrderId &&
+    ["Rider Accepted","Picked Up","Out For Delivery","Reached Nearby","Collect Payment","Cash Collected","Payment Settled","Delivery Code Pending","Payment Completed"].includes(normalizeStatus(order.status))
+  );
+}
+
+async function publishRiderLocation(position){
+  if(!riderRef || !rider?.riderId || !position?.coords) return;
+  const now = Date.now();
+  if(now - lastRiderLocationWriteAt < 12000) return;
+  lastRiderLocationWriteAt = now;
+  const location = {
+    lat:Number(position.coords.latitude),
+    lng:Number(position.coords.longitude),
+    accuracy:Number(position.coords.accuracy || 0),
+    updatedAt:new Date(now).toISOString()
+  };
+  await updateDoc(riderRef, {
+    location,
+    lastSeenAt:serverTimestamp()
+  }).catch(error => console.warn("Rider location profile update skipped:", error));
+  const order = activeDeliveryOrder();
+  if(!order?.id) return;
+  await updateDoc(doc(db, "orders", order.id), {
+    riderLocation:location,
+    riderLocationUpdatedAt:serverTimestamp(),
+    riderStatus:normalizeStatus(order.status) === "Reached Nearby" ? "Rider is nearby" : "Rider is moving toward you"
+  }).catch(error => console.warn("Rider live order location update skipped:", error));
+}
+
+function startRiderLocationSharing(){
+  if(riderLocationWatchId || !navigator.geolocation) return;
+  riderLocationWatchId = navigator.geolocation.watchPosition(
+    position => publishRiderLocation(position),
+    error => console.warn("Rider live location unavailable:", error?.message || error),
+    { enableHighAccuracy:true, maximumAge:10000, timeout:15000 }
+  );
+}
+
+function stopRiderLocationSharing(){
+  if(riderLocationWatchId && navigator.geolocation){
+    navigator.geolocation.clearWatch(riderLocationWatchId);
+  }
+  riderLocationWatchId = null;
+  lastRiderLocationWriteAt = 0;
 }
 
 async function setOnline(online){
@@ -914,6 +965,8 @@ async function setOnline(online){
     ...(location ? { location } : {}),
     lastSeenAt:serverTimestamp()
   });
+  if(online) startRiderLocationSharing();
+  else stopRiderLocationSharing();
 }
 
 async function saveProfilePassword(){
@@ -966,9 +1019,12 @@ async function resetProfilePassword(){
 }
 
 window.startDelivery = async function(orderId){
+  const location = await getRiderLocation();
   await updateAssignedOrderStatus(orderId, "Out For Delivery", {
-    outForDeliveryAt:serverTimestamp()
+    outForDeliveryAt:serverTimestamp(),
+    ...(location ? { riderLocation:location, riderLocationUpdatedAt:serverTimestamp(), riderStatus:"Rider is moving toward you" } : {})
   });
+  startRiderLocationSharing();
   const order = findOrderById(orderId);
   if(order && isPaidOnlineOrder(order) && order.deliveryOtpStatus !== "active" && !prepaidOtpVerified(order)){
     requestPrepaidDeliveryOtp(orderId).catch(error => console.warn("Auto delivery OTP request failed:", error));
@@ -989,6 +1045,7 @@ window.acceptRequest = async function(orderId){
   }
   const orderRef = doc(db,"orders",orderId);
   const riderDocRef = riderRef;
+  const location = await getRiderLocation();
   try{
     await runTransaction(db, async (transaction) => {
       const riderSnap = await transaction.get(riderDocRef);
@@ -1014,6 +1071,7 @@ window.acceptRequest = async function(orderId){
           phone:rider.phone || rider.phoneDigits || ""
         },
         riderStatus:"Accepted by rider",
+        ...(location ? { riderLocation:location, riderLocationUpdatedAt:serverTimestamp() } : {}),
         riderRequest:{
           ...request,
           status:"assigned",
@@ -1031,6 +1089,7 @@ window.acceptRequest = async function(orderId){
     currentFilter = "Assigned";
     document.querySelectorAll(".filter").forEach(el => el.classList.toggle("active", el.dataset.filter === "Assigned"));
     renderOrders();
+    startRiderLocationSharing();
   }catch(error){
     alert(error.message || "Request is no longer available.");
   }
@@ -1046,8 +1105,10 @@ window.rejectRequest = async function(orderId){
 };
 
 window.reachNearby = async function(orderId){
+  const location = await getRiderLocation();
   await updateAssignedOrderStatus(orderId, "Reached Nearby", {
-    reachedNearbyAt:serverTimestamp()
+    reachedNearbyAt:serverTimestamp(),
+    ...(location ? { riderLocation:location, riderLocationUpdatedAt:serverTimestamp(), riderStatus:"Rider is nearby" } : {})
   });
   const order = findOrderById(orderId);
   if(order && isPaidOnlineOrder(order) && order.deliveryOtpStatus !== "active" && !prepaidOtpVerified(order)){
@@ -1310,6 +1371,7 @@ window.deliver = async function(orderId){
       mode:paidDoorstepOnline ? "doorstep_online_paid" : "verified_payment"
     }, 25000);
     alert("Delivery completed.");
+    stopRiderLocationSharing();
   }catch(error){
     alert(error?.message || "Unable to mark delivered.");
   }
@@ -1371,6 +1433,7 @@ document.getElementById("changePasswordBtn")?.addEventListener("click", saveProf
 document.getElementById("resetPasswordBtn")?.addEventListener("click", resetProfilePassword);
 document.getElementById("logoutBtn").addEventListener("click", async () => {
   try{ await setOnline(false); }catch(_){}
+  stopRiderLocationSharing();
   localStorage.removeItem("riderId");
   localStorage.removeItem("riderPhone");
   localStorage.removeItem("riderName");
@@ -1379,6 +1442,7 @@ document.getElementById("logoutBtn").addEventListener("click", async () => {
 });
 
 window.addEventListener("pagehide", () => {
+  stopRiderLocationSharing();
   riderUnsub?.();
   ordersUnsub?.();
   requestOrdersUnsub?.();

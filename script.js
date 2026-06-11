@@ -312,7 +312,10 @@ function applyHeroColors(hero = {}){
 function applyHeroBackgroundBlur(hero = {}){
   const rawValue = Number(hero.backgroundBlur);
   const blur = Number.isFinite(rawValue) ? Math.max(0, Math.min(24, Math.round(rawValue))) : 0;
+  const rawBlackIntensity = Number(hero.backgroundBlackIntensity);
+  const blackIntensity = Number.isFinite(rawBlackIntensity) ? Math.max(0, Math.min(85, Math.round(rawBlackIntensity))) : 24;
   document.documentElement.style.setProperty("--hero-bg-blur", `${blur}px`);
+  document.documentElement.style.setProperty("--hero-bg-black-opacity", (blackIntensity / 100).toFixed(2));
 }
 
 function armRazorpayOpenWatchdog(){
@@ -4307,6 +4310,7 @@ Math.max(0, timelineSteps.findIndex(
 
 const cancelHTML = buildCancelWindowHTML(order);
 const paymentHTML = buildPaymentTrackingHTML(order);
+const riderLiveMapHTML = buildRiderLiveMapHTML(order);
 
 const timelineHTML = `
 
@@ -4485,6 +4489,8 @@ order.status === "Delivered"
             ${order.riderStatus || ""}
           </p>
 
+          ${riderLiveMapHTML}
+
         </div>
 
         `
@@ -4499,6 +4505,40 @@ order.status === "Delivered"
   hydrateDeliveryAuthorizationCodes(filtered);
   startCountdownTicker();
 
+}
+
+function buildRiderLiveMapHTML(order){
+  const location = order.riderLocation || {};
+  const riderLat = Number(location.lat);
+  const riderLng = Number(location.lng);
+  const customerLat = Number(order.location?.lat || order.customerLocation?.lat);
+  const customerLng = Number(order.location?.lng || order.customerLocation?.lng);
+  const canShow = Number.isFinite(riderLat) && Number.isFinite(riderLng) &&
+    ["Out For Delivery","Reached Nearby","Collect Payment","Cash Collected","Payment Settled","Delivery Code Pending","Payment Completed"].includes(order.status);
+  if(!canShow) return "";
+  const markerQuery = Number.isFinite(customerLat) && Number.isFinite(customerLng)
+    ? `marker=${customerLat},${customerLng}&marker=${riderLat},${riderLng}`
+    : `marker=${riderLat},${riderLng}`;
+  const south = Number.isFinite(customerLat) ? Math.min(customerLat, riderLat) - .012 : riderLat - .018;
+  const north = Number.isFinite(customerLat) ? Math.max(customerLat, riderLat) + .012 : riderLat + .018;
+  const west = Number.isFinite(customerLng) ? Math.min(customerLng, riderLng) - .012 : riderLng - .018;
+  const east = Number.isFinite(customerLng) ? Math.max(customerLng, riderLng) + .012 : riderLng + .018;
+  const updatedAt = location.updatedAt ? new Date(location.updatedAt).toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" }) : "Live";
+  return `
+    <div class="rider-live-map">
+      <div class="rider-live-map-head">
+        <strong>Live rider map</strong>
+        <span>Updated ${escapeHTML(updatedAt)}</span>
+      </div>
+      <iframe
+        title="Live rider location map"
+        loading="lazy"
+        referrerpolicy="no-referrer-when-downgrade"
+        src="https://www.openstreetmap.org/export/embed.html?bbox=${west},${south},${east},${north}&layer=mapnik&${markerQuery}">
+      </iframe>
+      <a href="https://www.openstreetmap.org/?mlat=${riderLat}&mlon=${riderLng}#map=16/${riderLat}/${riderLng}" target="_blank" rel="noopener">Open full map</a>
+    </div>
+  `;
 }
 
 function normalizeTimelineStatus(status){

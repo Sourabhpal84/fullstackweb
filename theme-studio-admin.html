@@ -33,6 +33,10 @@
         <input id="heroBgBlur" type="range" min="0" max="24" step="1" value="0">
         <span id="heroBgBlurValue">0px</span>
       </label>
+      <label>Black blur intensity
+        <input id="heroBgBlackIntensity" type="range" min="0" max="85" step="1" value="24">
+        <span id="heroBgBlackIntensityValue">24%</span>
+      </label>
     </div>
     <label style="margin-top:12px">Hero background image URLs
       <textarea id="heroImages" placeholder="https://example.com/pizza-1.jpg&#10;https://example.com/pizza-2.jpg&#10;https://example.com/pizza-3.jpg"></textarea>
@@ -104,7 +108,8 @@ const heroDefaults={
     secondaryButton:"#ffffff"
   },
   images:[],
-  backgroundBlur:0
+  backgroundBlur:0,
+  backgroundBlackIntensity:24
 };
 const lightCardDefaults={
 "--site-background":"radial-gradient(circle at 18% 0%,rgba(255,123,0,.10),transparent 24rem),linear-gradient(145deg,#f8fafc,#ffffff 46%,#f3f6fb)",
@@ -220,6 +225,11 @@ function clampHeroBlur(value){
   if(!Number.isFinite(number)) return 0;
   return Math.max(0,Math.min(24,Math.round(number)));
 }
+function clampHeroBlackIntensity(value){
+  const number=Number(value);
+  if(!Number.isFinite(number)) return 24;
+  return Math.max(0,Math.min(85,Math.round(number)));
+}
 function paintHeroForm(hero={}){
   heroKicker.value=("kicker" in hero) ? hero.kicker : heroDefaults.kicker;
   heroTitle.value=("title" in hero) ? hero.title : heroDefaults.title;
@@ -235,6 +245,8 @@ function paintHeroForm(hero={}){
   heroImages.value=Array.isArray(hero.images) ? hero.images.join("\n") : "";
   heroBgBlur.value=clampHeroBlur(hero.backgroundBlur ?? heroDefaults.backgroundBlur);
   heroBgBlurValue.textContent=`${heroBgBlur.value}px`;
+  heroBgBlackIntensity.value=clampHeroBlackIntensity(hero.backgroundBlackIntensity ?? heroDefaults.backgroundBlackIntensity);
+  heroBgBlackIntensityValue.textContent=`${heroBgBlackIntensity.value}%`;
 }
 applyCardStyle.onclick=async()=>{
   const current=await readCurrentTheme();
@@ -258,6 +270,7 @@ loadCurrentCardStyle.onclick=async()=>{
 };
 resetCardStyle.onclick=()=>paintCardForm(activeCardDefaults());
 heroBgBlur.oninput=()=>{heroBgBlurValue.textContent=`${heroBgBlur.value}px`;};
+heroBgBlackIntensity.oninput=()=>{heroBgBlackIntensityValue.textContent=`${heroBgBlackIntensity.value}%`;};
 resetHeroSettings.onclick=async()=>{
   const current=await readCurrentTheme();
   paintHeroForm(heroDefaults);
@@ -295,7 +308,8 @@ applyModeHero.onclick=async()=>{
         secondaryButton:heroSecondaryColor.value
       },
       images:heroImages.value.split(/\n+/).map(item => item.trim()).filter(Boolean).slice(0, 8),
-      backgroundBlur:clampHeroBlur(heroBgBlur.value)
+      backgroundBlur:clampHeroBlur(heroBgBlur.value),
+      backgroundBlackIntensity:clampHeroBlackIntensity(heroBgBlackIntensity.value)
     },
     updatedAt:serverTimestamp()
   },{merge:true});
