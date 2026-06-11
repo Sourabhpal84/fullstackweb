@@ -6443,16 +6443,17 @@ body .category-tab-label{
   text-overflow:ellipsis;
 }
 
-/* Keep header in the original premium orange brand style */
+/* Keep the main header glassy and separate from Theme Studio colors */
 body .main-header,
 body.light-theme .main-header,
 body.dark-theme .main-header,
 body.dark-mode .main-header,
 body:not(.dark-mode):not(.dark-theme) .main-header{
-  background:#ff7b00 !important;
-  border-bottom:1px solid rgba(255,255,255,.18) !important;
-  box-shadow:0 4px 20px rgba(255,123,0,.35) !important;
-  backdrop-filter:none !important;
+  background:rgba(0,0,0,.58) !important;
+  border-bottom:1px solid rgba(255,255,255,.16) !important;
+  box-shadow:0 10px 34px rgba(0,0,0,.32) !important;
+  backdrop-filter:blur(18px) saturate(140%) !important;
+  -webkit-backdrop-filter:blur(18px) saturate(140%) !important;
 }
 
 body .brand-name,
