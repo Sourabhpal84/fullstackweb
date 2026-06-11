@@ -504,7 +504,10 @@ async function callRiderFunction(name, payload = {}, timeoutMs = 25000){
       signal:controller.signal
     });
     const data = await response.json().catch(() => ({}));
-    if(!response.ok || data.ok === false) throw new Error(data.error || "Request failed.");
+    if(!response.ok || data.ok === false){
+      console.warn("[RIDER FUNCTION ERROR]", { name, status:response.status, payload, response:data });
+      throw new Error(data.error || "Request failed.");
+    }
     return data;
   }finally{
     clearTimeout(timer);

@@ -1614,9 +1614,34 @@ exports.completeRiderDelivery = onRequest(
     try {
       const user = await requireAuth(req);
       const rider = await riderProfileForUser(user.uid);
+      const orderId = String(req.body?.orderId || "");
       const requestedMode = String(req.body?.mode || "verified_payment");
-      const mode = requestedMode === "doorstep_online_paid" ? "doorstep_online_paid" : "verified_payment";
-      const result = await completeDeliveryTransaction({ orderId: String(req.body?.orderId || ""), rider, mode });
+      let mode = requestedMode === "doorstep_online_paid" ? "doorstep_online_paid" : "verified_payment";
+      if (mode === "verified_payment") {
+        const orderSnap = await db.collection("orders").doc(orderId).get();
+        if (orderSnap.exists) {
+          const order = orderSnap.data() || {};
+          const methodText = String(order.paymentMethod || order.paymentMode || "").toLowerCase();
+          const statusText = String(order.status || order.orderStatus || "").toLowerCase();
+          const stageText = String(order.paymentStage || "").toLowerCase();
+          const paymentStatusText = String(order.paymentStatus || "").toLowerCase();
+          const amountToCollect = Number(order.amountToCollect || 0);
+          const paidDoorstepOnline = isOnlineMethod(methodText)
+            && amountToCollect === 0
+            && (
+              statusText === "payment completed"
+              || stageText === "payment completed"
+              || paymentStatusText === "paid"
+              || paymentStatusText === "success"
+              || paymentStatusText === "collected"
+              || order.paymentCaptured === true
+              || !!order.razorpayPaymentId
+              || !!order.transactionId
+            );
+          if (paidDoorstepOnline) mode = "doorstep_online_paid";
+        }
+      }
+      const result = await completeDeliveryTransaction({ orderId, rider, mode });
       return sendJson(res, 200, { ok: true, ...result });
     } catch (error) {
       return sendJson(res, error.status || 500, { ok: false, error: error.message || "Delivery completion failed" });
