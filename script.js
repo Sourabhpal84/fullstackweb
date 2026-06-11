@@ -231,7 +231,7 @@ function renderHeroPizzaSlider(images = []){
     .map(image => normalizeImageUrl(image))
     .filter(Boolean)
     .slice(0, 8);
-  const slides = cleanImages.length ? cleanImages : ["logo_tran1.png"];
+  const slides = cleanImages.length ? cleanImages : ["logo_tran.jpeg"];
   const markup = slides.map((image, index) => `
     <img
       src="${escapeHTML(image)}"
@@ -241,7 +241,7 @@ function renderHeroPizzaSlider(images = []){
       loading="${index === 0 ? "eager" : "lazy"}"
       decoding="async"
       style="--slide-index:${index};--slide-count:${slides.length};"
-      onerror="this.onerror=null;this.src='logo_tran1.png';"
+      onerror="this.onerror=null;this.src='logo_tran.jpeg';"
     >
   `).join("");
   if(slider){
@@ -307,6 +307,12 @@ function applyHeroColors(hero = {}){
     if(typeof value === "string" && value.trim()) root.style.setProperty(key, value.trim());
     else root.style.removeProperty(key);
   });
+}
+
+function applyHeroBackgroundBlur(hero = {}){
+  const rawValue = Number(hero.backgroundBlur);
+  const blur = Number.isFinite(rawValue) ? Math.max(0, Math.min(24, Math.round(rawValue))) : 0;
+  document.documentElement.style.setProperty("--hero-bg-blur", `${blur}px`);
 }
 
 function armRazorpayOpenWatchdog(){
@@ -604,11 +610,11 @@ function escapeHTML(value = ""){
 
 function normalizeImageUrl(value){
   const image = String(value || "").trim();
-  if(!image) return "logo_tran1.png";
+  if(!image) return "logo_tran.jpeg";
   if(image.startsWith("http://") || image.startsWith("https://") || image.startsWith("data:") || image.startsWith("blob:")){
     return image;
   }
-  return image.replace(/^\.?\//, "") || "logo_tran1.png";
+  return image.replace(/^\.?\//, "") || "logo_tran.jpeg";
 }
 
 function formatCurrency(amount){
@@ -774,7 +780,7 @@ function cleanInvoiceItemName(value = ""){
 }
 
 function imageMarkup(src, alt){
-  return `<img src="${escapeHTML(normalizeImageUrl(src))}" alt="${escapeHTML(alt || "Magneetoz dish")}" width="640" height="480" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='logo_tran1.png';">`;
+  return `<img src="${escapeHTML(normalizeImageUrl(src))}" alt="${escapeHTML(alt || "Magneetoz dish")}" width="640" height="480" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='logo_tran.jpeg';">`;
 }
 
 function dishDataAttrs(d = {}){
@@ -894,7 +900,7 @@ function renderSmartAssistant(intent = smartAssistantIntent){
     const variant = dishLowestVariant(dish);
     return `
       <article class="smart-result-card">
-        <img src="${escapeHTML(normalizeImageUrl(dish.image))}" alt="${escapeHTML(dish.name || "MAGNEETOZ item")}" loading="lazy" onerror="this.onerror=null;this.src='logo_tran1.png';">
+        <img src="${escapeHTML(normalizeImageUrl(dish.image))}" alt="${escapeHTML(dish.name || "MAGNEETOZ item")}" loading="lazy" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
         <div>
           <span>${index === 0 ? "Top pick" : escapeHTML(dish.category || "Recommended")}</span>
           <strong>${escapeHTML(dish.name || "MAGNEETOZ Item")}</strong>
@@ -1536,8 +1542,8 @@ messagingReady.then(messaging => {
     if(Notification.permission === "granted"){
       new Notification(payload.notification?.title || data.title || (data.type === "order_status" ? "Order Update" : "MAGNEETOZ Offer"), {
         body:payload.notification?.body || data.body || "A fresh MAGNEETOZ update is live.",
-        icon:"logo_tran1.png",
-        badge:"logo_tran1.png",
+        icon:"logo_tran.jpeg",
+        badge:"logo_tran.jpeg",
         tag:data.orderId || data.offerId || data.type,
         vibrate:data.type === "order_status" ? [160,80,160] : [140,70,180]
       });
@@ -1752,8 +1758,8 @@ function cacheCategoryScrollTargets(){
 }
 
 function categoryImageMarkup(category = {}, label = "MAGNEETOZ category"){
-  const source = category.image || category.imageUrl || category.icon || category.photo || category.thumbnail || "logo_tran1.png";
-  return `<span class="category-tab-media"><img src="${escapeHTML(normalizeImageUrl(source))}" alt="${escapeHTML(label)}" width="72" height="72" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='logo_tran1.png';"></span>`;
+  const source = category.image || category.imageUrl || category.icon || category.photo || category.thumbnail || "logo_tran.jpeg";
+  return `<span class="category-tab-media"><img src="${escapeHTML(normalizeImageUrl(source))}" alt="${escapeHTML(label)}" width="72" height="72" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='logo_tran.jpeg';"></span>`;
 }
 
 function loadCategories(){
@@ -1774,7 +1780,7 @@ function loadCategories(){
       if(nav){
         navHTML.push(`
           <a href="#menuSection" class="category-tab active" data-category-tab="all">
-            ${categoryImageMarkup({ image:"logo_tran1.png" }, "All MAGNEETOZ items")}
+            ${categoryImageMarkup({ image:"logo_tran.jpeg" }, "All MAGNEETOZ items")}
             <span class="category-tab-label">All</span>
           </a>
         `);
@@ -1967,6 +1973,7 @@ registerGlobalSnapshot(onSnapshot(doc(db, "settings", "theme"), snap => {
     if(el && typeof text === "string") el.textContent = text.trim();
   });
   applyHeroColors(hero);
+  applyHeroBackgroundBlur(hero);
   syncHeroEmptyState(hero);
   renderHeroPizzaSlider(Array.isArray(hero.images) ? hero.images : []);
   setThemeParticles(String(vars["--particle-bg"] || "").trim() === "founder-gold");
@@ -2493,7 +2500,7 @@ registerGlobalSnapshot(onSnapshot(query(collection(db, "offers"), orderBy("creat
     .slice(0, 8);
   host.innerHTML = offers.map(offer => `
     <article class="offer-card">
-      <img src="${escapeHTML(normalizeImageUrl(offer.image))}" alt="${escapeHTML(offer.title || "Offer")}" onerror="this.onerror=null;this.src='logo_tran1.png';">
+      <img src="${escapeHTML(normalizeImageUrl(offer.image))}" alt="${escapeHTML(offer.title || "Offer")}" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
       <div>
         <span>${offer.couponCode ? "Use code" : "Magneetoz offer"}</span>
         <h3>${escapeHTML(offer.title || "Special Offer")}</h3>
@@ -2518,7 +2525,7 @@ registerGlobalSnapshot(onSnapshot(query(collection(db, "combos"), orderBy("creat
     .slice(0, 10);
   host.innerHTML = combos.map(combo => `
     <article class="combo-card">
-      <img src="${escapeHTML(normalizeImageUrl(combo.image))}" alt="${escapeHTML(combo.name || "Combo")}" onerror="this.onerror=null;this.src='logo_tran1.png';">
+      <img src="${escapeHTML(normalizeImageUrl(combo.image))}" alt="${escapeHTML(combo.name || "Combo")}" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
       <div>
         <span>Combo deal</span>
         <h3>${escapeHTML(combo.name || "MAGNEETOZ Combo")}</h3>
@@ -2983,7 +2990,7 @@ function updateCart() {
     total += item.price;
     itemsHTML += `
   <div class="cart-item cart-item-pro">
-    <img src="${escapeHTML(normalizeImageUrl(item.image))}" alt="${escapeHTML(item.name)}" onerror="this.onerror=null;this.src='logo_tran1.png';">
+    <img src="${escapeHTML(normalizeImageUrl(item.image))}" alt="${escapeHTML(item.name)}" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
     <div>
       <strong>${escapeHTML(item.name)}</strong><br>
       <small>${escapeHTML(item.size || "Regular")} x ${item.qty}</small>
@@ -3161,7 +3168,7 @@ function addToCartFull(btn, name){
     size,
     qty,
     category: card.dataset.dishCategory || "",
-    image: card.dataset.dishImage || card.querySelector("img")?.getAttribute("src") || "logo_tran1.png",
+    image: card.dataset.dishImage || card.querySelector("img")?.getAttribute("src") || "logo_tran.jpeg",
     unitPrice: price,
     price: price * qty
   });
@@ -3195,7 +3202,7 @@ function addToCartSimple(btn, name){
     size:"Regular",
     qty,
     category: card.dataset.dishCategory || "",
-    image: card.dataset.dishImage || card.querySelector("img")?.getAttribute("src") || "logo_tran1.png",
+    image: card.dataset.dishImage || card.querySelector("img")?.getAttribute("src") || "logo_tran.jpeg",
     unitPrice: qty ? price / qty : price,
     price
   });
@@ -3224,7 +3231,7 @@ window.addComboToCart = function(id){
     size:"Combo",
     qty:1,
     category:"Combo",
-    image:combo.image || "logo_tran1.png",
+    image:combo.image || "logo_tran.jpeg",
     unitPrice:price,
     price,
     comboId:id,

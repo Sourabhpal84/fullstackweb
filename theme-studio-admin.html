@@ -29,12 +29,17 @@
       <label>Subtitle color<input id="heroSubtitleColor" type="color" value="#ffffff"></label>
       <label>Primary text color<input id="heroPrimaryColor" type="color" value="#ffffff"></label>
       <label>Secondary text color<input id="heroSecondaryColor" type="color" value="#ffffff"></label>
+      <label>Background image blur
+        <input id="heroBgBlur" type="range" min="0" max="24" step="1" value="0">
+        <span id="heroBgBlurValue">0px</span>
+      </label>
     </div>
     <label style="margin-top:12px">Hero background image URLs
       <textarea id="heroImages" placeholder="https://example.com/pizza-1.jpg&#10;https://example.com/pizza-2.jpg&#10;https://example.com/pizza-3.jpg"></textarea>
     </label>
     <div class="actions" style="margin-top:14px">
       <button class="apply" id="applyModeHero">Apply Mode & Hero</button>
+      <button class="soft" id="resetHeroSettings">Reset Hero</button>
     </div>
   </section>
   <section class="grid" id="themes"></section>
@@ -85,6 +90,22 @@ const presets=[
 ["Festival Theme","light",{"--brand":"#ef4444","--accent":"#facc15","--bg":"#fff7ed","--page-bg":"radial-gradient(circle at 18% 15%,rgba(250,204,21,.22),transparent 18rem),radial-gradient(circle at 84% 18%,rgba(239,68,68,.16),transparent 18rem),linear-gradient(145deg,#fff7ed,#ffffff)","--theme-ambient":"linear-gradient(45deg,rgba(239,68,68,.08) 25%,transparent 25%,transparent 50%,rgba(250,204,21,.08) 50%,rgba(250,204,21,.08) 75%,transparent 75%)","--white":"#ffffff","--dark":"#351b1b","--gray":"#725d48","--light-gray":"#fef3c7","--border":"#fecaca"}]
 ];
 const host=document.getElementById("themes");
+const heroDefaults={
+  kicker:"Live kitchen • fast delivery • secure checkout",
+  title:"Cravings, Delivered Like Magic",
+  subtitle:"Hot MAGNEETOZ favourites, cinematic tracking, and a checkout that feels effortless.",
+  primaryButton:"Explore Menu",
+  secondaryButton:"Smart Search",
+  colors:{
+    kicker:"#67e8f9",
+    title:"#ffffff",
+    subtitle:"#ffffff",
+    primaryButton:"#ffffff",
+    secondaryButton:"#ffffff"
+  },
+  images:[],
+  backgroundBlur:0
+};
 const lightCardDefaults={
 "--site-background":"radial-gradient(circle at 18% 0%,rgba(255,123,0,.10),transparent 24rem),linear-gradient(145deg,#f8fafc,#ffffff 46%,#f3f6fb)",
 "--light-menu-card-bg":"linear-gradient(145deg,#fff8ed,#eadfce)",
@@ -194,6 +215,27 @@ async function readCurrentTheme(){
   const snap=await getDoc(doc(db,"settings","theme"));
   return snap.exists()?snap.data():{name:"Custom",mode:"light",variables:{}};
 }
+function clampHeroBlur(value){
+  const number=Number(value);
+  if(!Number.isFinite(number)) return 0;
+  return Math.max(0,Math.min(24,Math.round(number)));
+}
+function paintHeroForm(hero={}){
+  heroKicker.value=("kicker" in hero) ? hero.kicker : heroDefaults.kicker;
+  heroTitle.value=("title" in hero) ? hero.title : heroDefaults.title;
+  heroSubtitle.value=("subtitle" in hero) ? hero.subtitle : heroDefaults.subtitle;
+  heroPrimaryButton.value=("primaryButton" in hero) ? hero.primaryButton : heroDefaults.primaryButton;
+  heroSecondaryButton.value=("secondaryButton" in hero) ? hero.secondaryButton : heroDefaults.secondaryButton;
+  const colors=hero.colors || {};
+  heroKickerColor.value=colors.kicker || heroDefaults.colors.kicker;
+  heroTitleColor.value=colors.title || heroDefaults.colors.title;
+  heroSubtitleColor.value=colors.subtitle || heroDefaults.colors.subtitle;
+  heroPrimaryColor.value=colors.primaryButton || heroDefaults.colors.primaryButton;
+  heroSecondaryColor.value=colors.secondaryButton || heroDefaults.colors.secondaryButton;
+  heroImages.value=Array.isArray(hero.images) ? hero.images.join("\n") : "";
+  heroBgBlur.value=clampHeroBlur(hero.backgroundBlur ?? heroDefaults.backgroundBlur);
+  heroBgBlurValue.textContent=`${heroBgBlur.value}px`;
+}
 applyCardStyle.onclick=async()=>{
   const current=await readCurrentTheme();
   const targetMode = siteMode.value || current.mode || "dark";
@@ -211,22 +253,23 @@ applyCardStyle.onclick=async()=>{
 loadCurrentCardStyle.onclick=async()=>{
   const current=await readCurrentTheme();
   siteMode.value=current.mode || "dark";
-  const hero=current.hero || {};
-  heroKicker.value=("kicker" in hero) ? hero.kicker : heroKicker.value;
-  heroTitle.value=("title" in hero) ? hero.title : heroTitle.value;
-  heroSubtitle.value=("subtitle" in hero) ? hero.subtitle : heroSubtitle.value;
-  heroPrimaryButton.value=("primaryButton" in hero) ? hero.primaryButton : heroPrimaryButton.value;
-  heroSecondaryButton.value=("secondaryButton" in hero) ? hero.secondaryButton : heroSecondaryButton.value;
-  const colors=hero.colors || {};
-  heroKickerColor.value=colors.kicker || heroKickerColor.value;
-  heroTitleColor.value=colors.title || heroTitleColor.value;
-  heroSubtitleColor.value=colors.subtitle || heroSubtitleColor.value;
-  heroPrimaryColor.value=colors.primaryButton || heroPrimaryColor.value;
-  heroSecondaryColor.value=colors.secondaryButton || heroSecondaryColor.value;
-  heroImages.value=Array.isArray(hero.images) ? hero.images.join("\n") : "";
+  paintHeroForm(current.hero || {});
   paintCardForm({...activeCardDefaults(),...(current.variables||{})});
 };
 resetCardStyle.onclick=()=>paintCardForm(activeCardDefaults());
+heroBgBlur.oninput=()=>{heroBgBlurValue.textContent=`${heroBgBlur.value}px`;};
+resetHeroSettings.onclick=async()=>{
+  const current=await readCurrentTheme();
+  paintHeroForm(heroDefaults);
+  await setDoc(doc(db,"settings","theme"),{
+    name:current.name || "Custom Theme",
+    mode:siteMode.value || current.mode || "dark",
+    variables:current.variables || {},
+    hero:{...heroDefaults},
+    updatedAt:serverTimestamp()
+  },{merge:true});
+  alert("Hero reset to defaults.");
+};
 cardMode.onchange=()=>paintCardForm(activeCardDefaults());
 siteMode.onchange=()=>{
   cardMode.value=siteMode.value;
@@ -251,7 +294,8 @@ applyModeHero.onclick=async()=>{
         primaryButton:heroPrimaryColor.value,
         secondaryButton:heroSecondaryColor.value
       },
-      images:heroImages.value.split(/\n+/).map(item => item.trim()).filter(Boolean).slice(0, 8)
+      images:heroImages.value.split(/\n+/).map(item => item.trim()).filter(Boolean).slice(0, 8),
+      backgroundBlur:clampHeroBlur(heroBgBlur.value)
     },
     updatedAt:serverTimestamp()
   },{merge:true});

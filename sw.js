@@ -11,7 +11,7 @@ const APP_SHELL = [
   "/about-us.html",
   "/theme-studio-admin.html",
   "/super-admin-dashboard.html",
-  "/logo_tran1.png",
+  "/logo_tran.jpeg",
   "/manifest.json"
 ];
 
@@ -65,7 +65,7 @@ self.addEventListener("fetch", event => {
         cache.match(event.request).then(cached => cached || fetch(event.request).then(response => {
           if(response.ok) cache.put(event.request, response.clone());
           return response;
-        }).catch(() => caches.match("/logo_tran1.png")))
+        }).catch(() => caches.match("/logo_tran.jpeg")))
       )
     );
     return;
