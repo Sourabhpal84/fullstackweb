@@ -6977,6 +6977,10 @@ body .category-nav button.category-tab.active{
   backdrop-filter:blur(14px);
 }
 
+.menu-category-browser:empty{
+  display:none !important;
+}
+
 body.dark-mode .menu-category-browser,
 body.dark-theme .menu-category-browser{
   background:rgba(11,15,20,.82);
@@ -7095,12 +7099,160 @@ body.dark-theme .menu-subcategory-chip{
 
 .inline-menu-section .new-card{
   height:auto !important;
-  min-height:390px !important;
+  min-height:0 !important;
   overflow:hidden !important;
 }
 
 .inline-menu-section .card-body{
   min-height:0 !important;
+}
+
+/* Compact complete menu cards: keep theme colors, reduce wasted height */
+.inline-menu-section .new-card,
+body .inline-menu-section .new-card,
+body.light-theme .inline-menu-section .new-card,
+body.dark-theme .inline-menu-section .new-card,
+body.dark-mode .inline-menu-section .new-card{
+  width:clamp(172px,42vw,216px) !important;
+  min-width:clamp(172px,42vw,216px) !important;
+  max-width:clamp(172px,42vw,216px) !important;
+  border-radius:18px !important;
+  clip-path:none !important;
+  display:flex !important;
+  flex-direction:column !important;
+}
+
+.inline-menu-section .new-card .card-img{
+  height:128px !important;
+  margin:8px 8px 0 !important;
+  border-radius:14px !important;
+  flex:0 0 auto !important;
+}
+
+.inline-menu-section .new-card .card-body{
+  padding:9px 10px 10px !important;
+  gap:6px !important;
+  display:flex !important;
+  flex-direction:column !important;
+}
+
+.inline-menu-section .new-card .card-body h3,
+body .inline-menu-section .new-card .card-body h3{
+  min-height:0 !important;
+  margin:0 !important;
+  padding:7px 9px !important;
+  border-radius:11px !important;
+  font-size:13px !important;
+  line-height:1.18 !important;
+  display:-webkit-box !important;
+  -webkit-line-clamp:2 !important;
+  -webkit-box-orient:vertical !important;
+  overflow:hidden !important;
+}
+
+.inline-menu-section .new-card .card-body p{
+  min-height:0 !important;
+  max-height:32px !important;
+  margin:0 !important;
+  font-size:11px !important;
+  line-height:1.35 !important;
+  display:-webkit-box !important;
+  -webkit-line-clamp:2 !important;
+  -webkit-box-orient:vertical !important;
+  overflow:hidden !important;
+}
+
+.inline-menu-section .quantity-box{
+  min-height:32px !important;
+  padding:4px 7px !important;
+  margin:0 !important;
+  border-radius:999px !important;
+}
+
+.inline-menu-section .quantity-box button{
+  width:25px !important;
+  height:25px !important;
+  min-width:25px !important;
+  padding:0 !important;
+  margin:0 !important;
+  border-radius:50% !important;
+}
+
+.inline-menu-section .quantity-box .qty{
+  font-size:12px !important;
+  font-weight:950 !important;
+}
+
+.inline-menu-section .card-footer{
+  margin-top:auto !important;
+  gap:7px !important;
+  align-items:center !important;
+}
+
+.inline-menu-section .price-box{
+  gap:1px !important;
+  min-width:0 !important;
+}
+
+.inline-menu-section .price-box .offer,
+.inline-menu-section .card-body .offer{
+  font-size:13px !important;
+  line-height:1 !important;
+  padding:5px 7px !important;
+  border-radius:999px !important;
+  white-space:nowrap !important;
+}
+
+.inline-menu-section .price-box .market,
+.inline-menu-section .new-card .market{
+  font-size:10px !important;
+  line-height:1 !important;
+}
+
+.inline-menu-section .add-cart-btn,
+.inline-menu-section .new-card button.add-cart-btn,
+.inline-menu-section .new-card button:not(.quantity-box button):not(.quick-preview-btn){
+  min-height:34px !important;
+  padding:0 11px !important;
+  margin:0 !important;
+  border-radius:999px !important;
+  font-size:12px !important;
+  white-space:nowrap !important;
+}
+
+.inline-menu-section .quick-preview-btn{
+  top:12px !important;
+  right:12px !important;
+  min-height:30px !important;
+  padding:0 11px !important;
+  font-size:11px !important;
+  border-radius:999px !important;
+}
+
+@media(max-width:560px){
+  .inline-menu-section .new-card,
+  body .inline-menu-section .new-card{
+    width:calc((100vw - 44px) / 2) !important;
+    min-width:calc((100vw - 44px) / 2) !important;
+    max-width:calc((100vw - 44px) / 2) !important;
+  }
+
+  .inline-menu-section .new-card .card-img{
+    height:116px !important;
+  }
+
+  .inline-menu-section .new-card .card-body{
+    padding:8px !important;
+  }
+
+  .inline-menu-section .new-card .card-body h3{
+    font-size:12px !important;
+    padding:6px 7px !important;
+  }
+
+  .inline-menu-section .new-card .card-body p{
+    display:none !important;
+  }
 }
 
 .category-block[hidden]{

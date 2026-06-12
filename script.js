@@ -551,6 +551,7 @@ let activeCategoryId = "";
 let menuCategoryGroups = [];
 let activeMenuGroup = "";
 let activeMenuCategory = "";
+let menuBrowserOpen = false;
 const globalSnapshotUnsubs = [];
 let restaurantLocationReadyResolved = false;
 let resolveRestaurantLocationReady;
@@ -1883,13 +1884,32 @@ function renderMenuGroupNav(groups = []){
   const nav = document.getElementById("categoryNav");
   if(!nav) return;
   nav.innerHTML = groups.map((group, index) => `
-    <button type="button" class="category-tab menu-group-tab ${index === 0 ? "active" : ""}" data-menu-group="${escapeHTML(group.key)}">
+    <button type="button" class="category-tab menu-group-tab" data-menu-group="${escapeHTML(group.key)}">
       ${categoryImageMarkup({ ...(group.categories[0] || {}), groupImage:group.groupImage }, group.label)}
       <span class="category-tab-label">${escapeHTML(group.label)}</span>
     </button>
   `).join("");
   nav.querySelectorAll("[data-menu-group]").forEach(button => {
-    button.addEventListener("click", () => selectMenuGroup(button.dataset.menuGroup));
+    button.addEventListener("click", () => {
+      if(menuBrowserOpen && activeMenuGroup === button.dataset.menuGroup){
+        closeMenuBrowser();
+        return;
+      }
+      selectMenuGroup(button.dataset.menuGroup, true);
+    });
+  });
+}
+
+function closeMenuBrowser(){
+  menuBrowserOpen = false;
+  activeMenuGroup = "";
+  activeMenuCategory = "";
+  document.querySelectorAll("[data-menu-group]").forEach(button => button.classList.remove("active"));
+  const browser = document.getElementById("menuCategoryBrowser");
+  if(browser) browser.innerHTML = "";
+  document.querySelectorAll(".category-block").forEach(block => {
+    block.hidden = true;
+    block.classList.remove("menu-category-active");
   });
 }
 
@@ -1911,6 +1931,7 @@ function renderMenuSubcategoryNav(group){
 function selectMenuGroup(groupKey, shouldScroll = true){
   const group = menuCategoryGroups.find(item => item.key === groupKey) || menuCategoryGroups[0];
   if(!group) return;
+  menuBrowserOpen = true;
   activeMenuGroup = group.key;
   activeMenuCategory = group.categories[0]?.id || "";
   document.querySelectorAll("[data-menu-group]").forEach(button => {
@@ -1928,6 +1949,10 @@ function renderVisibleMenuCategories({ scroll = false } = {}){
   const group = menuCategoryGroups.find(item => item.key === activeMenuGroup) || menuCategoryGroups[0];
   const browser = document.getElementById("menuCategoryBrowser");
   if(!group || !browser) return;
+  if(!menuBrowserOpen){
+    closeMenuBrowser();
+    return;
+  }
   if(!activeMenuCategory || !group.categories.some(category => category.id === activeMenuCategory)){
     activeMenuCategory = group.categories[0]?.id || "";
   }
@@ -2016,7 +2041,7 @@ function loadCategories(){
       categoryGridIds = nextGridIds;
       categoriesReady = true;
       cacheCategoryScrollTargets();
-      selectMenuGroup(activeMenuGroup, false);
+      closeMenuBrowser();
       if(menuListenerStarted){
         menuListenerStarted = false;
         loadMenu();
