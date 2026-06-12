@@ -7072,8 +7072,9 @@ body.dark-theme .menu-subcategory-chip{
 
 .inline-menu-section{
   max-width:1200px !important;
-  padding:8px 12px 18px !important;
+  padding:8px 12px 28px !important;
   margin:0 auto !important;
+  overflow:visible !important;
 }
 
 .inline-menu-section .section-header{
@@ -7082,6 +7083,24 @@ body.dark-theme .menu-subcategory-chip{
 
 .inline-menu-section .category-block{
   margin-top:0;
+  overflow:visible !important;
+}
+
+.inline-menu-section .grid{
+  padding:10px 0 22px !important;
+  align-items:stretch !important;
+  overflow-x:auto !important;
+  overflow-y:visible !important;
+}
+
+.inline-menu-section .new-card{
+  height:auto !important;
+  min-height:390px !important;
+  overflow:hidden !important;
+}
+
+.inline-menu-section .card-body{
+  min-height:0 !important;
 }
 
 .category-block[hidden]{
