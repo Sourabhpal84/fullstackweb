@@ -22,6 +22,16 @@ service firebase.storage {
         && request.resource.contentType.matches("image/.*");
     }
 
+    match /categories/{allPaths=**} {
+      allow read: if true;
+      allow write: if signedIn() && validImage();
+    }
+
+    match /dishes/{allPaths=**} {
+      allow read: if true;
+      allow write: if signedIn() && validImage();
+    }
+
     match /menu-images/{fileName} {
       allow read: if true;
       allow write: if isAdmin() && validImage();

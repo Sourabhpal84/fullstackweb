@@ -291,7 +291,7 @@
 
 // 🔥 SAME FIREBASE (NO CHANGE)
 import { protectAdminPage, mountAdminLogout } from "./admin-guard.js";
-import { db, storage } from "./firebase-config.js";
+import { auth, db, storage } from "./firebase-config.js";
 import {
   collection, addDoc, updateDoc,
   deleteDoc, doc, onSnapshot, getDocs
@@ -301,6 +301,9 @@ import {
   ref,
   uploadBytesResumable
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+import {
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 protectAdminPage();
 mountAdminLogout(document.body);
@@ -312,11 +315,57 @@ let uploadedDishImageSet = null;
 let uploadedCategoryImageSet = null;
 let activeUploadTask = null;
 const IMAGE_VARIANTS = [
-  { key:"thumbnail", width:320, quality:.72 },
+  { key:"thumbnail", width:200, quality:.72 },
   { key:"mobile", width:400, quality:.78 },
   { key:"tablet", width:800, quality:.78 },
-  { key:"desktop", width:1000, quality:.78 }
+  { key:"desktop", width:1200, quality:.76 }
 ];
+
+const UPLOAD_DEBUG = true;
+
+function uploadLog(event, detail = {}){
+  if(UPLOAD_DEBUG) console.info("[IMAGE_UPLOAD]", { event, ...detail });
+}
+
+function formatBytes(bytes = 0){
+  const value = Number(bytes) || 0;
+  if(value < 1024) return `${value} B`;
+  if(value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function firebaseUploadMessage(error){
+  const code = error?.code || "";
+  const message = error?.message || String(error || "Upload failed");
+  const map = {
+    "storage/unauthorized":"Storage permission denied. Login as admin and deploy storage.rules.",
+    "storage/canceled":"Upload was canceled. Please retry.",
+    "storage/retry-limit-exceeded":"Network retry limit exceeded. Check internet and retry.",
+    "storage/quota-exceeded":"Firebase Storage quota exceeded.",
+    "storage/object-not-found":"Uploaded object was not found after upload.",
+    "storage/unknown":"Firebase Storage returned an unknown error. Check bucket and rules."
+  };
+  return map[code] || message;
+}
+
+function waitForAdminUser(timeoutMs = 8000){
+  if(auth.currentUser) return Promise.resolve(auth.currentUser);
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      unsubscribe();
+      reject(new Error("Admin login not ready. Please login again, then retry upload."));
+    }, timeoutMs);
+    const unsubscribe = onAuthStateChanged(auth, user => {
+      clearTimeout(timer);
+      unsubscribe();
+      user ? resolve(user) : reject(new Error("No authenticated admin user found. Please login again."));
+    }, error => {
+      clearTimeout(timer);
+      unsubscribe();
+      reject(error);
+    });
+  });
+}
 
 function formatCurrency(amount){
   return new Intl.NumberFormat("en-IN", {
@@ -402,8 +451,17 @@ async function makeImageVariant(source, width, quality){
   return { blob:jpeg, ext:"jpg", contentType:"image/jpeg", width:canvas.width, height:canvas.height };
 }
 
-async function uploadBlobWithProgress(path, blob, contentType, onProgress){
+async function uploadBlobWithProgress(path, blob, contentType, onProgress, timeoutMs = 30000){
+  const user = await waitForAdminUser();
   const storageRef = ref(storage, path);
+  uploadLog("upload_start", {
+    uid:user.uid,
+    email:user.email,
+    bucket:storage.app?.options?.storageBucket || "unknown",
+    fullPath:path,
+    size:formatBytes(blob.size),
+    contentType
+  });
   const task = uploadBytesResumable(storageRef, blob, {
     contentType,
     cacheControl:"public,max-age=31536000,immutable"
@@ -411,52 +469,114 @@ async function uploadBlobWithProgress(path, blob, contentType, onProgress){
   const uploadPromise = new Promise((resolve, reject) => {
     task.on("state_changed", snap => {
       const pct = snap.totalBytes ? Math.round((snap.bytesTransferred / snap.totalBytes) * 100) : 0;
+      uploadLog("upload_progress", {
+        fullPath:path,
+        pct,
+        bytesTransferred:snap.bytesTransferred,
+        totalBytes:snap.totalBytes
+      });
       onProgress?.(pct);
-    }, reject, resolve);
+    }, error => {
+      uploadLog("upload_error", {
+        fullPath:path,
+        code:error?.code || "",
+        message:error?.message || String(error)
+      });
+      reject(error);
+    }, resolve);
   });
   const timeoutPromise = new Promise((_, reject) => {
     setTimeout(() => {
       try{ task.cancel(); }catch(_){}
-      reject(new Error("Storage upload timeout. Check internet or deploy storage rules."));
-    }, 18000);
+      reject(new Error(`Storage upload timeout after ${Math.round(timeoutMs / 1000)}s for ${path}`));
+    }, timeoutMs);
   });
   await Promise.race([uploadPromise, timeoutPromise]);
-  return getDownloadURL(task.snapshot.ref);
+  if(task.snapshot.bytesTransferred !== task.snapshot.totalBytes){
+    throw new Error(`Upload incomplete: ${task.snapshot.bytesTransferred}/${task.snapshot.totalBytes} bytes`);
+  }
+  const url = await getDownloadURL(task.snapshot.ref);
+  if(!url) throw new Error("Download URL was not generated.");
+  uploadLog("upload_complete", { fullPath:path, url });
+  return url;
 }
 
 async function createAndUploadImageSet(file, folder, statusFn){
+  const user = await waitForAdminUser();
   const source = await loadImageFile(file);
   const baseName = `${Date.now()}-${file.name.replace(/[^a-z0-9]/gi, "-").toLowerCase().replace(/-+/g, "-")}`;
   const variants = {};
   let fallback = "";
   try{
+    uploadLog("firebase_ready", {
+      uid:user.uid,
+      email:user.email,
+      bucket:storage.app?.options?.storageBucket || "unknown",
+      projectId:storage.app?.options?.projectId || "unknown"
+    });
+    uploadLog("file_before_optimization", {
+      name:file.name,
+      size:formatBytes(file.size),
+      type:file.type,
+      width:source.width,
+      height:source.height,
+      targetFolder:folder
+    });
     statusFn("Optimizing WebP sizes...", 8);
     const prepared = [];
     for(let i = 0; i < IMAGE_VARIANTS.length; i++){
       const spec = IMAGE_VARIANTS[i];
       statusFn(`Optimizing ${spec.key}...`, 8 + Math.round((i / IMAGE_VARIANTS.length) * 35));
       const variant = await makeImageVariant(source, spec.width, spec.quality);
+      uploadLog("file_after_optimization", {
+        variant:spec.key,
+        width:variant.width,
+        height:variant.height,
+        size:formatBytes(variant.blob?.size),
+        contentType:variant.contentType
+      });
       prepared.push({ spec, variant });
     }
-    statusFn("Uploading optimized images...", 48);
-    const uploads = await Promise.allSettled(prepared.map(({ spec, variant }, index) =>
+    const primary = prepared.find(item => item.spec.key === "mobile") || prepared[0];
+    statusFn("Uploading mobile optimized image...", 48);
+    const primaryUrl = await uploadBlobWithProgress(
+      `${folder}/${baseName}/${primary.spec.key}-${primary.variant.width}.${primary.variant.ext}`,
+      primary.variant.blob,
+      primary.variant.contentType,
+      pct => statusFn(`Uploading ${primary.spec.key} ${pct}%`, 48 + Math.round(pct * .3)),
+      30000
+    );
+    variants[primary.spec.key] = {
+      url:primaryUrl,
+      width:primary.variant.width,
+      height:primary.variant.height,
+      contentType:primary.variant.contentType
+    };
+    fallback = primaryUrl;
+
+    statusFn("Uploading remaining sizes...", 78);
+    const remaining = prepared.filter(item => item !== primary);
+    const uploads = await Promise.allSettled(remaining.map(({ spec, variant }, index) =>
       uploadBlobWithProgress(
         `${folder}/${baseName}/${spec.key}-${variant.width}.${variant.ext}`,
         variant.blob,
         variant.contentType,
-        pct => statusFn(`Uploading ${spec.key} ${pct}%`, 48 + Math.round(((index + pct / 100) / prepared.length) * 45))
+        pct => statusFn(`Uploading ${spec.key} ${pct}%`, 78 + Math.round(((index + pct / 100) / Math.max(1, remaining.length)) * 18)),
+        30000
       ).then(url => ({ spec, variant, url }))
     ));
     uploads.forEach(result => {
-      if(result.status !== "fulfilled") return;
+      if(result.status !== "fulfilled"){
+        uploadLog("variant_upload_skipped", {
+          code:result.reason?.code || "",
+          message:result.reason?.message || String(result.reason)
+        });
+        return;
+      }
       const { spec, variant, url } = result.value;
       variants[spec.key] = { url, width:variant.width, height:variant.height, contentType:variant.contentType };
-      if(spec.key === "mobile") fallback = url;
     });
-    if(!Object.keys(variants).length){
-      throw new Error("Storage upload did not complete. Check internet or Firebase Storage rules.");
-    }
-    statusFn(fallback ? "Optimized images ready." : "Image uploaded with partial optimized sizes.", 100);
+    statusFn("Optimized images ready.", 100);
     return {
       url:fallback || variants.desktop?.url || variants.thumbnail?.url || "",
       variants,
@@ -494,6 +614,14 @@ async function useCompressedFallback(file, reason = "Firebase Storage is taking 
   setUploadStatus(`${reason} Compressed image is ready.`, 100);
 }
 
+async function useCompressedCategoryFallback(file, reason = "Firebase Storage upload failed."){
+  const dataUrl = await compressImageToDataUrl(file, 420, .78);
+  uploadedCategoryImageUrl = dataUrl;
+  uploadedCategoryImageSet = null;
+  document.getElementById("catImage").value = dataUrl;
+  setCategoryUploadStatus(`${reason} Compressed image is ready.`, 100);
+}
+
 async function uploadDishImage(file){
   if(!file || !file.type.startsWith("image/")){
     alert("Please choose a valid image.");
@@ -504,19 +632,14 @@ async function uploadDishImage(file){
   prompt.style.display = "none";
   setUploadStatus("Optimizing image...", 4);
   try{
-    uploadedDishImageSet = await createAndUploadImageSet(file, "menu-images", setUploadStatus);
+    uploadedDishImageSet = await createAndUploadImageSet(file, "dishes", setUploadStatus);
     uploadedDishImageUrl = uploadedDishImageSet.url;
     document.getElementById("image").value = uploadedDishImageUrl;
     setUploadStatus("Upload complete. Responsive WebP images ready.", 100);
   }catch(error){
     console.error("Dish image upload failed:", error);
-    uploadedDishImageUrl = "";
-    uploadedDishImageSet = null;
-    document.getElementById("image").value = "";
-    setUploadStatus(`Upload failed: ${error?.message || "Please try again."}`, 0);
-    alert(error?.code === "storage/unauthorized"
-      ? "Firebase Storage permission denied. Deploy storage.rules, then try again."
-      : "Image upload failed. You can paste an image URL as fallback.");
+    await useCompressedFallback(file, error?.message || "Firebase Storage upload failed.");
+    alert(firebaseUploadMessage(error));
   }
 }
 
@@ -530,16 +653,14 @@ async function uploadCategoryImage(file){
   categoryPrompt.style.display = "none";
   setCategoryUploadStatus("Optimizing image...", 4);
   try{
-    uploadedCategoryImageSet = await createAndUploadImageSet(file, "category-images", setCategoryUploadStatus);
+    uploadedCategoryImageSet = await createAndUploadImageSet(file, "categories", setCategoryUploadStatus);
     uploadedCategoryImageUrl = uploadedCategoryImageSet.url;
     document.getElementById("catImage").value = uploadedCategoryImageUrl;
     setCategoryUploadStatus("Upload complete. Category WebP images ready.", 100);
   }catch(error){
     console.error("Category image upload failed:", error);
-    uploadedCategoryImageUrl = "";
-    uploadedCategoryImageSet = null;
-    setCategoryUploadStatus(`Upload failed: ${error?.message || "Please try again."}`, 0);
-    alert("Category image upload failed. You can paste an image URL instead.");
+    await useCompressedCategoryFallback(file, error?.message || "Firebase Storage upload failed.");
+    alert(firebaseUploadMessage(error));
   }
 }
 
