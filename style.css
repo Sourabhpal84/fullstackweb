@@ -7020,6 +7020,23 @@ body.dark-theme .menu-browser-head strong{
 
 .menu-subcategory-nav::-webkit-scrollbar{display:none}
 
+.menu-direct-note{
+  display:inline-flex;
+  min-height:42px;
+  align-items:center;
+  padding:0 14px;
+  border-radius:999px;
+  background:color-mix(in srgb,#14b8a6 12%,var(--surface,#ffffff));
+  color:var(--foreground,#111827);
+  font:900 12px Poppins,system-ui,sans-serif;
+}
+
+body.dark-mode .menu-direct-note,
+body.dark-theme .menu-direct-note{
+  background:rgba(20,184,166,.18);
+  color:#ccfbf1;
+}
+
 .menu-subcategory-chip{
   flex:0 0 auto;
   min-height:42px;

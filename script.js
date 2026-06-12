@@ -1843,7 +1843,7 @@ function cacheCategoryScrollTargets(){
 }
 
 function categoryImageMarkup(category = {}, label = "MAGNEETOZ category"){
-  const source = category.image || category.imageUrl || category.icon || category.photo || category.thumbnail || "logo_tran.jpeg";
+  const source = category.groupImage || category.image || category.imageUrl || category.icon || category.photo || category.thumbnail || "logo_tran.jpeg";
   return `<span class="category-tab-media"><img src="${escapeHTML(normalizeImageUrl(source))}" alt="${escapeHTML(label)}" width="72" height="72" loading="eager" fetchpriority="auto" decoding="async" onerror="this.onerror=null;this.src='logo_tran.jpeg';"></span>`;
 }
 
@@ -1869,7 +1869,10 @@ function buildMenuCategoryGroups(categories = []){
   categories.forEach(category => {
     const group = inferMenuGroup(category);
     if(!map.has(group.key)){
-      map.set(group.key, { ...group, categories:[] });
+      map.set(group.key, { ...group, groupImage:category.groupImage || category.mainTypeImage || category.parentImage || category.image || "", categories:[] });
+    }
+    if(!map.get(group.key).groupImage && (category.groupImage || category.mainTypeImage || category.parentImage)){
+      map.get(group.key).groupImage = category.groupImage || category.mainTypeImage || category.parentImage;
     }
     map.get(group.key).categories.push(category);
   });
@@ -1881,7 +1884,7 @@ function renderMenuGroupNav(groups = []){
   if(!nav) return;
   nav.innerHTML = groups.map((group, index) => `
     <button type="button" class="category-tab menu-group-tab ${index === 0 ? "active" : ""}" data-menu-group="${escapeHTML(group.key)}">
-      ${categoryImageMarkup(group.categories[0] || {}, group.label)}
+      ${categoryImageMarkup({ ...(group.categories[0] || {}), groupImage:group.groupImage }, group.label)}
       <span class="category-tab-label">${escapeHTML(group.label)}</span>
     </button>
   `).join("");
@@ -1892,6 +1895,7 @@ function renderMenuGroupNav(groups = []){
 
 function renderMenuSubcategoryNav(group){
   if(!group) return "";
+  if(group.categories.length <= 1) return `<div class="menu-direct-note">Showing all ${escapeHTML(group.label)} items</div>`;
   return `
     <div class="menu-subcategory-nav" id="menuSubcategoryNav" aria-label="${escapeHTML(group.label)} categories">
       ${group.categories.map((category, index) => `

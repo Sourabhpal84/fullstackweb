@@ -206,6 +206,8 @@
 
   <div id="categorySection" style="display:none;">
     <h3>Add Category</h3>
+    <input id="mainTypeName" placeholder="Food Button Name e.g. Pizza, Burger, Sandwich">
+    <input id="mainTypeImage" placeholder="Food Button Image URL (optional)">
     <input id="catName" placeholder="Category Name">
     <input id="catImage" placeholder="Category Image URL or upload below">
     <div class="upload-box category-upload-box" id="categoryUploadBox">
@@ -514,8 +516,11 @@ window.toggleType = function(){
 
 /* ➕ CATEGORY */
 window.addCategory = async function(){
+  const mainType = normalizeUnicodeText(mainTypeName.value);
+  const mainImage = normalizeUnicodeText(mainTypeImage.value || uploadedCategoryImageUrl || catImage.value);
   const cleanName = normalizeUnicodeText(catName.value);
   const image = normalizeUnicodeText(uploadedCategoryImageUrl || catImage.value);
+  if(!mainType) return alert("Enter Food Button Name e.g. Pizza, Burger ❌");
   if(!cleanName) return alert("Enter name ❌");
 
   const snap = await getDocs(collection(db,"categories"));
@@ -523,10 +528,16 @@ window.addCategory = async function(){
 await addDoc(collection(db,"categories"),{
   name: cleanName,
   image,
+  parent: mainType,
+  group: mainType,
+  mainCategory: mainType,
+  groupImage: mainImage,
   active:true,
   order: snap.size + 1   // ⭐ IMPORTANT
 });
 
+  mainTypeName.value="";
+  mainTypeImage.value="";
   catName.value="";
   catImage.value="";
   uploadedCategoryImageUrl = "";
@@ -564,7 +575,10 @@ onSnapshot(collection(db,"categories"), snap=>{
 
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
       <img src="${c.image || c.imageUrl || c.icon || c.photo || c.thumbnail || 'logo_tran.jpeg'}" alt="${c.name}" style="width:48px;height:48px;border-radius:50%;object-fit:cover;background:#fff;" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
-      <b>${c.name}</b>
+      <div>
+        <b>${c.name}</b>
+        <small style="display:block;color:#94a3b8;">Food Button: ${c.parent || c.group || c.mainCategory || "Not set"}</small>
+      </div>
     </div>
 
     <span style="color:${c.active ? '#22c55e' : '#ef4444'};">
