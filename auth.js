@@ -1,7 +1,6 @@
 ﻿// auth.js - production customer OTP login for MAGNEETOZ
 window.AUTH_MODULE_LOADED = true;
 
-console.log("✅ auth.js loaded");
 import { auth, db, messagingReady } from "./firebase-config.js";
 import {
   RecaptchaVerifier,
@@ -33,9 +32,23 @@ let otpVerifyInFlight = false;
 let pushRegistrationInFlight = false;
 let pendingAuthResolve = null;
 let authNullTimer = null;
+let resendTimer = null;
+let webOtpController = null;
 const VAPID_KEY_RE = /^[A-Za-z0-9_-]{80,}$/;
+const DEV_LOGS = ["localhost", "127.0.0.1"].includes(location.hostname) || location.search.includes("debugAuth=1");
 
 const $ = (id) => document.getElementById(id);
+
+function devLog(...args){
+  if(DEV_LOGS) console.info(...args);
+}
+
+function setAuthStatus(message, type = "info"){
+  const el = $("authStatus");
+  if(!el) return;
+  el.textContent = message;
+  el.dataset.type = type;
+}
 
 function isValidVapidKey(value = ""){
   const key = String(value || "").trim();
@@ -77,6 +90,8 @@ function setAuthView(user){
   document.body.classList.remove("auth-loading");
 
   if(user){
+    cleanupOtpSession({ keepRecaptcha:true });
+    setAuthStatus("Login successful", "success");
     document.body.classList.remove("auth-required");
     document.body.classList.add("auth-success");
     if(popup) popup.style.display = "none";
@@ -107,12 +122,18 @@ function openAuthPopup(reason = "checkout"){
     popup.style.display = "flex";
     popup.dataset.reason = reason;
   }
+  setAuthStatus("Enter mobile number", "info");
+  ensureRecaptcha().catch((error) => {
+    devLog("Invisible reCAPTCHA preload failed:", error);
+    setAuthStatus("Security check will start when you send OTP.", "info");
+  });
   $("phoneNumber")?.focus();
   window.dispatchEvent(new CustomEvent("magneetoz:auth-required", { detail:{ reason } }));
 }
 
 function closeAuthPopup(){
   if(auth.currentUser) return;
+  cleanupOtpSession({ keepRecaptcha:true });
   const popup = $("authPopup");
   document.body.classList.remove("auth-required");
   if(popup) popup.style.display = "none";
@@ -197,10 +218,10 @@ async function ensureRecaptcha(){
   recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
     size: "invisible",
     callback: () => {
-      toast("Security verified. Sending OTP...", "info");
+      setAuthStatus("Security verified. Sending OTP...", "info");
     },
     "expired-callback": () => {
-      toast("Security check expired. Please try again.", "error");
+      setAuthStatus("Security check expired. Please try again.", "error");
       resetRecaptcha();
     }
   });
@@ -213,12 +234,92 @@ function resetRecaptcha(){
   recaptchaVerifier = null;
 }
 
+function maskPhone(phone){
+  return `+91 ${phone.slice(0, 5)} ${phone.slice(5)}`;
+}
+
+function friendlyAuthError(error){
+  const code = error?.code || "";
+  if(code.includes("invalid-verification-code")) return "Invalid OTP, please try again.";
+  if(code.includes("code-expired")) return "OTP expired. Please resend OTP.";
+  if(code.includes("too-many-requests") || code.includes("quota-exceeded")) return "Too many attempts. Please try again after some time.";
+  if(code.includes("captcha") || code.includes("app-not-authorized") || code.includes("missing-app-credential")) return "Security check failed. Please retry OTP.";
+  if(code.includes("invalid-phone-number")) return "Enter a valid 10 digit mobile number.";
+  if(code.includes("network")) return "Network issue. Please check internet and retry.";
+  return error?.message || "Something went wrong. Please try again.";
+}
+
+function stopResendTimer(){
+  if(resendTimer){
+    clearInterval(resendTimer);
+    resendTimer = null;
+  }
+}
+
+function startResendTimer(seconds = 30){
+  stopResendTimer();
+  const sendButton = $("sendOtpBtn");
+  const resendButton = $("resendOtpBtn");
+  if(sendButton) sendButton.style.display = "none";
+  if(resendButton){
+    resendButton.style.display = "block";
+    resendButton.disabled = true;
+  }
+
+  const tick = () => {
+    const remaining = Math.max(0, Math.ceil((otpCooldownUntil - Date.now()) / 1000));
+    if(remaining > 0){
+      if(resendButton) resendButton.textContent = `Resend OTP in ${remaining}s`;
+      return;
+    }
+    stopResendTimer();
+    if(resendButton){
+      resendButton.textContent = "Resend OTP";
+      resendButton.disabled = false;
+    }
+  };
+
+  otpCooldownUntil = Date.now() + seconds * 1000;
+  tick();
+  resendTimer = setInterval(tick, 250);
+}
+
+function stopOtpListener(){
+  try{ webOtpController?.abort(); }catch(_){}
+  webOtpController = null;
+}
+
+function cleanupOtpSession({ keepRecaptcha = false } = {}){
+  confirmationResult = null;
+  otpCooldownUntil = 0;
+  otpInFlight = false;
+  otpVerifyInFlight = false;
+  stopResendTimer();
+  stopOtpListener();
+  $("authPopup")?.classList.remove("otp-sent");
+  const otpInput = $("otp");
+  if(otpInput) otpInput.value = "";
+  const sendButton = $("sendOtpBtn");
+  const resendButton = $("resendOtpBtn");
+  if(sendButton){
+    setButton(sendButton, false);
+    sendButton.style.display = "block";
+  }
+  if(resendButton){
+    resendButton.disabled = true;
+    resendButton.textContent = "Resend OTP";
+    resendButton.style.display = "none";
+  }
+  if(!keepRecaptcha) resetRecaptcha();
+}
+
 async function sendOTP(){
   if(otpInFlight) return;
   const button = $("sendOtpBtn");
   const phone = cleanPhone();
 
   if(!PHONE_RE.test(phone)){
+    setAuthStatus("Enter a valid 10 digit mobile number.", "error");
     toast("Enter a valid 10 digit mobile number", "error");
     $("phoneNumber")?.focus();
     return;
@@ -226,24 +327,34 @@ async function sendOTP(){
 
   if(Date.now() < otpCooldownUntil){
     const wait = Math.ceil((otpCooldownUntil - Date.now()) / 1000);
+    setAuthStatus(`Resend OTP in ${wait}s`, "info");
     toast(`Please wait ${wait}s before resending OTP`, "error");
     return;
   }
 
   otpInFlight = true;
+  setAuthStatus("Sending OTP...", "info");
   setButton(button, true, "Sending OTP...");
 
   try{
     confirmationResult = await signInWithPhoneNumber(auth, `+91${phone}`, await ensureRecaptcha());
-    otpCooldownUntil = Date.now() + 30000;
     $("authPopup")?.classList.add("otp-sent");
-    $("otp")?.focus();
-    toast("OTP sent successfully", "success");
+    const otpInput = $("otp");
+    if(otpInput){
+      otpInput.value = "";
+      otpInput.focus();
+    }
+    setAuthStatus(`OTP sent to ${maskPhone(phone)}`, "success");
+    toast("OTP sent", "success");
+    startResendTimer(30);
     startOtpListener();
   }catch(error){
-    console.error("sendOTP error:", error);
-    toast(error?.message || "Unable to send OTP", "error");
+    devLog("sendOTP error:", error);
+    const message = friendlyAuthError(error);
+    setAuthStatus(message, "error");
+    toast(message, "error");
     resetRecaptcha();
+    ensureRecaptcha().catch((recaptchaError) => devLog("Invisible reCAPTCHA retry preload failed:", recaptchaError));
   }finally{
     otpInFlight = false;
     setButton(button, false);
@@ -256,25 +367,33 @@ async function verifyOTP(){
   const code = ($("otp")?.value || "").trim();
 
   if(!confirmationResult){
+    setAuthStatus("Send OTP first.", "error");
     toast("Send OTP first", "error");
     return;
   }
 
   if(!OTP_RE.test(code)){
+    setAuthStatus("Enter the 6 digit OTP.", "error");
     toast("Enter the 6 digit OTP", "error");
     $("otp")?.focus();
     return;
   }
 
   otpVerifyInFlight = true;
-  setButton(button, true, "Verifying...");
+  setAuthStatus("Verifying OTP...", "info");
+  setButton(button, true, "Verifying OTP...");
 
   try{
     await confirmationResult.confirm(code);
+    stopOtpListener();
+    stopResendTimer();
+    setAuthStatus("Login successful", "success");
     toast("Login successful", "success");
   }catch(error){
-    console.error("verifyOTP error:", error);
-    toast("Wrong OTP. Please try again.", "error");
+    devLog("verifyOTP error:", error);
+    const message = friendlyAuthError(error);
+    setAuthStatus(message, "error");
+    toast(message, "error");
     setButton(button, false);
   }finally{
     otpVerifyInFlight = false;
@@ -301,22 +420,13 @@ async function logout(){
       popup.style.display = "none";
     }
 
-    confirmationResult = null;
-
-    resetRecaptcha();
-
-    const otpInput =
-      document.getElementById("otp");
-
-    if(otpInput){
-      otpInput.value = "";
-    }
+    cleanupOtpSession();
 
     toast("Logged out", "success");
 
   }catch(error){
 
-    console.error("logout error:", error);
+    devLog("logout error:", error);
 
     toast("Logout failed", "error");
 
@@ -326,28 +436,33 @@ async function logout(){
 
 async function startOtpListener(){
   if(!("OTPCredential" in window)) return;
+  stopOtpListener();
   try{
     const input = $("otp");
     if(!input) return;
-    const controller = new AbortController();
-    setTimeout(() => controller.abort(), 60000);
+    setAuthStatus("Auto-detecting OTP...", "info");
+    webOtpController = new AbortController();
+    setTimeout(() => webOtpController?.abort(), 60000);
     const otp = await navigator.credentials.get({
       otp:{ transport:["sms"] },
-      signal:controller.signal
+      signal:webOtpController.signal
     });
     if(otp?.code){
-      input.value = otp.code;
+      input.value = String(otp.code).replace(/\D/g, "").slice(0, 6);
       input.dispatchEvent(new Event("input", { bubbles:true }));
-      setTimeout(verifyOTP, 250);
+      if(OTP_RE.test(input.value)) setTimeout(verifyOTP, 250);
     }
   }catch(error){
-    console.log("Auto OTP unavailable:", error);
+    devLog("Auto OTP unavailable:", error);
+  }finally{
+    webOtpController = null;
   }
 }
 
 function bindAuthUI(){
   $("phoneNumber")?.addEventListener("input", cleanPhone);
   $("sendOtpBtn")?.addEventListener("click", sendOTP);
+  $("resendOtpBtn")?.addEventListener("click", sendOTP);
   $("verifyOtpBtn")?.addEventListener("click", verifyOTP);
   $("closeAuthPopup")?.addEventListener("click", closeAuthPopup);
   $("otp")?.addEventListener("input", () => {
@@ -363,6 +478,7 @@ function bindAuthUI(){
 
 document.body.classList.add("auth-loading");
 bindAuthUI();
+ensureRecaptcha().catch((error) => devLog("Invisible reCAPTCHA preload skipped:", error));
 
 await setPersistence(auth, browserLocalPersistence)
   .catch((error) => {
@@ -371,7 +487,7 @@ await setPersistence(auth, browserLocalPersistence)
 
 onAuthStateChanged(auth, (user) => {
 
-  console.info("[AUTH]", { state:user ? "signed_in" : "signed_out", uid:user?.uid || null });
+  devLog("[AUTH]", { state:user ? "signed_in" : "signed_out", uid:user?.uid || null });
 
   if(user){
     if(authNullTimer){
@@ -391,7 +507,7 @@ onAuthStateChanged(auth, (user) => {
 
 }, (error) => {
 
-  console.error("AUTH ERROR:", error);
+  devLog("AUTH ERROR:", error);
 
   setAuthView(null);
 

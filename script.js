@@ -210,10 +210,11 @@ let menuDishesUnsub = null;
 let allMenuDishes = [];
 let smartAssistantIntent = "popular";
 
-function resetRazorpayCheckoutState(){
+function resetRazorpayCheckoutState({ clearCheckoutId = true } = {}){
   isOrderProcessing = false;
   razorpayInFlight = false;
   lastOrderSignature = null;
+  if(clearCheckoutId) checkoutInFlightId = "";
 }
 
 function hasVisibleRazorpayCheckout(){
@@ -720,6 +721,116 @@ function updateCustomerDistanceBanner(message){
     : "📍 Enable location to see your distance from our kitchen";
 }
 
+function setLocationUiState(state, detail = ""){
+  const status = document.getElementById("locationStatus");
+  const banner = ensureCustomerDistanceBanner();
+  const messages = {
+    detecting:"Detecting location...",
+    current:"Current location updated",
+    permission:"Location permission required",
+    lastSaved:"Last saved location",
+    idle:"Tap to fetch your current location"
+  };
+  const text = detail || messages[state] || messages.idle;
+  if(status) status.textContent = text;
+  if(banner) {
+    banner.textContent = state === "lastSaved" ? `📍 Last saved location · ${detail || "Tap Refresh Location for current GPS"}` : `📍 ${text}`;
+    banner.title = state === "lastSaved" ? "This is not live GPS. Tap to refresh current location." : "Tap to refresh current location";
+  }
+}
+
+async function getLocationPermissionState(){
+  try{
+    if(!navigator.permissions?.query) return "unknown";
+    const result = await navigator.permissions.query({ name:"geolocation" });
+    return result.state || "unknown";
+  }catch{
+    return "unknown";
+  }
+}
+
+function requestFreshGpsPosition(){
+  return new Promise((resolve, reject) => {
+    if(!navigator.geolocation){
+      reject(new Error("Geolocation not supported"));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy:true,
+      maximumAge:0,
+      timeout:10000
+    });
+  });
+}
+
+async function reverseGeocodeFreshLocation(location){
+  try{
+    const result = await callPaymentFunction("reverseGeocodeAddress", { lat:location.lat, lng:location.lng }, 15000);
+    console.info("[LOCATION]", { event:"reverse_geocode_response", result });
+    return result;
+  }catch(error){
+    console.warn("[LOCATION]", { event:"reverse_geocode_failed", error:error?.message || String(error) });
+    return null;
+  }
+}
+
+function showLastSavedLocation(reason = "fresh_location_failed"){
+  const saved = normalizeCustomerLocation(readJSON(LOCATION_CACHE_KEY, null), "last_saved");
+  console.warn("[LOCATION]", { event:"show_last_saved_location", reason, saved });
+  if(!saved){
+    setLocationUiState("permission", "Please enable location permission and GPS, then retry.");
+    return null;
+  }
+  userLocation = saved;
+  userLocationUpdatedAt = saved.updatedAt || 0;
+  updateCustomerDistanceGlobals();
+  setLocationUiState("lastSaved", `${saved.lat.toFixed(5)}, ${saved.lng.toFixed(5)}`);
+  return saved;
+}
+
+async function fetchFreshCurrentLocation({ updateAddress = true, source = "fresh_gps" } = {}){
+  setLocationUiState("detecting");
+  const permission = await getLocationPermissionState();
+  console.info("[LOCATION]", { event:"permission_status", permission, source });
+  try{
+    const pos = await requestFreshGpsPosition();
+    const fresh = {
+      lat:pos.coords.latitude,
+      lng:pos.coords.longitude,
+      accuracy:pos.coords.accuracy,
+      updatedAt:Date.now(),
+      source,
+      mapLink:`https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}`
+    };
+    console.info("[LOCATION]", { event:"fresh_gps_lat_lng", lat:fresh.lat, lng:fresh.lng, accuracy:fresh.accuracy, source });
+    const geocode = updateAddress ? await reverseGeocodeFreshLocation(fresh) : null;
+    setCustomerLocation({
+      ...fresh,
+      address:geocode?.formattedAddress || ""
+    }, source);
+    console.info("[LOCATION]", { event:"storage_update_status", ok:true, key:LOCATION_CACHE_KEY, updatedAt:userLocationUpdatedAt });
+    if(updateAddress && geocode?.formattedAddress){
+      const addressEl = document.getElementById("customerAddress");
+      const latEl = document.getElementById("customerLat");
+      const lngEl = document.getElementById("customerLng");
+      if(addressEl) addressEl.value = geocode.formattedAddress;
+      if(latEl) latEl.value = geocode.lat || fresh.lat;
+      if(lngEl) lngEl.value = geocode.lng || fresh.lng;
+      setCheckoutFieldsCollapsed(false);
+      persistGuestState();
+    }
+    setLocationUiState("current", geocode?.formattedAddress || "Current location updated");
+    updateCustomerDistanceGlobals();
+    await refreshDeliveryDistance({ force:true, maxAgeMs:0, routeTimeoutMs:12000 }).catch(() => updateCustomerDistanceBanner());
+    return userLocation;
+  }catch(error){
+    console.warn("[LOCATION]", { event:"fresh_location_failed", error:error?.message || String(error), code:error?.code, source });
+    setLocationUiState("permission", "Please enable location permission and GPS, then retry.");
+    showLastSavedLocation(error?.message || "fresh_location_failed");
+    throw error;
+  }
+}
+
 function resetCustomerLocation(){
   clearCustomerLocation("manual_reset");
   estimatedTravelTime = "";
@@ -1143,10 +1254,16 @@ function setCustomerLocation(location, source = "gps"){
   if(!next) return null;
   userLocation = next;
   userLocationUpdatedAt = next.updatedAt || Date.now();
-  writeJSON(LOCATION_CACHE_KEY, {
-    ...next,
-    updatedAt:userLocationUpdatedAt
-  });
+  const shouldPersistLocation = /^(gps|fresh|address_geocode)/i.test(source);
+  if(shouldPersistLocation){
+    writeJSON(LOCATION_CACHE_KEY, {
+      ...next,
+      updatedAt:userLocationUpdatedAt
+    });
+    console.info("[LOCATION]", { event:"storage_update_status", ok:true, source, key:LOCATION_CACHE_KEY });
+  }else{
+    console.info("[LOCATION]", { event:"storage_update_skipped_non_fresh", source });
+  }
   logDistanceDebug("customer_location_set", { customerLocationSource:source });
   return userLocation;
 }
@@ -1325,14 +1442,15 @@ function renderSavedAddresses(addresses = []){
     select.value = "0";
     restoreCheckoutFields(valid[0], true);
     if(isUsableLocation(valid[0])){
-      setCustomerLocation({
+      userLocation = normalizeCustomerLocation({
         lat:Number(valid[0].lat),
         lng:Number(valid[0].lng),
         accuracy:valid[0].accuracy || null,
-        updatedAt:Date.now(),
+        updatedAt:Number(valid[0].updatedAt || Date.now()),
         mapLink:`https://www.google.com/maps?q=${valid[0].lat},${valid[0].lng}`
-      }, "saved_address_default");
-      refreshDeliveryDistance({ force:true, maxAgeMs:0, routeTimeoutMs:12000 }).catch(() => updateCustomerDistanceBanner());
+      }, "last_saved_address_default");
+      userLocationUpdatedAt = userLocation?.updatedAt || 0;
+      setLocationUiState("lastSaved", `${Number(valid[0].lat).toFixed(5)}, ${Number(valid[0].lng).toFixed(5)}`);
     }
     setCheckoutFieldsCollapsed(true);
   }else{
@@ -1363,9 +1481,10 @@ function applySavedAddress(index){
       lat:Number(item.lat),
       lng:Number(item.lng),
       accuracy:item.accuracy || null,
-      updatedAt:Date.now(),
+      updatedAt:Number(item.updatedAt || Date.now()),
       mapLink:`https://www.google.com/maps?q=${item.lat},${item.lng}`
-    }, "saved_address");
+    }, "last_saved_address_selected");
+    setLocationUiState("lastSaved", `${Number(item.lat).toFixed(5)}, ${Number(item.lng).toFixed(5)}`);
     refreshDeliveryDistance({ force:true, maxAgeMs:0, routeTimeoutMs:12000 }).catch(() => updateCustomerDistanceBanner());
   }
   setCheckoutFieldsCollapsed(true);
@@ -1425,16 +1544,9 @@ async function useCurrentLocationForAddress(){
       if(!auth.currentUser) return;
     }
     if(btn) btn.textContent = "Detecting...";
-    const location = await getUserLocation();
-    const result = await callPaymentFunction("reverseGeocodeAddress", { lat:location.lat, lng:location.lng }, 15000);
-    document.getElementById("customerAddress").value = result.formattedAddress || "";
-    document.getElementById("customerLat").value = result.lat || location.lat;
-    document.getElementById("customerLng").value = result.lng || location.lng;
-    setCheckoutFieldsCollapsed(false);
-    persistGuestState();
-    await refreshDeliveryDistance({ force:true, maxAgeMs:0, routeTimeoutMs:12000 }).catch(() => updateCustomerDistanceBanner());
+    await fetchFreshCurrentLocation({ updateAddress:true, source:"fresh_gps:address_button" });
   }catch(error){
-    alert(error.message || "Unable to fetch current location.");
+    alert("Please enable location permission and GPS, then retry.");
   }finally{
     if(btn) btn.textContent = "📍 Use Current Location";
   }
@@ -1457,7 +1569,7 @@ async function searchAddressForCheckout(){
       lng:Number(result.lng),
       updatedAt:Date.now(),
       mapLink:`https://www.google.com/maps?q=${result.lat},${result.lng}`
-    }, "address_search");
+    }, "address_geocode_search");
     setCheckoutFieldsCollapsed(false);
     refreshDeliveryDistance().catch(() => updateCustomerDistanceBanner());
     persistGuestState();
@@ -1509,13 +1621,15 @@ async function loadSavedCustomerProfile(user){
       if(select && preferredIndex >= 0) select.value = String(preferredIndex);
       restoreCheckoutFields(preferred, true);
       if(isUsableLocation(preferred)){
-        setCustomerLocation({
+        userLocation = normalizeCustomerLocation({
           lat:Number(preferred.lat),
           lng:Number(preferred.lng),
           accuracy:preferred.accuracy || null,
-          updatedAt:Date.now(),
+          updatedAt:Number(preferred.updatedAt || Date.now()),
           mapLink:`https://www.google.com/maps?q=${preferred.lat},${preferred.lng}`
-        }, "saved_address_preferred");
+        }, "last_saved_address_preferred");
+        userLocationUpdatedAt = userLocation?.updatedAt || 0;
+        setLocationUiState("lastSaved", `${Number(preferred.lat).toFixed(5)}, ${Number(preferred.lng).toFixed(5)}`);
         refreshDeliveryDistance({ force:true, maxAgeMs:0, routeTimeoutMs:12000 }).catch(() => updateCustomerDistanceBanner());
       }
       setCheckoutFieldsCollapsed(!!data.savedAddresses?.length);
@@ -1587,11 +1701,9 @@ async function mergeGuestCartWithUser(user){
   }
   const checkout = readJSON(CHECKOUT_STATE_KEY, {});
   const checkoutLocation = normalizeCustomerLocation(checkout.userLocation, "checkout_cache");
-  if(checkoutLocation && !userLocation && Date.now() - checkoutLocation.updatedAt <= CUSTOMER_LOCATION_MAX_AGE_MS){
-    setCustomerLocation(checkoutLocation, "checkout_cache");
-  }else if(checkout.userLocation){
+  if(checkoutLocation){
     console.warn("[DISTANCE_DEBUG]", {
-      event:"stale_checkout_location_ignored",
+      event:"checkout_location_kept_as_last_saved_only",
       timestamp:new Date().toISOString(),
       cacheValues:{ checkoutUserLocation:checkout.userLocation }
     });
@@ -2399,36 +2511,7 @@ function loadMenu(){
 }
 
 async function getUserLocation() {
-  return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) reject();
-    if(isFreshCustomerLocation()){
-      logDistanceDebug("fresh_customer_location_reused");
-      resolve(userLocation);
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setCustomerLocation({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          accuracy:pos.coords.accuracy,
-          updatedAt:Date.now(),
-          mapLink: `https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}`
-        }, "gps:getUserLocation");
-        resolve(userLocation);
-      },
-      (error) => {
-        logDistanceDebug("customer_location_fetch_failed", { error:error?.message || String(error) });
-        reject(error);
-      },
-      {
-  enableHighAccuracy: true,
-  timeout: 8000,
-  maximumAge: 30000
-}
-    );
-  });
+  return fetchFreshCurrentLocation({ updateAddress:false, source:"gps:getUserLocation" });
 }
 
 async function checkServiceArea(){
@@ -2530,71 +2613,31 @@ async function ensureDeliveryEligible(){
 
 /* ================= LOCATION SYSTEM ================= */
 
-function acceptLocation() {
+async function acceptLocation() {
 
   const btn = document.querySelector("#locationPopup button");
   const popup = document.getElementById("locationPopup");
-
-  if (!navigator.geolocation) {
-    alert("Geolocation not supported");
-    return;
-  }
 
   if(btn){
     btn.innerText = "Detecting...";
     btn.disabled = true;
   }
-
-  navigator.geolocation.getCurrentPosition(
-
-    (pos) => {
-
-      setCustomerLocation({
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude,
-        accuracy:pos.coords.accuracy,
-        updatedAt:Date.now(),
-        mapLink:
-          `https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}`
-      }, "gps:acceptLocation");
-      logStructured("AUTH", { event:"location_granted", lat:userLocation.lat, lng:userLocation.lng });
-
-      refreshDeliveryDistance();
-
-      checkServiceArea();
-
-      if(popup) popup.style.display = "none";
-
-      if(btn){
-        btn.innerText = "Allow Location";
-        btn.disabled = false;
-      }
-
-      alert("Location Enabled ✅");
-
-    },
-
-    (error) => {
-
-      console.log(error);
-      updateCustomerDistanceBanner("📍 Enable location to see your distance from our kitchen");
-
-      if(btn){
-        btn.innerText = "Allow Location";
-        btn.disabled = false;
-      }
-
-      alert("Location Permission Denied ❌");
-
-    },
-
-    {
-      enableHighAccuracy: true,
-      timeout: 15000,
-      maximumAge: 0
+  try{
+    await fetchFreshCurrentLocation({ updateAddress:true, source:"gps:acceptLocation" });
+    logStructured("AUTH", { event:"location_granted", lat:userLocation?.lat, lng:userLocation?.lng });
+    await checkServiceArea();
+    if(popup) popup.style.display = "none";
+    toastSuccess?.("Current location updated");
+  }catch(error){
+    console.log(error);
+    updateCustomerDistanceBanner("📍 Please enable location permission and GPS, then retry.");
+    alert("Please enable location permission and GPS, then retry.");
+  }finally{
+    if(btn){
+      btn.innerText = "Allow Location";
+      btn.disabled = false;
     }
-
-  );
+  }
 
 }
 
@@ -2611,16 +2654,13 @@ window.addEventListener("load", ()=>{
 
   const saved = normalizeCustomerLocation(readJSON(LOCATION_CACHE_KEY, null), "localStorage");
 
-  if(saved && Date.now() - saved.updatedAt <= CUSTOMER_LOCATION_MAX_AGE_MS){
-    setCustomerLocation(saved, "localStorage");
+  if(saved){
+    userLocation = saved;
+    userLocationUpdatedAt = saved.updatedAt || 0;
     updateCustomerDistanceGlobals();
-    updateCustomerDistanceBanner();
-    refreshDeliveryDistance().catch(() => updateCustomerDistanceBanner());
-  }else if(saved){
-    clearCustomerLocation("stale_localStorage_ignored");
-    updateCustomerDistanceBanner();
+    setLocationUiState("lastSaved", `${saved.lat.toFixed(5)}, ${saved.lng.toFixed(5)}`);
   }else{
-    updateCustomerDistanceBanner();
+    setLocationUiState("idle");
   }
   const savedCart = readJSON(GUEST_CART_KEY, null);
   if(savedCart?.cart?.length){
@@ -3191,7 +3231,7 @@ async function buildPaidOnlineOrderDraft(){
   if(!fields.name || !fields.phone || !fields.address) throw new Error("Fill name, phone & address");
 
   const subtotal = getCartSubtotal();
-  if(subtotal < 2) throw new Error(`Add ${formatCurrency(99 - subtotal)} more to place order`);
+  if(subtotal < 2) throw new Error(`Add ${formatCurrency(2 - subtotal)} more to place order`);
   if(!(await ensureDeliveryEligible())) throw new Error("Delivery is not available for this location.");
   if(!calculateDeliveryCharge(subtotal)) throw new Error("Delivery is not available for this location.");
 
@@ -3217,7 +3257,7 @@ async function buildPaidOnlineOrderDraft(){
   }));
 
   return {
-    idempotencyKey:checkoutSignature("Online"),
+    idempotencyKey:`${checkoutSignature("Online")}|${checkoutId}`,
     amount:pricing.grandTotal,
     cart:itemsSnapshot,
     orderDraft:{
@@ -3986,9 +4026,6 @@ const verifiedOrder = await timedStep("upiOrder.handler:verifyPaymentAndCreateOr
   razorpay_payment_id:response.razorpay_payment_id,
   razorpay_signature:response.razorpay_signature
 }, 35000));
-await timedStep("upiOrder.handler:recordCouponUsage", () =>
-  recordCouponUsage(activeCoupon, pricing.couponDiscount + pricing.freeDeliveryDiscount)
-);
 clearRazorpayPaymentRecovery();
 finishSuccessfulCheckout(verifiedOrder.orderNumber);
 
@@ -4186,6 +4223,17 @@ document.addEventListener("DOMContentLoaded", () => {
     applySavedAddress(event.target.value);
   });
   document.getElementById("useCurrentLocationBtn")?.addEventListener("click", useCurrentLocationForAddress);
+  document.getElementById("refreshLocationBtn")?.addEventListener("click", async () => {
+    const btn = document.getElementById("refreshLocationBtn");
+    try{
+      if(btn) btn.textContent = "Detecting...";
+      await fetchFreshCurrentLocation({ updateAddress:true, source:"fresh_gps:refresh_button" });
+    }catch{
+      alert("Please enable location permission and GPS, then retry.");
+    }finally{
+      if(btn) btn.textContent = "↻ Refresh Location";
+    }
+  });
   document.getElementById("searchAddressBtn")?.addEventListener("click", searchAddressForCheckout);
   document.getElementById("editSavedAddressBtn")?.addEventListener("click", editSelectedAddress);
   document.getElementById("deleteSavedAddressBtn")?.addEventListener("click", () => {
@@ -4253,8 +4301,11 @@ window.addEventListener("scroll", ()=>{
 onAuthStateChanged(auth,(user)=>{
 
   if(user){
-    mergeGuestCartWithUser(user).then(() => {
+    mergeGuestCartWithUser(user).then(async () => {
       if(resumeCheckoutAfterAuth) persistGuestState();
+      await fetchFreshCurrentLocation({ updateAddress:true, source:"fresh_gps:login" }).catch(() => {
+        setLocationUiState("permission", "Please enable location permission and GPS, then retry.");
+      });
     });
 
   }

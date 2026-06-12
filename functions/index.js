@@ -182,6 +182,27 @@ function verifyCheckoutSignature({ razorpayOrderId, razorpayPaymentId, razorpayS
   return received.length === expectedBuffer.length && crypto.timingSafeEqual(received, expectedBuffer);
 }
 
+function allowedWebOrigins() {
+  return [
+    "https://magneetoz.com",
+    "https://www.magneetoz.com",
+    "https://magneetozonline.netlify.app",
+    "https://magneetoz.web.app",
+    "https://magneetoz.firebaseapp.com",
+    "http://localhost:8011",
+    "http://localhost:8010",
+    "http://127.0.0.1:8011",
+    "http://127.0.0.1:8010"
+  ];
+}
+
+function publicWebsiteUrl(req) {
+  const configured = env("WEBSITE_URL") || env("PUBLIC_WEBSITE_URL") || "";
+  const origin = req.get("origin") || "";
+  const candidate = configured || (allowedWebOrigins().includes(origin) ? origin : "") || "https://magneetoz.com";
+  return String(candidate).replace(/\/+$/, "");
+}
+
 function verifyPaymentLinkSignature({ paymentLinkId, paymentLinkReferenceId, paymentLinkStatus, razorpayPaymentId, razorpaySignature }) {
   const secret = env("RAZORPAY_KEY_SECRET");
   const expected = crypto
@@ -339,7 +360,7 @@ async function createOrderFromPaidSession({ sessionRef, session, payment, source
   const counterRef = db.collection("counters").doc("orders");
   const recoveryRef = db.collection("paidOrderRecovery").doc(session.id);
 
-  return db.runTransaction(async transaction => {
+  const result = await db.runTransaction(async transaction => {
     const [sessionSnap, existingOrderSnap, counterSnap] = await Promise.all([
       transaction.get(sessionRef),
       transaction.get(orderRef),
@@ -413,15 +434,37 @@ async function createOrderFromPaidSession({ sessionRef, session, payment, source
     }, { merge: true });
     return { orderId: orderRef.id, orderNumber: nextOrderNumber, duplicate: false };
   });
+
+  if (!result.duplicate) {
+    await recordVerifiedOrderCouponUsage(session).catch(error => {
+      logger.warn("Verified order coupon usage update skipped", {
+        paymentSessionId: session.id,
+        error: error.message || String(error)
+      });
+    });
+  }
+
+  return result;
+}
+
+async function recordVerifiedOrderCouponUsage(session = {}) {
+  const draft = session.orderDraft || {};
+  const couponId = String(draft.couponId || "").trim();
+  if (!couponId) return;
+  const discount = Number(draft.couponDiscount || 0) + Number(draft.freeDeliveryDiscount || 0);
+  const userId = String(session.userId || draft.userId || "unknown");
+  await db.collection("coupons").doc(couponId).update({
+    usedCount: FieldValue.increment(1),
+    totalDiscountGiven: FieldValue.increment(Math.max(0, discount)),
+    [`usageByUser.${userId}`]: FieldValue.increment(1),
+    lastUsedAt: FieldValue.serverTimestamp()
+  });
 }
 
 exports.createPaymentSession = onRequest(
   {
   region: "asia-south1",
-  cors: [
-    "https://magneetozonline.netlify.app",
-    "https://magneetoz.com"
-  ]
+  cors: allowedWebOrigins()
 },
   async (req, res) => {
     if (req.method === "OPTIONS") return sendJson(res, 204, {});
@@ -459,6 +502,9 @@ exports.createPaymentSession = onRequest(
       const existing = await sessionRef.get();
       if (existing.exists && existing.data().razorpayOrderId) {
         const data = existing.data();
+        if (data.status === "order_created" || data.createdOrderId) {
+          throw Object.assign(new Error("This payment session is already completed. Please reopen checkout and try again."), { status: 409 });
+        }
         const existingAmountPaise = Number(data.amountPaise || Math.round(Number(data.amount || 0) * 100));
         if (existingAmountPaise !== amountPaise) {
           throw Object.assign(new Error("Payment amount changed. Please reopen checkout and try again."), { status: 409 });
@@ -514,7 +560,7 @@ exports.createPaymentSession = onRequest(
           email: false
         },
         reminder_enable: false,
-        callback_url: `https://magneetoz.com/?paymentSessionId=${encodeURIComponent(sessionId)}`,
+        callback_url: `${publicWebsiteUrl(req)}/?paymentSessionId=${encodeURIComponent(sessionId)}`,
         callback_method: "get",
         notes: {
           paymentSessionId: sessionId,
@@ -584,10 +630,7 @@ exports.createPaymentSession = onRequest(
 exports.verifyPaymentAndCreateOrder = onRequest(
   {
   region: "asia-south1",
-  cors: [
-    "https://magneetozonline.netlify.app",
-    "https://magneetoz.com"
-  ]
+  cors: allowedWebOrigins()
 },
   async (req, res) => {
     if (req.method === "OPTIONS") return sendJson(res, 204, {});
@@ -685,10 +728,7 @@ exports.verifyPaymentAndCreateOrder = onRequest(
 exports.verifyPaymentLinkAndCreateOrder = onRequest(
   {
     region: "asia-south1",
-    cors: [
-      "https://magneetozonline.netlify.app",
-      "https://magneetoz.com"
-    ]
+    cors: allowedWebOrigins()
   },
   async (req, res) => {
     if (req.method === "OPTIONS") return sendJson(res, 204, {});

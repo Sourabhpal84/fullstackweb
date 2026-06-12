@@ -330,6 +330,7 @@ base-uri 'self';
         Secure Checkout Login
       </h2>
       <p class="auth-subtitle">Enter your mobile number only when you are ready to place the order. Your cart and coupon stay saved.</p>
+      <p class="auth-status" id="authStatus" aria-live="polite">Enter mobile number</p>
 
       <!-- PHONE -->
       <div class="phone-input-box">
@@ -354,6 +355,12 @@ base-uri 'self';
 id="sendOtpBtn"
 type="button">
 Send OTP
+      </button>
+      <button
+id="resendOtpBtn"
+type="button"
+style="display:none;">
+Resend OTP
       </button>
 
       <br><br>
@@ -752,6 +759,7 @@ Verify OTP
         </select>
         <div class="address-actions">
           <button type="button" id="useCurrentLocationBtn">📍 Use Current Location</button>
+          <button type="button" id="refreshLocationBtn">↻ Refresh Location</button>
           <button type="button" id="editSavedAddressBtn">Edit</button>
           <button type="button" id="deleteSavedAddressBtn">Delete</button>
         </div>
@@ -1140,8 +1148,8 @@ Verify OTP
 
   <!-- MODULES -->
   <script type="module" src="./firebase.js?v=20260524-restaurant-location"></script>
-<script type="module" src="./auth.js?v=20260524-restaurant-location"></script>
-<script type="module" src="./script.js?v=20260524-restaurant-location"></script>
+<script type="module" src="./auth.js?v=20260613-otp-flow"></script>
+<script type="module" src="./script.js?v=20260613-production-flow"></script>
 
 <script>
 
