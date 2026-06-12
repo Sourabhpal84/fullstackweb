@@ -6655,14 +6655,6 @@ body{
   -webkit-overflow-scrolling:touch;
 }
 
-.experience-grid,
-.combo-section,
-#menuSection,
-.footer{
-  content-visibility:auto;
-  contain-intrinsic-size:1px 680px;
-}
-
 .new-card,
 .combo-card,
 .offer-card,
@@ -6672,9 +6664,6 @@ body{
 .profile-card-premium,
 .cart-item,
 .order-track-card{
-  content-visibility:auto;
-  contain:layout paint style;
-  contain-intrinsic-size:var(--scroll-card-size);
   backface-visibility:hidden;
   transform:translateZ(0);
 }
@@ -6686,8 +6675,28 @@ body{
 .combo-card img,
 .smart-result-card img,
 .cart-item img{
-  contain:layout paint;
   backface-visibility:hidden;
+}
+
+.card-img,
+.category-tab-media,
+.offer-card,
+.combo-card{
+  background:
+    linear-gradient(110deg,rgba(255,255,255,.06),rgba(255,255,255,.16),rgba(255,255,255,.06)),
+    rgba(15,23,42,.18);
+  background-size:220% 100%;
+  animation:imageWarmSkeleton 1.1s ease-in-out infinite;
+}
+
+.card-img:has(img),
+.category-tab-media:has(img){
+  animation:none;
+}
+
+@keyframes imageWarmSkeleton{
+  from{background-position:220% 0;}
+  to{background-position:-220% 0;}
 }
 
 .new-card,
@@ -6720,5 +6729,61 @@ body{
   .combo-card:hover,
   .offer-card:hover{
     transform:none !important;
+  }
+}
+
+@media (max-width:560px){
+  body .hero,
+  body.light-theme .hero,
+  body.dark-theme .hero,
+  body.dark-mode .hero,
+  body:not(.dark-mode):not(.dark-theme) .hero{
+    min-height:44svh !important;
+    height:auto !important;
+    padding:12px 14px 16px !important;
+  }
+
+  body .hero-content{
+    display:flex !important;
+    flex-direction:column !important;
+    align-items:flex-start !important;
+    justify-content:center !important;
+    gap:8px !important;
+    width:100% !important;
+    height:100% !important;
+    text-align:left !important;
+  }
+
+  body .hero-copy{
+    width:100% !important;
+    align-self:flex-start !important;
+  }
+
+  body .hero-content h1:first-of-type{
+    max-width:92vw !important;
+    margin:7px 0 8px !important;
+  }
+
+  body .hero-actions{
+    justify-content:flex-start !important;
+  }
+
+  body .hero-showcase{
+    width:min(178px,48vw) !important;
+    align-self:flex-start !important;
+    justify-self:start !important;
+    margin:0 0 0 2px !important;
+    padding:7px !important;
+    border-radius:18px !important;
+  }
+
+  body .hero-showcase-top{
+    min-height:112px !important;
+    aspect-ratio:1.08 / 1 !important;
+    border-radius:14px !important;
+  }
+
+  body .hero-pizza-slider{
+    width:90% !important;
   }
 }

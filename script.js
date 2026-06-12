@@ -545,6 +545,7 @@ let menuListenerStarted = false;
 let categoryGridIds = new Set();
 let cachedCategorySections = [];
 let cachedCategoryLinks = [];
+let menuImageRenderIndex = 0;
 let activeCategoryId = "";
 const globalSnapshotUnsubs = [];
 let restaurantLocationReadyResolved = false;
@@ -801,7 +802,9 @@ function cleanInvoiceItemName(value = ""){
 }
 
 function imageMarkup(src, alt){
-  return `<img src="${escapeHTML(normalizeImageUrl(src))}" alt="${escapeHTML(alt || "Magneetoz dish")}" width="640" height="480" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='logo_tran.jpeg';">`;
+  menuImageRenderIndex += 1;
+  const eager = menuImageRenderIndex <= 12;
+  return `<img src="${escapeHTML(normalizeImageUrl(src))}" alt="${escapeHTML(alt || "Magneetoz dish")}" width="640" height="480" loading="${eager ? "eager" : "lazy"}" fetchpriority="${eager && menuImageRenderIndex <= 6 ? "high" : "auto"}" decoding="async" onerror="this.onerror=null;this.src='logo_tran.jpeg';">`;
 }
 
 function dishDataAttrs(d = {}){
@@ -1780,7 +1783,7 @@ function cacheCategoryScrollTargets(){
 
 function categoryImageMarkup(category = {}, label = "MAGNEETOZ category"){
   const source = category.image || category.imageUrl || category.icon || category.photo || category.thumbnail || "logo_tran.jpeg";
-  return `<span class="category-tab-media"><img src="${escapeHTML(normalizeImageUrl(source))}" alt="${escapeHTML(label)}" width="72" height="72" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='logo_tran.jpeg';"></span>`;
+  return `<span class="category-tab-media"><img src="${escapeHTML(normalizeImageUrl(source))}" alt="${escapeHTML(label)}" width="72" height="72" loading="eager" fetchpriority="auto" decoding="async" onerror="this.onerror=null;this.src='logo_tran.jpeg';"></span>`;
 }
 
 function loadCategories(){
@@ -2024,6 +2027,7 @@ function loadMenu(){
     allMenuDishes = snapshot.docs
       .map(docSnap => ({ id:docSnap.id, ...docSnap.data() }))
       .filter(d => d.available && d.category);
+    menuImageRenderIndex = 0;
 
     snapshot.forEach(docSnap => {
 
