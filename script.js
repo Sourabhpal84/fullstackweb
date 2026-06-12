@@ -188,6 +188,7 @@ let restaurantState = {
 
 const GUEST_CART_KEY = "magneetozGuestCart";
 const CHECKOUT_STATE_KEY = "magneetozCheckoutState";
+const PG_REFERRAL_COUPON_KEY = "magneetozPgReferralCoupon";
 const RAZORPAY_RECOVERY_KEY = "magneetozRazorpayRecovery";
 const FUNCTIONS_REGION = "asia-south1";
 const FUNCTIONS_BASE_URL = "https://asia-south1-magneetoz.cloudfunctions.net";
@@ -1060,6 +1061,58 @@ function writeJSON(key, value){
   }
 }
 
+function normalizeCouponKey(value = ""){
+  return String(value || "").trim().toUpperCase();
+}
+
+function capturePgReferralCoupon(){
+  const params = new URLSearchParams(window.location.search || "");
+  const couponCode = normalizeCouponKey(params.get("coupon") || params.get("couponCode") || params.get("code") || params.get("refCoupon"));
+  const pgCode = normalizeCouponKey(params.get("pg") || params.get("pgCode") || params.get("pgid") || params.get("source"));
+  const pgName = String(params.get("pgName") || params.get("hostel") || "").trim();
+  if(!couponCode && !pgCode && !pgName) return readJSON(PG_REFERRAL_COUPON_KEY, null);
+
+  const referral = {
+    couponCode,
+    pgCode,
+    pgName,
+    capturedAt:Date.now()
+  };
+  writeJSON(PG_REFERRAL_COUPON_KEY, referral);
+  return referral;
+}
+
+function findReferralCoupon(referral = readJSON(PG_REFERRAL_COUPON_KEY, null)){
+  if(!referral || !availableCoupons.length) return null;
+  const couponCode = normalizeCouponKey(referral.couponCode);
+  const pgCode = normalizeCouponKey(referral.pgCode);
+  const pgName = normalizeCouponKey(referral.pgName);
+  return availableCoupons.find(coupon => {
+    if(coupon.deleted === true || coupon.active === false || couponExpired(coupon)) return false;
+    if(couponCode && normalizeCouponKey(coupon.code) === couponCode) return true;
+    if(pgCode && normalizeCouponKey(coupon.pgCode) === pgCode) return true;
+    if(pgName && normalizeCouponKey(coupon.pgName || coupon.pg) === pgName) return true;
+    return false;
+  }) || null;
+}
+
+function fillReferralCouponField(coupon){
+  if(!coupon?.code) return;
+  const input = document.getElementById("couponInput");
+  if(input) input.value = coupon.code;
+}
+
+function applyReferralCouponIfPossible({ silent = true } = {}){
+  if(activeCoupon) return activeCoupon;
+  const coupon = findReferralCoupon();
+  if(!coupon) return null;
+  activeCoupon = coupon;
+  fillReferralCouponField(coupon);
+  persistGuestState();
+  if(!silent) toastSuccess?.(`${coupon.code} coupon ready`);
+  return coupon;
+}
+
 function isUsableCoordinatePair(lat, lng){
   return Number.isFinite(Number(lat)) &&
     Number.isFinite(Number(lng)) &&
@@ -1522,6 +1575,7 @@ function persistGuestState(){
 }
 
 async function mergeGuestCartWithUser(user){
+  const referral = capturePgReferralCoupon();
   const saved = readJSON(GUEST_CART_KEY, null);
   if(saved?.cart?.length && cart.length === 0){
     cart = saved.cart;
@@ -1539,10 +1593,14 @@ async function mergeGuestCartWithUser(user){
   }
   restoreCheckoutFields(checkout);
   await loadSavedCustomerProfile(user);
-  if(saved?.activeCouponCode && !activeCoupon){
+  const referralCoupon = findReferralCoupon(referral);
+  if(referralCoupon){
+    activeCoupon = referralCoupon;
+  }else if(saved?.activeCouponCode && !activeCoupon){
     const found = availableCoupons.find(item => String(item.code || "").toUpperCase() === String(saved.activeCouponCode).toUpperCase());
     if(found) activeCoupon = found;
   }
+  if(!activeCoupon) applyReferralCouponIfPossible();
   updateCart();
   if(user?.uid){
     await setDoc(doc(db, "users", user.uid), {
@@ -2372,6 +2430,7 @@ document.getElementById("customerDistanceBanner")?.addEventListener("click", () 
 });
 window.addEventListener("load", ()=>{
   handlePaymentLinkReturn().catch(error => console.warn("Payment link return skipped:", error));
+  capturePgReferralCoupon();
 
   const saved = normalizeCustomerLocation(readJSON(LOCATION_CACHE_KEY, null), "localStorage");
 
@@ -2506,12 +2565,17 @@ return true;
 
 registerGlobalSnapshot(onSnapshot(collection(db, "coupons"), (snapshot) => {
   availableCoupons = snapshot.docs.map(item => ({ id:item.id, ...item.data() }));
+  const referral = capturePgReferralCoupon();
+  const referralCoupon = findReferralCoupon(referral);
+  if(referralCoupon) activeCoupon = referralCoupon;
   if(!activeCoupon){
     const saved = readJSON(GUEST_CART_KEY, null);
     const code = saved?.activeCouponCode || readJSON(CHECKOUT_STATE_KEY, {})?.activeCouponCode || "";
     const found = availableCoupons.find(item => String(item.code || "").toUpperCase() === String(code).toUpperCase());
     if(found) activeCoupon = found;
+    if(!found) applyReferralCouponIfPossible();
   }
+  if(activeCoupon) fillReferralCouponField(activeCoupon);
   renderAvailableCoupons();
   if(activeCoupon) validateActiveCoupon();
   updateCart();
@@ -2598,7 +2662,7 @@ function validateCoupon(coupon, subtotal = getCartSubtotal()){
     if(!matched) return { ok:false, message:"Coupon is not valid for these items" };
   }
   if(coupon.firstOrderOnly && !auth.currentUser?.uid){
-    return { ok:false, message:"Sign in to use first-order coupons" };
+    return { ok:true, message:"Coupon ready. Sign in before checkout to confirm first order." };
   }
   return { ok:true, message:"Coupon applied" };
 }
@@ -2841,7 +2905,10 @@ async function createOrderSafely({ paymentMethod, paymentStatus, paymentId = "",
         ...deliveryMetrics(),
         deliveryCharge:pricing.deliveryCharge,
         originalDeliveryCharge:deliveryCharge,
+        couponId:activeCoupon?.id || "",
         couponCode:activeCoupon?.code || "",
+        couponPgName:activeCoupon?.pgName || activeCoupon?.pg || "",
+        couponPgCode:activeCoupon?.pgCode || "",
         couponDiscount:pricing.couponDiscount,
         freeDelivery:!!activeCoupon?.freeDelivery,
         gstPercent:pricing.gstPercent,
@@ -2953,7 +3020,10 @@ async function buildPaidOnlineOrderDraft(){
       ...deliveryMetrics(),
       deliveryCharge:pricing.deliveryCharge,
       originalDeliveryCharge:deliveryCharge,
+      couponId:activeCoupon?.id || "",
       couponCode:activeCoupon?.code || "",
+      couponPgName:activeCoupon?.pgName || activeCoupon?.pg || "",
+      couponPgCode:activeCoupon?.pgCode || "",
       couponDiscount:pricing.couponDiscount,
       freeDelivery:!!activeCoupon?.freeDelivery,
       gstPercent:pricing.gstPercent,
@@ -2998,6 +3068,7 @@ window.applyCoupon = async function(codeFromCard){
 
 window.removeCoupon = function(){
   activeCoupon = null;
+  localStorage.removeItem(PG_REFERRAL_COUPON_KEY);
   const input = document.getElementById("couponInput");
   if(input) input.value = "";
   updateCart();
@@ -3824,6 +3895,7 @@ function resetCart() {
   checkoutInFlightId = "";
   localStorage.removeItem(GUEST_CART_KEY);
   localStorage.removeItem(CHECKOUT_STATE_KEY);
+  localStorage.removeItem(PG_REFERRAL_COUPON_KEY);
   const couponInput = document.getElementById("couponInput");
   if(couponInput) couponInput.value = "";
   updateCart();

@@ -25,6 +25,13 @@ button{border:0;border-radius:12px;min-height:42px;padding:0 14px;font:800 12px 
 .danger{background:#ef4444;color:white}.soft{background:#263241;color:white}.ok{background:#22c55e;color:#06110a}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
 .stat{background:#0b0f14;border:1px solid #263241;border-radius:14px;padding:12px}.stat b{display:block;font-size:20px;color:#00ffcc}.stat span{font-size:11px;color:#94a3b8}
+.wide{grid-column:1/-1}
+.pg-board{margin-bottom:14px}
+.pg-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.pg-card{background:#0b0f14;border:1px solid #263241;border-radius:14px;padding:12px}
+.pg-card strong{display:block;color:#ffd166}.pg-card span{display:block;color:#cbd5e1;font-size:12px;margin-top:4px}
+.analytics{margin-top:12px;padding-top:10px;border-top:1px solid #263241;display:grid;gap:5px}
+.analytics b{color:#00ffcc}.muted{color:#94a3b8;font-size:12px}
 @media(max-width:860px){.grid{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}}
 </style>
 </head>
@@ -34,13 +41,20 @@ button{border:0;border-radius:12px;min-height:42px;padding:0 14px;font:800 12px 
   <div class="stats">
     <div class="stat"><b id="totalCoupons">0</b><span>Total coupons</span></div>
     <div class="stat"><b id="totalUsage">0</b><span>Total usage</span></div>
-    <div class="stat"><b id="discountGiven">₹0</b><span>Discount given</span></div>
+    <div class="stat"><b id="couponRevenue">₹0</b><span>Coupon revenue</span></div>
     <div class="stat"><b id="freeDeliveryCount">0</b><span>Free delivery offers</span></div>
   </div>
+  <section class="panel pg-board">
+    <h2 style="margin:0 0 8px;color:#00ffcc">PG Coupon Dashboard</h2>
+    <p class="muted">Yaha har PG ke coupon usage aur revenue live orders se calculate hoga.</p>
+    <div class="pg-grid" id="pgStats"></div>
+  </section>
   <div class="grid">
     <form class="panel" id="couponForm">
       <input type="hidden" id="couponId">
       <label>Code</label><input id="code" placeholder="MAGNEETOZ50" required>
+      <label>PG Name</label><input id="pgName" placeholder="AP Boys PG, XYZ Hostel">
+      <label>PG Short Code</label><input id="pgCode" placeholder="APBOYS">
       <label>Type</label>
       <select id="type">
         <option value="percentage">Percentage Discount</option>
@@ -81,14 +95,63 @@ protectAdminPage();
 mountAdminLogout(document.querySelector(".wrap"));
 const money = amount => new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0}).format(Number(amount)||0);
 let coupons = [];
+let orders = [];
 function splitList(value){return String(value||"").split(",").map(v=>v.trim()).filter(Boolean)}
 function expiryInput(ts){return ts?.seconds ? new Date(ts.seconds*1000).toISOString().slice(0,16) : ""}
+function norm(value){return String(value||"").trim().toUpperCase()}
+function orderRevenue(order){return Number(order.grandTotal || order.finalAmount || order.totalAmount || order.total || 0) || 0}
+function successfulOrder(order){
+  const status = String(order.status || order.orderStatus || "").toLowerCase();
+  return status !== "cancelled" && status !== "rejected";
+}
+function couponStats(coupon){
+  const code = norm(coupon.code);
+  const id = String(coupon.id || "");
+  const matched = orders.filter(order => successfulOrder(order) && (norm(order.couponCode) === code || (id && String(order.couponId || "") === id)));
+  return {
+    used:matched.length,
+    revenue:matched.reduce((sum, order) => sum + orderRevenue(order), 0),
+    discount:matched.reduce((sum, order) => sum + Number(order.couponDiscount || 0) + Number(order.freeDeliveryDiscount || 0), 0)
+  };
+}
+function renderAnalytics(){
+  const couponRows = coupons.map(coupon => ({ coupon, stats:couponStats(coupon) }));
+  const totalUsage = couponRows.reduce((sum,row)=>sum+row.stats.used,0);
+  const totalRevenue = couponRows.reduce((sum,row)=>sum+row.stats.revenue,0);
+  const totalDiscount = couponRows.reduce((sum,row)=>sum+row.stats.discount,0);
+  document.getElementById("totalCoupons").textContent = coupons.length;
+  document.getElementById("totalUsage").textContent = totalUsage;
+  document.getElementById("couponRevenue").textContent = money(totalRevenue);
+  document.getElementById("freeDeliveryCount").textContent = coupons.filter(c=>c.freeDelivery).length;
+
+  const pgMap = new Map();
+  couponRows.forEach(({ coupon, stats }) => {
+    const pg = coupon.pgName || coupon.pg || "No PG linked";
+    const current = pgMap.get(pg) || { coupons:0, used:0, revenue:0, discount:0 };
+    current.coupons += 1;
+    current.used += stats.used;
+    current.revenue += stats.revenue;
+    current.discount += stats.discount;
+    pgMap.set(pg, current);
+  });
+  document.getElementById("pgStats").innerHTML = Array.from(pgMap.entries()).map(([pg, item]) => `
+    <div class="pg-card">
+      <strong>${pg}</strong>
+      <span>${item.coupons} coupons</span>
+      <span>Used: <b>${item.used}</b></span>
+      <span>Revenue: <b>${money(item.revenue)}</b></span>
+      <span>Discount: ${money(item.discount)}</span>
+    </div>
+  `).join("") || `<div class="pg-card"><strong>No PG coupons yet</strong><span>Add PG name while creating coupon.</span></div>`;
+}
 function readForm(){
   const type = document.getElementById("type").value;
   const expiry = document.getElementById("expiryDate").value;
   const visibility = document.getElementById("visibility").value;
   const data = {
     code:document.getElementById("code").value.trim().toUpperCase(),
+    pgName:document.getElementById("pgName").value.trim(),
+    pgCode:document.getElementById("pgCode").value.trim().toUpperCase(),
     type:type === "freeDelivery" ? "flat" : type === "freeItem" ? "flat" : type,
     discountValue:Number(document.getElementById("discountValue").value)||0,
     active:document.getElementById("active").checked,
@@ -132,6 +195,8 @@ window.editCoupon = id => {
   if(!c) return;
   document.getElementById("couponId").value = id;
   document.getElementById("code").value = c.code || "";
+  document.getElementById("pgName").value = c.pgName || c.pg || "";
+  document.getElementById("pgCode").value = c.pgCode || "";
   document.getElementById("type").value = c.freeDelivery ? "freeDelivery" : c.freeItem ? "freeItem" : c.type || "percentage";
   document.getElementById("discountValue").value = c.discountValue || 0;
   document.getElementById("minOrderAmount").value = c.minOrderAmount || 0;
@@ -155,15 +220,17 @@ window.deleteCoupon = async id => {
 };
 onSnapshot(collection(db,"coupons"), snap => {
   coupons = snap.docs.map(item => ({ id:item.id, ...item.data() }));
-  document.getElementById("totalCoupons").textContent = coupons.length;
-  document.getElementById("totalUsage").textContent = coupons.reduce((s,c)=>s+(c.usedCount||0),0);
-  document.getElementById("discountGiven").textContent = money(coupons.reduce((s,c)=>s+(c.totalDiscountGiven||0),0));
-  document.getElementById("freeDeliveryCount").textContent = coupons.filter(c=>c.freeDelivery).length;
+  renderAnalytics();
   list.innerHTML = coupons.map(c => `
     <article class="card">
       <h3>${c.code}</h3>
-      <div class="meta">${c.freeDelivery ? "Free Delivery" : c.freeItem ? "Free Item" : c.type} | Used ${c.usedCount || 0}/${c.usageLimit || "∞"}</div>
+      <div class="meta">${c.pgName || c.pg ? `PG: ${c.pgName || c.pg} | ` : ""}${c.freeDelivery ? "Free Delivery" : c.freeItem ? "Free Item" : c.type}</div>
+      <div class="meta">Stored usage ${c.usedCount || 0}/${c.usageLimit || "∞"} | Live usage ${couponStats(c).used} | Revenue ${money(couponStats(c).revenue)}</div>
       <div class="meta">Min ${money(c.minOrderAmount)} | Max ${money(c.maxDiscount)} | ${c.active ? "Active" : "Paused"} | ${c.visibility || (c.vipOnly ? "vip-only" : c.hiddenCoupon ? "hidden" : "public")}</div>
+      <div class="analytics">
+        <span>Discount given: <b>${money(couponStats(c).discount)}</b></span>
+        <span>PG Code: ${c.pgCode || "Not set"}</span>
+      </div>
       <div class="actions">
         <button class="ok" onclick="editCoupon('${c.id}')">Edit</button>
         <button class="soft" onclick="toggleCoupon('${c.id}')">${c.active ? "Disable" : "Enable"}</button>
@@ -171,6 +238,29 @@ onSnapshot(collection(db,"coupons"), snap => {
       </div>
     </article>
   `).join("");
+});
+onSnapshot(collection(db,"orders"), snap => {
+  orders = snap.docs.map(item => ({ id:item.id, ...item.data() }));
+  renderAnalytics();
+  if(coupons.length){
+    list.innerHTML = coupons.map(c => `
+      <article class="card">
+        <h3>${c.code}</h3>
+        <div class="meta">${c.pgName || c.pg ? `PG: ${c.pgName || c.pg} | ` : ""}${c.freeDelivery ? "Free Delivery" : c.freeItem ? "Free Item" : c.type}</div>
+        <div class="meta">Stored usage ${c.usedCount || 0}/${c.usageLimit || "∞"} | Live usage ${couponStats(c).used} | Revenue ${money(couponStats(c).revenue)}</div>
+        <div class="meta">Min ${money(c.minOrderAmount)} | Max ${money(c.maxDiscount)} | ${c.active ? "Active" : "Paused"} | ${c.visibility || (c.vipOnly ? "vip-only" : c.hiddenCoupon ? "hidden" : "public")}</div>
+        <div class="analytics">
+          <span>Discount given: <b>${money(couponStats(c).discount)}</b></span>
+          <span>PG Code: ${c.pgCode || "Not set"}</span>
+        </div>
+        <div class="actions">
+          <button class="ok" onclick="editCoupon('${c.id}')">Edit</button>
+          <button class="soft" onclick="toggleCoupon('${c.id}')">${c.active ? "Disable" : "Enable"}</button>
+          <button class="danger" onclick="deleteCoupon('${c.id}')">Delete</button>
+        </div>
+      </article>
+    `).join("");
+  }
 });
 </script>
   <script src="app-notifications.js"></script>

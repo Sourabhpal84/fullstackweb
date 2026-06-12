@@ -168,6 +168,17 @@
 .upload-progress i{display:block;width:0;height:100%;background:linear-gradient(90deg,#22c55e,#00ffcc);transition:.2s ease}
 #uploadStatus{position:absolute;left:14px;right:14px;bottom:8px}
 @keyframes previewIn{from{opacity:0;transform:scale(1.04)}to{opacity:1;transform:scale(1)}}
+.dish-row{margin-top:10px;padding:12px;border:1px solid #1e293b;border-radius:14px;background:#0f172a}
+.dish-row-main{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.dish-row strong{color:#f8fafc}.dish-row small{display:block;color:#94a3b8;margin-top:3px}
+.dish-actions{display:flex;gap:6px;flex-wrap:wrap}
+.dish-edit-panel{display:none;margin-top:12px;padding:12px;border-radius:14px;background:#020617;border:1px solid #334155}
+.dish-edit-panel.active{display:grid;gap:10px}
+.dish-edit-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
+.dish-edit-grid input,.dish-edit-grid select{width:100%;margin:0}
+.size-edit-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
+.size-edit-grid label{display:grid;gap:6px;color:#cbd5e1;font-size:12px;font-weight:800}
+.btn-blue{background:#38bdf8 !important;color:#020617 !important}
 
   </style>
 </head>
@@ -307,6 +318,21 @@ function formatCurrency(amount){
 
 function normalizeUnicodeText(value = ""){
   return String(value || "").normalize("NFC").trim();
+}
+
+function escapeHTML(value = ""){
+  return String(value || "").replace(/[&<>"']/g, char => ({
+    "&":"&amp;",
+    "<":"&lt;",
+    ">":"&gt;",
+    "\"":"&quot;",
+    "'":"&#39;"
+  }[char]));
+}
+
+function numberValue(value, fallback = 0){
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 const uploadBox = document.getElementById("dishUploadBox");
@@ -715,21 +741,71 @@ onSnapshot(collection(db,"categories"), (catSnap)=>{
         ){
 
           hasDish = true;
+          const isSizeBased = dish.type === "multiple" || dish.sizes;
+          const simplePrice = Number(dish.price || 0);
+          const simpleMarket = Number(dish.marketPrice || (simplePrice ? simplePrice + 20 : 0));
+          const sizes = dish.sizes || {};
+          const small = sizes.small || {};
+          const medium = sizes.medium || {};
+          const large = sizes.large || {};
+          const currentPrice = isSizeBased ? (small.price || medium.price || large.price || 0) : simplePrice;
 
           html += `
-          <div style="margin-top:8px;">
-            ${dish.name} - ${formatCurrency(dish.price ? dish.price : (dish.sizes?.small?.price || 0))}
+          <div class="dish-row" id="dishRow-${d.id}">
+            <div class="dish-row-main">
+              <div>
+                <strong>${escapeHTML(dish.name || "Untitled dish")}</strong> - ${formatCurrency(currentPrice)}
+                <small>${escapeHTML(dish.description || "No description")} • ${isSizeBased ? "Size based" : "Simple"} • ${dish.available ? "Active" : "Disabled"}</small>
+              </div>
 
-            <button 
-  style="background:${dish.available ? '#22c55e' : '#facc15'}; color:black;"
-  onclick="toggleDish('${d.id}',${dish.available})">
-  ${dish.available ? "Disable" : "Enable"}
-</button>
+              <div class="dish-actions">
+                <button class="btn-blue" onclick="openDishEditor('${d.id}')">Edit</button>
+                <button 
+                  style="background:${dish.available ? '#22c55e' : '#facc15'}; color:black;"
+                  onclick="toggleDish('${d.id}',${dish.available})">
+                  ${dish.available ? "Disable" : "Enable"}
+                </button>
 
-            <button class="btn-red"
-              onclick="del('${d.id}')">
-              Delete
-            </button>
+                <button class="btn-red"
+                  onclick="del('${d.id}')">
+                  Delete
+                </button>
+              </div>
+            </div>
+
+            <div class="dish-edit-panel" id="edit-${d.id}">
+              <div class="dish-edit-grid">
+                <input id="edit-name-${d.id}" value="${escapeHTML(dish.name || "")}" placeholder="Dish name">
+                <input id="edit-desc-${d.id}" value="${escapeHTML(dish.description || "")}" placeholder="Description">
+                <input id="edit-image-${d.id}" value="${escapeHTML(dish.image || "")}" placeholder="Image URL">
+                <select id="edit-category-${d.id}">
+                  ${Array.from(document.getElementById("category").options).map(option => `<option value="${escapeHTML(option.value)}" ${option.value === dish.category ? "selected" : ""}>${escapeHTML(option.textContent)}</option>`).join("")}
+                </select>
+                <select id="edit-type-${d.id}" onchange="toggleDishEditorType('${d.id}')">
+                  <option value="simple" ${!isSizeBased ? "selected" : ""}>Simple</option>
+                  <option value="multiple" ${isSizeBased ? "selected" : ""}>Size Based</option>
+                </select>
+              </div>
+
+              <div class="dish-edit-grid" id="edit-simple-${d.id}" style="${isSizeBased ? "display:none" : ""}">
+                <input id="edit-price-${d.id}" type="number" value="${simplePrice || ""}" placeholder="Price">
+                <input id="edit-market-${d.id}" type="number" value="${simpleMarket || ""}" placeholder="Market price">
+              </div>
+
+              <div class="size-edit-grid" id="edit-sizes-${d.id}" style="${isSizeBased ? "" : "display:none"}">
+                <label>Small price<input id="edit-small-${d.id}" type="number" value="${small.price || ""}"></label>
+                <label>Small market<input id="edit-small-market-${d.id}" type="number" value="${small.market || ""}"></label>
+                <label>Medium price<input id="edit-medium-${d.id}" type="number" value="${medium.price || ""}"></label>
+                <label>Medium market<input id="edit-medium-market-${d.id}" type="number" value="${medium.market || ""}"></label>
+                <label>Large price<input id="edit-large-${d.id}" type="number" value="${large.price || ""}"></label>
+                <label>Large market<input id="edit-large-market-${d.id}" type="number" value="${large.market || ""}"></label>
+              </div>
+
+              <div>
+                <button class="btn-green" onclick="saveDishEdit('${d.id}')">Save Changes</button>
+                <button onclick="closeDishEditor('${d.id}')">Cancel</button>
+              </div>
+            </div>
           </div>`;
         }
 
@@ -751,6 +827,80 @@ onSnapshot(collection(db,"categories"), (catSnap)=>{
 /* TOGGLE */
 window.toggleDish = async(id,c)=>{
   await updateDoc(doc(db,"dishes",id),{available:!c});
+}
+
+window.openDishEditor = function(id){
+  document.getElementById(`edit-${id}`)?.classList.add("active");
+}
+
+window.closeDishEditor = function(id){
+  document.getElementById(`edit-${id}`)?.classList.remove("active");
+}
+
+window.toggleDishEditorType = function(id){
+  const type = document.getElementById(`edit-type-${id}`)?.value || "simple";
+  const simpleBox = document.getElementById(`edit-simple-${id}`);
+  const sizeBox = document.getElementById(`edit-sizes-${id}`);
+  if(simpleBox) simpleBox.style.display = type === "simple" ? "" : "none";
+  if(sizeBox) sizeBox.style.display = type === "multiple" ? "" : "none";
+}
+
+window.saveDishEdit = async function(id){
+  try{
+    const type = document.getElementById(`edit-type-${id}`)?.value || "simple";
+    const data = {
+      name: normalizeUnicodeText(document.getElementById(`edit-name-${id}`)?.value),
+      description: normalizeUnicodeText(document.getElementById(`edit-desc-${id}`)?.value),
+      image: normalizeUnicodeText(document.getElementById(`edit-image-${id}`)?.value),
+      category: normalizeUnicodeText(document.getElementById(`edit-category-${id}`)?.value),
+      type
+    };
+
+    if(!data.name || !data.image){
+      alert("Dish name aur image required hai ❌");
+      return;
+    }
+
+    if(type === "simple"){
+      const price = numberValue(document.getElementById(`edit-price-${id}`)?.value);
+      const marketPrice = numberValue(document.getElementById(`edit-market-${id}`)?.value);
+      if(!price || !marketPrice){
+        alert("Valid price aur market price enter karo ❌");
+        return;
+      }
+      data.price = price;
+      data.marketPrice = marketPrice;
+      data.sizes = null;
+    } else {
+      data.price = null;
+      data.marketPrice = null;
+      data.sizes = {
+        small:{
+          price:numberValue(document.getElementById(`edit-small-${id}`)?.value),
+          market:numberValue(document.getElementById(`edit-small-market-${id}`)?.value)
+        },
+        medium:{
+          price:numberValue(document.getElementById(`edit-medium-${id}`)?.value),
+          market:numberValue(document.getElementById(`edit-medium-market-${id}`)?.value)
+        },
+        large:{
+          price:numberValue(document.getElementById(`edit-large-${id}`)?.value),
+          market:numberValue(document.getElementById(`edit-large-market-${id}`)?.value)
+        }
+      };
+      const hasAnyPrice = Object.values(data.sizes).some(size => Number(size.price) > 0 && Number(size.market) > 0);
+      if(!hasAnyPrice){
+        alert("At least ek size ka valid price aur market price enter karo ❌");
+        return;
+      }
+    }
+
+    await updateDoc(doc(db,"dishes",id), data);
+    alert("Dish updated ✅");
+  }catch(error){
+    console.error(error);
+    alert("Update error: " + error.message);
+  }
 }
 
 /* DELETE */

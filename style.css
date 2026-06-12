@@ -6787,3 +6787,143 @@ body{
     width:90% !important;
   }
 }
+
+@media (min-width:921px){
+  body .hero{
+    min-height:clamp(560px,72svh,760px) !important;
+    padding:42px 28px !important;
+  }
+
+  body .hero-content{
+    width:min(1180px,100%) !important;
+    display:grid !important;
+    grid-template-columns:minmax(0,1fr) minmax(300px,390px) !important;
+    align-items:center !important;
+    gap:42px !important;
+    text-align:left !important;
+    margin-inline:auto !important;
+    padding:0 18px !important;
+  }
+
+  body .hero-content::before{
+    display:none !important;
+    content:none !important;
+  }
+
+  body .hero-copy{
+    max-width:680px !important;
+    justify-self:start !important;
+  }
+
+  body .hero-content h1:first-of-type{
+    max-width:640px !important;
+    margin:10px 0 18px !important;
+    font-size:clamp(54px,6.2vw,92px) !important;
+  }
+
+  body .hero-content p{
+    max-width:520px !important;
+    margin-left:0 !important;
+    margin-right:0 !important;
+  }
+
+  body .hero-actions,
+  body .hero-proof{
+    justify-content:flex-start !important;
+  }
+
+  body .hero-showcase{
+    display:grid !important;
+    justify-self:end !important;
+    align-self:center !important;
+    width:min(390px,28vw) !important;
+    min-width:300px !important;
+    opacity:1 !important;
+    visibility:visible !important;
+  }
+
+  body .hero-showcase-top{
+    min-height:250px !important;
+  }
+}
+
+/* Track Order readability in both Theme Studio modes */
+body .tracking-container{
+  background:var(--surface,#0b0f14) !important;
+  color:var(--foreground,#f8fafc) !important;
+}
+
+body .tracking-topbar{
+  background:color-mix(in srgb,var(--surface,#0b0f14) 88%,transparent) !important;
+  border-bottom-color:color-mix(in srgb,var(--foreground,#ffffff) 12%,transparent) !important;
+}
+
+body .tracking-topbar h2,
+body .order-item,
+body .summary-card h3,
+body .timeline-title,
+body .rider-box p,
+body .empty-orders h3,
+body .order-track-card{
+  color:var(--foreground,#ffffff) !important;
+  -webkit-text-fill-color:var(--foreground,#ffffff) !important;
+}
+
+body .tracking-topbar p,
+body .order-date,
+body .summary-card p,
+body .timeline-time,
+body .empty-orders p{
+  color:var(--muted-foreground,#94a3b8) !important;
+  -webkit-text-fill-color:var(--muted-foreground,#94a3b8) !important;
+}
+
+body .order-track-card,
+body.light-theme .order-track-card,
+body:not(.dark-mode):not(.dark-theme) .order-track-card{
+  background:var(--card-bg,#ffffff) !important;
+  border-color:var(--card-border,#e5e7eb) !important;
+  box-shadow:0 16px 42px rgba(15,23,42,.14) !important;
+}
+
+body.dark-mode .order-track-card,
+body.dark-theme .order-track-card{
+  background:rgba(255,255,255,.08) !important;
+  border-color:rgba(255,255,255,.12) !important;
+  box-shadow:0 10px 40px rgba(0,0,0,.35) !important;
+}
+
+body .order-items,
+body .summary-card{
+  background:color-mix(in srgb,var(--foreground,#ffffff) 7%,var(--surface,#0b0f14)) !important;
+  border:1px solid color-mix(in srgb,var(--foreground,#ffffff) 10%,transparent) !important;
+}
+
+body .filter-btn{
+  background:color-mix(in srgb,var(--foreground,#ffffff) 9%,var(--surface,#0b0f14)) !important;
+  color:var(--muted-foreground,#94a3b8) !important;
+}
+
+body .filter-btn.active{
+  color:#06110b !important;
+  -webkit-text-fill-color:#06110b !important;
+}
+
+body #closeTracking{
+  background:color-mix(in srgb,var(--foreground,#ffffff) 10%,transparent) !important;
+  color:var(--foreground,#ffffff) !important;
+}
+
+body .timeline::before,
+body .timeline-dot{
+  background:color-mix(in srgb,var(--foreground,#ffffff) 16%,transparent) !important;
+}
+
+body .timeline-dot{
+  border-color:var(--surface,#0b0f14) !important;
+}
+
+body .rider-box{
+  background:color-mix(in srgb,#00ffcc 10%,var(--surface,#0b0f14)) !important;
+  border-color:color-mix(in srgb,#00ffcc 28%,transparent) !important;
+}
