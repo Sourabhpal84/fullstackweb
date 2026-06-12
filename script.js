@@ -552,6 +552,7 @@ let menuCategoryGroups = [];
 let activeMenuGroup = "";
 let activeMenuCategory = "";
 let menuBrowserOpen = false;
+let menuBrowserHideOnNextScroll = false;
 const globalSnapshotUnsubs = [];
 let restaurantLocationReadyResolved = false;
 let resolveRestaurantLocationReady;
@@ -1902,6 +1903,7 @@ function renderMenuGroupNav(groups = []){
 
 function closeMenuBrowser(){
   menuBrowserOpen = false;
+  menuBrowserHideOnNextScroll = false;
   activeMenuGroup = "";
   activeMenuCategory = "";
   document.querySelectorAll("[data-menu-group]").forEach(button => button.classList.remove("active"));
@@ -1911,6 +1913,14 @@ function closeMenuBrowser(){
     block.hidden = true;
     block.classList.remove("menu-category-active");
   });
+}
+
+function hideMenuCategoryPicker(){
+  if(!menuBrowserOpen) return;
+  menuBrowserOpen = false;
+  menuBrowserHideOnNextScroll = false;
+  const browser = document.getElementById("menuCategoryBrowser");
+  if(browser) browser.innerHTML = "";
 }
 
 function renderMenuSubcategoryNav(group){
@@ -1932,6 +1942,7 @@ function selectMenuGroup(groupKey, shouldScroll = true){
   const group = menuCategoryGroups.find(item => item.key === groupKey) || menuCategoryGroups[0];
   if(!group) return;
   menuBrowserOpen = true;
+  menuBrowserHideOnNextScroll = false;
   activeMenuGroup = group.key;
   activeMenuCategory = group.categories[0]?.id || "";
   document.querySelectorAll("[data-menu-group]").forEach(button => {
@@ -1942,6 +1953,7 @@ function selectMenuGroup(groupKey, shouldScroll = true){
 
 function selectMenuCategory(categoryId){
   activeMenuCategory = categoryId || activeMenuCategory;
+  menuBrowserHideOnNextScroll = true;
   renderVisibleMenuCategories({ scroll:true });
 }
 
@@ -4181,6 +4193,10 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 window.addEventListener("scroll", ()=>{
+  if(menuBrowserHideOnNextScroll){
+    hideMenuCategoryPicker();
+    return;
+  }
   if(menuCategoryGroups.length) return;
   if(categoryScrollRaf) return;
   categoryScrollRaf = true;
