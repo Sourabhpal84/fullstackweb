@@ -24,6 +24,31 @@ service firebase.storage {
       allow write: if isAdmin() && validImage();
     }
 
+    match /menu-images/{folder}/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() && validImage();
+    }
+
+    match /category-images/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() && validImage();
+    }
+
+    match /category-images/{folder}/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() && validImage();
+    }
+
+    match /hero-images/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() && validImage();
+    }
+
+    match /hero-images/{folder}/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() && validImage();
+    }
+
     match /whatsapp-campaigns/{fileName} {
       allow read: if true;
       allow write: if isAdmin() && validImage();

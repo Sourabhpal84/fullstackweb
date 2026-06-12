@@ -308,7 +308,15 @@ mountAdminLogout(document.body);
 let isSorting = false;
 let uploadedDishImageUrl = "";
 let uploadedCategoryImageUrl = "";
+let uploadedDishImageSet = null;
+let uploadedCategoryImageSet = null;
 let activeUploadTask = null;
+const IMAGE_VARIANTS = [
+  { key:"thumbnail", width:320, quality:.72 },
+  { key:"mobile", width:400, quality:.78 },
+  { key:"tablet", width:800, quality:.78 },
+  { key:"desktop", width:1200, quality:.8 }
+];
 
 function formatCurrency(amount){
   return new Intl.NumberFormat("en-IN", {
@@ -360,19 +368,12 @@ function setCategoryUploadStatus(message, pct = null){
   if(pct != null) categoryProgress.style.width = `${pct}%`;
 }
 
-function compressImageToDataUrl(file, maxWidth = 900, quality = .78){
+function loadImageFile(file){
   return new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = () => {
-      const scale = Math.min(1, maxWidth / img.width);
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.round(img.width * scale));
-      canvas.height = Math.max(1, Math.round(img.height * scale));
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      URL.revokeObjectURL(url);
-      resolve(canvas.toDataURL("image/jpeg", quality));
+      resolve({ img, url, width:img.naturalWidth || img.width, height:img.naturalHeight || img.height });
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);
@@ -382,9 +383,99 @@ function compressImageToDataUrl(file, maxWidth = 900, quality = .78){
   });
 }
 
+function canvasToBlob(canvas, type = "image/webp", quality = .78){
+  return new Promise(resolve => canvas.toBlob(resolve, type, quality));
+}
+
+async function makeImageVariant(source, width, quality){
+  const scale = Math.min(1, width / source.width);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(source.width * scale));
+  canvas.height = Math.max(1, Math.round(source.height * scale));
+  const ctx = canvas.getContext("2d", { alpha:false });
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(source.img, 0, 0, canvas.width, canvas.height);
+  const webp = await canvasToBlob(canvas, "image/webp", quality);
+  if(webp) return { blob:webp, ext:"webp", contentType:"image/webp", width:canvas.width, height:canvas.height };
+  const jpeg = await canvasToBlob(canvas, "image/jpeg", quality);
+  return { blob:jpeg, ext:"jpg", contentType:"image/jpeg", width:canvas.width, height:canvas.height };
+}
+
+async function uploadBlobWithProgress(path, blob, contentType, onProgress){
+  const storageRef = ref(storage, path);
+  const task = uploadBytesResumable(storageRef, blob, {
+    contentType,
+    cacheControl:"public,max-age=31536000,immutable"
+  });
+  await new Promise((resolve, reject) => {
+    task.on("state_changed", snap => {
+      const pct = snap.totalBytes ? Math.round((snap.bytesTransferred / snap.totalBytes) * 100) : 0;
+      onProgress?.(pct);
+    }, reject, resolve);
+  });
+  return getDownloadURL(task.snapshot.ref);
+}
+
+async function createAndUploadImageSet(file, folder, statusFn){
+  const source = await loadImageFile(file);
+  const baseName = `${Date.now()}-${file.name.replace(/[^a-z0-9]/gi, "-").toLowerCase().replace(/-+/g, "-")}`;
+  const variants = {};
+  let fallback = "";
+  try{
+    for(let i = 0; i < IMAGE_VARIANTS.length; i++){
+      const spec = IMAGE_VARIANTS[i];
+      statusFn(`Optimizing ${spec.key}...`, Math.round((i / IMAGE_VARIANTS.length) * 45));
+      const variant = await makeImageVariant(source, spec.width, spec.quality);
+      statusFn(`Uploading ${spec.key}...`, 45 + Math.round((i / IMAGE_VARIANTS.length) * 45));
+      const url = await uploadBlobWithProgress(
+        `${folder}/${baseName}/${spec.key}-${variant.width}.${variant.ext}`,
+        variant.blob,
+        variant.contentType,
+        pct => statusFn(`Uploading ${spec.key} ${pct}%`, 45 + Math.round(((i + pct / 100) / IMAGE_VARIANTS.length) * 50))
+      );
+      variants[spec.key] = {
+        url,
+        width:variant.width,
+        height:variant.height,
+        contentType:variant.contentType
+      };
+      if(spec.key === "mobile") fallback = url;
+    }
+    statusFn("Optimized WebP images ready.", 100);
+    return {
+      url:fallback || variants.desktop?.url || variants.thumbnail?.url || "",
+      variants,
+      width:source.width,
+      height:source.height,
+      storageFolder:`${folder}/${baseName}`,
+      optimized:true,
+      createdAt:Date.now()
+    };
+  }finally{
+    URL.revokeObjectURL(source.url);
+  }
+}
+
+function compressImageToDataUrl(file, maxWidth = 900, quality = .78){
+  return loadImageFile(file).then(async source => {
+    try{
+      const variant = await makeImageVariant(source, maxWidth, quality);
+      return await new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(variant.blob);
+      });
+    }finally{
+      URL.revokeObjectURL(source.url);
+    }
+  });
+}
+
 async function useCompressedFallback(file, reason = "Firebase Storage is taking too long."){
   const dataUrl = await compressImageToDataUrl(file);
   uploadedDishImageUrl = dataUrl;
+  uploadedDishImageSet = null;
   document.getElementById("image").value = dataUrl;
   setUploadStatus(`${reason} Compressed image is ready.`, 100);
 }
@@ -397,54 +488,21 @@ async function uploadDishImage(file){
   preview.src = URL.createObjectURL(file);
   preview.style.display = "block";
   prompt.style.display = "none";
-  setUploadStatus("Uploading image...", 4);
-  const cleanName = file.name.replace(/[^a-z0-9.]/gi, "-").toLowerCase();
-  const storageRef = ref(storage, `menu-images/${Date.now()}-${cleanName}`);
-  const task = uploadBytesResumable(storageRef, file, { contentType:file.type });
-  activeUploadTask = task;
-  let lastProgressAt = Date.now();
-  let progressed = false;
-  const stuckTimer = setInterval(() => {
-    if(Date.now() - lastProgressAt > 12000){
-      setUploadStatus("Still connecting to Firebase Storage. Preparing backup...", progressed ? null : 4);
-    }
-  }, 3000);
+  setUploadStatus("Optimizing image...", 4);
   try{
-  const uploadPromise = new Promise((resolve, reject) => {
-    task.on("state_changed", snap => {
-      lastProgressAt = Date.now();
-      progressed = snap.bytesTransferred > 0;
-      const pct = snap.totalBytes ? Math.round((snap.bytesTransferred / snap.totalBytes) * 100) : 0;
-      setUploadStatus(`Uploading ${pct}%`, pct);
-    }, error => {
-      reject(error);
-    }, resolve);
-  });
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error("storage-timeout")), 22000);
-  });
-  await Promise.race([uploadPromise, timeoutPromise]);
-  uploadedDishImageUrl = await getDownloadURL(task.snapshot.ref);
-  document.getElementById("image").value = uploadedDishImageUrl;
-  setUploadStatus("Upload complete. Image ready.", 100);
+    uploadedDishImageSet = await createAndUploadImageSet(file, "menu-images", setUploadStatus);
+    uploadedDishImageUrl = uploadedDishImageSet.url;
+    document.getElementById("image").value = uploadedDishImageUrl;
+    setUploadStatus("Upload complete. Responsive WebP images ready.", 100);
   }catch(error){
     console.error("Dish image upload failed:", error);
-    try{ task.cancel(); }catch(_){}
-    if(error?.message === "storage-timeout"){
-      await useCompressedFallback(file);
-      return;
-    }
     uploadedDishImageUrl = "";
+    uploadedDishImageSet = null;
     document.getElementById("image").value = "";
-    setUploadStatus(error?.code === "storage/unauthorized"
-      ? "Upload blocked: deploy Firebase Storage rules."
-      : `Upload failed: ${error?.message || "Please try again."}`, 0);
+    setUploadStatus(`Upload failed: ${error?.message || "Please try again."}`, 0);
     alert(error?.code === "storage/unauthorized"
       ? "Firebase Storage permission denied. Deploy storage.rules, then try again."
-      : "Image upload failed. Please try again.");
-  }finally{
-    clearInterval(stuckTimer);
-    if(activeUploadTask === task) activeUploadTask = null;
+      : "Image upload failed. You can paste an image URL as fallback.");
   }
 }
 
@@ -456,31 +514,18 @@ async function uploadCategoryImage(file){
   categoryPreview.src = URL.createObjectURL(file);
   categoryPreview.style.display = "block";
   categoryPrompt.style.display = "none";
-  setCategoryUploadStatus("Uploading image...", 4);
-  const cleanName = file.name.replace(/[^a-z0-9.]/gi, "-").toLowerCase();
-  const storageRef = ref(storage, `category-images/${Date.now()}-${cleanName}`);
-  const task = uploadBytesResumable(storageRef, file, { contentType:file.type });
+  setCategoryUploadStatus("Optimizing image...", 4);
   try{
-    await new Promise((resolve, reject) => {
-      task.on("state_changed", snap => {
-        const pct = snap.totalBytes ? Math.round((snap.bytesTransferred / snap.totalBytes) * 100) : 0;
-        setCategoryUploadStatus(`Uploading ${pct}%`, pct);
-      }, reject, resolve);
-    });
-    uploadedCategoryImageUrl = await getDownloadURL(task.snapshot.ref);
+    uploadedCategoryImageSet = await createAndUploadImageSet(file, "category-images", setCategoryUploadStatus);
+    uploadedCategoryImageUrl = uploadedCategoryImageSet.url;
     document.getElementById("catImage").value = uploadedCategoryImageUrl;
-    setCategoryUploadStatus("Upload complete. Category image ready.", 100);
+    setCategoryUploadStatus("Upload complete. Category WebP images ready.", 100);
   }catch(error){
     console.error("Category image upload failed:", error);
-    try{
-      uploadedCategoryImageUrl = await compressImageToDataUrl(file, 420, .8);
-      document.getElementById("catImage").value = uploadedCategoryImageUrl;
-      setCategoryUploadStatus("Storage failed. Compressed image is ready.", 100);
-    }catch(_){
-      uploadedCategoryImageUrl = "";
-      setCategoryUploadStatus(`Upload failed: ${error?.message || "Please try again."}`, 0);
-      alert("Category image upload failed. You can paste an image URL instead.");
-    }
+    uploadedCategoryImageUrl = "";
+    uploadedCategoryImageSet = null;
+    setCategoryUploadStatus(`Upload failed: ${error?.message || "Please try again."}`, 0);
+    alert("Category image upload failed. You can paste an image URL instead.");
   }
 }
 
@@ -528,10 +573,12 @@ window.addCategory = async function(){
 await addDoc(collection(db,"categories"),{
   name: cleanName,
   image,
+  imageSet: uploadedCategoryImageSet,
   parent: mainType,
   group: mainType,
   mainCategory: mainType,
   groupImage: mainImage,
+  groupImageSet: mainImage === uploadedCategoryImageSet?.url ? uploadedCategoryImageSet : null,
   active:true,
   order: snap.size + 1   // ⭐ IMPORTANT
 });
@@ -541,6 +588,7 @@ await addDoc(collection(db,"categories"),{
   catName.value="";
   catImage.value="";
   uploadedCategoryImageUrl = "";
+  uploadedCategoryImageSet = null;
   categoryPreview.style.display = "none";
   categoryPrompt.style.display = "block";
   setCategoryUploadStatus("Firebase Storage upload ready", 0);
@@ -665,6 +713,7 @@ window.addDish = async function(){
     let data = {
       name: dishName,
       image: img,
+      imageSet: uploadedDishImageSet,
       category: cat,
       type: t,
       description: descText,
@@ -711,6 +760,7 @@ window.addDish = async function(){
     await addDoc(collection(db,"dishes"), data);
 
     uploadedDishImageUrl = "";
+    uploadedDishImageSet = null;
     document.getElementById("image").value = "";
     fileInput.value = "";
     preview.removeAttribute("src");

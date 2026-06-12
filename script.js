@@ -226,43 +226,58 @@ function hasVisibleRazorpayCheckout(){
     });
 }
 
-function renderHeroPizzaSlider(images = []){
+function renderHeroPizzaSlider(images = [], imageSets = []){
   const slider = document.getElementById("heroPizzaSlider");
   const bgSlider = document.getElementById("heroBgSlider");
   const cleanImages = images
-    .map(image => normalizeImageUrl(image))
-    .filter(Boolean)
+    .map((image, index) => ({
+      url:normalizeImageUrl(image),
+      imageSet:imageSets[index] || null
+    }))
+    .filter(item => item.url)
     .slice(0, 8);
-  const slides = cleanImages.length ? cleanImages : ["logo_tran.jpeg"];
-  const markup = slides.map((image, index) => `
+  const slides = cleanImages.length ? cleanImages : [{ url:"logo_tran.jpeg", imageSet:null }];
+  const markup = slides.map((slide, index) => {
+    const srcset = buildImageSrcset(slide.imageSet);
+    const srcsetAttr = srcset ? `srcset="${escapeHTML(srcset)}" sizes="(max-width: 720px) 62vw, 420px"` : "";
+    return `
     <img
-      src="${escapeHTML(image)}"
+      src="${escapeHTML(bestImageUrl(slide.url, slide.imageSet))}"
+      ${srcsetAttr}
       alt="MAGNEETOZ pizza slide ${index + 1}"
       width="420"
       height="420"
       loading="${index === 0 ? "eager" : "lazy"}"
+      fetchpriority="${index === 0 ? "high" : "auto"}"
       decoding="async"
       style="--slide-index:${index};--slide-count:${slides.length};"
       onerror="this.onerror=null;this.src='logo_tran.jpeg';"
     >
-  `).join("");
+  `;
+  }).join("");
   if(slider){
     slider.innerHTML = markup;
     slider.style.setProperty("--slide-count", String(slides.length));
   }
   if(bgSlider){
-    bgSlider.innerHTML = slides.map((image, index) => `
+    bgSlider.innerHTML = slides.map((slide, index) => {
+      const srcset = buildImageSrcset(slide.imageSet);
+      const srcsetAttr = srcset ? `srcset="${escapeHTML(srcset)}" sizes="100vw"` : "";
+      return `
       <img
-        src="${escapeHTML(image)}"
+        src="${escapeHTML(bestImageUrl(slide.url, slide.imageSet))}"
+        ${srcsetAttr}
         alt=""
         width="1200"
         height="800"
         loading="${index === 0 ? "eager" : "lazy"}"
+        fetchpriority="${index === 0 ? "high" : "auto"}"
         decoding="async"
         style="--slide-index:${index};--slide-count:${slides.length};"
         onerror="this.remove();"
       >
-    `).join("");
+    `;
+    }).join("");
     bgSlider.style.setProperty("--slide-count", String(slides.length));
   }
 }
@@ -646,6 +661,39 @@ function normalizeImageUrl(value){
   return image.replace(/^\.?\//, "") || "logo_tran.jpeg";
 }
 
+function imageVariantUrl(imageSet, key){
+  return imageSet?.variants?.[key]?.url || imageSet?.[key]?.url || imageSet?.[key] || "";
+}
+
+function bestImageUrl(src, imageSet){
+  return normalizeImageUrl(
+    imageVariantUrl(imageSet, "mobile") ||
+    imageVariantUrl(imageSet, "desktop") ||
+    imageSet?.url ||
+    src
+  );
+}
+
+function buildImageSrcset(imageSet){
+  if(!imageSet) return "";
+  return [
+    ["thumbnail", 320],
+    ["mobile", 400],
+    ["tablet", 800],
+    ["desktop", 1200]
+  ]
+    .map(([key, width]) => {
+      const url = imageVariantUrl(imageSet, key);
+      return url ? `${normalizeImageUrl(url)} ${width}w` : "";
+    })
+    .filter(Boolean)
+    .join(", ");
+}
+
+function imageFallbackAttrs(){
+  return `onload="this.closest('.image-shell')?.classList.add('is-loaded')" onerror="this.onerror=null;this.src='logo_tran.jpeg';this.closest('.image-shell')?.classList.add('is-loaded')"`;
+}
+
 function formatCurrency(amount){
   return new Intl.NumberFormat("en-IN", {
     style:"currency",
@@ -918,17 +966,21 @@ function cleanInvoiceItemName(value = ""){
   return firstReadable > 0 ? text.slice(firstReadable).trim() : (text || "Item");
 }
 
-function imageMarkup(src, alt){
+function imageMarkup(src, alt, imageSet = null){
   menuImageRenderIndex += 1;
   const eager = menuImageRenderIndex <= 12;
-  return `<img src="${escapeHTML(normalizeImageUrl(src))}" alt="${escapeHTML(alt || "Magneetoz dish")}" width="640" height="480" loading="${eager ? "eager" : "lazy"}" fetchpriority="${eager && menuImageRenderIndex <= 6 ? "high" : "auto"}" decoding="async" onerror="this.onerror=null;this.src='logo_tran.jpeg';">`;
+  const srcset = buildImageSrcset(imageSet);
+  const srcsetAttr = srcset ? `srcset="${escapeHTML(srcset)}" sizes="(max-width: 720px) 46vw, (max-width: 1100px) 260px, 320px"` : "";
+  return `<span class="image-shell dish-image-shell">
+    <img src="${escapeHTML(bestImageUrl(src, imageSet))}" ${srcsetAttr} alt="${escapeHTML(alt || "Magneetoz dish")}" width="640" height="480" loading="${eager ? "eager" : "lazy"}" fetchpriority="${eager && menuImageRenderIndex <= 6 ? "high" : "auto"}" decoding="async" ${imageFallbackAttrs()}>
+  </span>`;
 }
 
 function dishDataAttrs(d = {}){
   return `
     data-dish-name="${escapeHTML(normalizeUnicodeText(d.name || ""))}"
     data-dish-desc="${escapeHTML(normalizeUnicodeText(d.description || "Fresh MAGNEETOZ favourite"))}"
-    data-dish-image="${escapeHTML(normalizeImageUrl(d.image))}"
+    data-dish-image="${escapeHTML(bestImageUrl(d.image, d.imageSet))}"
     data-dish-category="${escapeHTML(d.category || "Recommended")}"
   `;
 }
@@ -1958,7 +2010,10 @@ function cacheCategoryScrollTargets(){
 
 function categoryImageMarkup(category = {}, label = "MAGNEETOZ category"){
   const source = category.groupImage || category.image || category.imageUrl || category.icon || category.photo || category.thumbnail || "logo_tran.jpeg";
-  return `<span class="category-tab-media"><img src="${escapeHTML(normalizeImageUrl(source))}" alt="${escapeHTML(label)}" width="72" height="72" loading="eager" fetchpriority="auto" decoding="async" onerror="this.onerror=null;this.src='logo_tran.jpeg';"></span>`;
+  const imageSet = category.groupImageSet || category.imageSet || null;
+  const srcset = buildImageSrcset(imageSet);
+  const srcsetAttr = srcset ? `srcset="${escapeHTML(srcset)}" sizes="72px"` : "";
+  return `<span class="category-tab-media image-shell"><img src="${escapeHTML(bestImageUrl(source, imageSet))}" ${srcsetAttr} alt="${escapeHTML(label)}" width="72" height="72" loading="eager" fetchpriority="auto" decoding="async" ${imageFallbackAttrs()}></span>`;
 }
 
 function inferMenuGroup(category = {}){
@@ -2346,7 +2401,7 @@ registerGlobalSnapshot(onSnapshot(doc(db, "settings", "theme"), snap => {
   applyHeroColors(hero);
   applyHeroBackgroundBlur(hero);
   syncHeroEmptyState(hero);
-  renderHeroPizzaSlider(Array.isArray(hero.images) ? hero.images : []);
+  renderHeroPizzaSlider(Array.isArray(hero.images) ? hero.images : [], Array.isArray(hero.imageSets) ? hero.imageSets : []);
   setThemeParticles(String(vars["--particle-bg"] || "").trim() === "founder-gold");
 }));
 
@@ -2398,7 +2453,7 @@ function loadMenu(){
 <div class="card new-card" ${dishAttrs}>
   <button type="button" class="quick-preview-btn" data-preview>Preview</button>
   <div class="card-img">
-    ${imageMarkup(d.image, d.name)}
+    ${imageMarkup(d.image, d.name, d.imageSet)}
   </div>
 
   <div class="card-body">
@@ -2451,7 +2506,7 @@ function loadMenu(){
 <div class="card new-card" ${dishAttrs}>
   <button type="button" class="quick-preview-btn" data-preview>Preview</button>
   <div class="card-img">
-    ${imageMarkup(d.image, d.name)}
+    ${imageMarkup(d.image, d.name, d.imageSet)}
   </div>
 
   <div class="card-body">
