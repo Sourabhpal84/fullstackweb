@@ -548,6 +548,9 @@ let cachedCategorySections = [];
 let cachedCategoryLinks = [];
 let menuImageRenderIndex = 0;
 let activeCategoryId = "";
+let menuCategoryGroups = [];
+let activeMenuGroup = "";
+let activeMenuCategory = "";
 const globalSnapshotUnsubs = [];
 let restaurantLocationReadyResolved = false;
 let resolveRestaurantLocationReady;
@@ -1844,6 +1847,121 @@ function categoryImageMarkup(category = {}, label = "MAGNEETOZ category"){
   return `<span class="category-tab-media"><img src="${escapeHTML(normalizeImageUrl(source))}" alt="${escapeHTML(label)}" width="72" height="72" loading="eager" fetchpriority="auto" decoding="async" onerror="this.onerror=null;this.src='logo_tran.jpeg';"></span>`;
 }
 
+function inferMenuGroup(category = {}){
+  const raw = String(category.parent || category.group || category.type || category.mainCategory || category.name || "Recommended").trim();
+  const text = raw.toLowerCase();
+  const groups = [
+    { key:"pizza", label:"Pizza", terms:["pizza","pizaa","piza"] },
+    { key:"burger", label:"Burger", terms:["burger","burgar"] },
+    { key:"sandwich", label:"Sandwich", terms:["sandwich","sendwitch","sandwitch"] },
+    { key:"combo", label:"Combos", terms:["combo","meal","deal"] },
+    { key:"drink", label:"Drinks", terms:["drink","cold","beverage","shake","mojito"] },
+    { key:"fries", label:"Fries & Sides", terms:["fries","side","garlic","bread","snack"] }
+  ];
+  const found = groups.find(group => group.terms.some(term => text.includes(term)));
+  if(found) return found;
+  const firstWord = raw.split(/[\s/-]+/).filter(Boolean)[0] || "Recommended";
+  return { key:normalizeCategoryId(firstWord), label:firstWord.charAt(0).toUpperCase() + firstWord.slice(1) };
+}
+
+function buildMenuCategoryGroups(categories = []){
+  const map = new Map();
+  categories.forEach(category => {
+    const group = inferMenuGroup(category);
+    if(!map.has(group.key)){
+      map.set(group.key, { ...group, categories:[] });
+    }
+    map.get(group.key).categories.push(category);
+  });
+  return [...map.values()];
+}
+
+function renderMenuGroupNav(groups = []){
+  const nav = document.getElementById("categoryNav");
+  if(!nav) return;
+  nav.innerHTML = groups.map((group, index) => `
+    <button type="button" class="category-tab menu-group-tab ${index === 0 ? "active" : ""}" data-menu-group="${escapeHTML(group.key)}">
+      ${categoryImageMarkup(group.categories[0] || {}, group.label)}
+      <span class="category-tab-label">${escapeHTML(group.label)}</span>
+    </button>
+  `).join("");
+  nav.querySelectorAll("[data-menu-group]").forEach(button => {
+    button.addEventListener("click", () => selectMenuGroup(button.dataset.menuGroup));
+  });
+}
+
+function renderMenuSubcategoryNav(group){
+  if(!group) return "";
+  return `
+    <div class="menu-subcategory-nav" id="menuSubcategoryNav" aria-label="${escapeHTML(group.label)} categories">
+      ${group.categories.map((category, index) => `
+        <button type="button" class="menu-subcategory-chip ${index === 0 ? "active" : ""}" data-menu-category="${escapeHTML(category.id)}">
+          ${escapeHTML(category.name)}
+        </button>
+      `).join("")}
+    </div>
+  `;
+}
+
+function selectMenuGroup(groupKey, shouldScroll = true){
+  const group = menuCategoryGroups.find(item => item.key === groupKey) || menuCategoryGroups[0];
+  if(!group) return;
+  activeMenuGroup = group.key;
+  activeMenuCategory = group.categories[0]?.id || "";
+  document.querySelectorAll("[data-menu-group]").forEach(button => {
+    button.classList.toggle("active", button.dataset.menuGroup === activeMenuGroup);
+  });
+  renderVisibleMenuCategories({ scroll:shouldScroll });
+}
+
+function selectMenuCategory(categoryId){
+  activeMenuCategory = categoryId || activeMenuCategory;
+  renderVisibleMenuCategories({ scroll:true });
+}
+
+function renderVisibleMenuCategories({ scroll = false } = {}){
+  const group = menuCategoryGroups.find(item => item.key === activeMenuGroup) || menuCategoryGroups[0];
+  const browser = document.getElementById("menuCategoryBrowser");
+  if(!group || !browser) return;
+  if(!activeMenuCategory || !group.categories.some(category => category.id === activeMenuCategory)){
+    activeMenuCategory = group.categories[0]?.id || "";
+  }
+  browser.innerHTML = `
+    <div class="menu-browser-head">
+      <span>${escapeHTML(group.label)}</span>
+      <strong>${group.categories.length} categories</strong>
+    </div>
+    ${renderMenuSubcategoryNav(group)}
+  `;
+  browser.querySelectorAll("[data-menu-category]").forEach(button => {
+    button.classList.toggle("active", button.dataset.menuCategory === activeMenuCategory);
+    button.addEventListener("click", () => selectMenuCategory(button.dataset.menuCategory));
+  });
+  document.querySelectorAll(".category-block").forEach(block => {
+    const isActive = block.id === activeMenuCategory;
+    block.classList.toggle("menu-category-active", isActive);
+    block.hidden = !isActive;
+  });
+  if(scroll) document.getElementById(activeMenuCategory)?.scrollIntoView({ behavior:"smooth", block:"start" });
+}
+
+function categoryJumpFooter(categories = [], index = 0){
+  const current = categories[index];
+  const previous = categories[index - 1];
+  const next = categories[index + 1];
+  if(!current || (!previous && !next)) return "";
+  return `
+    <div class="category-jump-footer" aria-label="More menu categories">
+      <span>More dishes</span>
+      <div>
+        ${previous ? `<a href="#${escapeHTML(previous.id)}">← ${escapeHTML(previous.name)}</a>` : ""}
+        <a href="#categoryNav">All categories</a>
+        ${next ? `<a href="#${escapeHTML(next.id)}">${escapeHTML(next.name)} →</a>` : ""}
+      </div>
+    </div>
+  `;
+}
+
 function loadCategories(){
   const container = document.getElementById("categoryContainer");
   const nav = document.getElementById("categoryNav");
@@ -1858,47 +1976,43 @@ function loadCategories(){
       const select = document.getElementById("category");
       const selectHTML = [];
       const nextGridIds = new Set();
-
-      if(nav){
-        navHTML.push(`
-          <a href="#menuSection" class="category-tab active" data-category-tab="all">
-            ${categoryImageMarkup({ image:"logo_tran.jpeg" }, "All MAGNEETOZ items")}
-            <span class="category-tab-label">All</span>
-          </a>
-        `);
-      }
+      const activeCategories = [];
 
       snapshot.forEach(docSnap => {
         const c = docSnap.data();
         const id = normalizeCategoryId(c.name);
         if(!c.active) return;
-        if(nav){
-          navHTML.push(`
-            <a href="#${id}" class="category-tab" data-category-tab="${escapeHTML(id)}">
-              ${categoryImageMarkup(c, c.name || "MAGNEETOZ category")}
-              <span class="category-tab-label">${escapeHTML(c.name)}</span>
-            </a>
-          `);
-        }
+        activeCategories.push({ id, name:c.name || "Menu", ...c });
         nextGridIds.add("grid-cat-" + id);
         selectHTML.push(`<option value="${escapeHTML(c.name)}">${escapeHTML(c.name)}</option>`);
+      });
+
+      menuCategoryGroups = buildMenuCategoryGroups(activeCategories);
+      if(!activeMenuGroup || !menuCategoryGroups.some(group => group.key === activeMenuGroup)){
+        activeMenuGroup = menuCategoryGroups[0]?.key || "";
+      }
+
+      activeCategories.forEach((category, index) => {
         categoryHTML.push(`
-  <div class="category-block" id="${id}">
+  <div class="category-block" id="${escapeHTML(category.id)}">
           <div class="section-header">
           <span class="line"></span>
-          <h2>${escapeHTML(c.name)}</h2>
+          <h2>${escapeHTML(category.name)}</h2>
           <span class="line"></span>
          </div>
-          <div class="grid" id="grid-cat-${id}"></div>
+          <div class="grid" id="grid-cat-${escapeHTML(category.id)}"></div>
+          ${categoryJumpFooter(activeCategories, index)}
         </div>
       `);
       });
-      if(nav) nav.innerHTML = navHTML.join("");
-      if(container) container.innerHTML = categoryHTML.join("");
+
+      if(nav) renderMenuGroupNav(menuCategoryGroups);
+      if(container) container.innerHTML = `<section class="menu-category-browser" id="menuCategoryBrowser"></section>${categoryHTML.join("")}`;
       if(select) select.innerHTML = selectHTML.join("");
       categoryGridIds = nextGridIds;
       categoriesReady = true;
       cacheCategoryScrollTargets();
+      selectMenuGroup(activeMenuGroup, false);
       if(menuListenerStarted){
         menuListenerStarted = false;
         loadMenu();
@@ -2640,8 +2754,43 @@ function couponExpired(coupon){
   return expiry > 0 && Date.now() > expiry;
 }
 
+function normalizeCouponCategory(value = ""){
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function couponCategoryAliases(value = ""){
+  const normalized = normalizeCouponCategory(value);
+  const aliases = new Set([normalized]);
+  if(normalized.includes("pizza") || normalized.includes("pizaa") || normalized.includes("piza")) aliases.add("pizza");
+  if(normalized.includes("burger") || normalized.includes("burgar")) aliases.add("burger");
+  if(normalized.includes("sandwich") || normalized.includes("sendwitch") || normalized.includes("sandwitch")) aliases.add("sandwich");
+  if(normalized.includes("combo") || normalized.includes("meal") || normalized.includes("deal")) aliases.add("combo");
+  if(normalized.includes("drink") || normalized.includes("cold") || normalized.includes("beverage") || normalized.includes("shake")) aliases.add("drink");
+  if(normalized.includes("fries") || normalized.includes("side") || normalized.includes("snack")) aliases.add("fries");
+  return aliases;
+}
+
 function cartCategories(){
-  return new Set(cart.map(item => item.category || item.dishCategory || "").filter(Boolean));
+  const categories = new Set();
+  cart.forEach(item => {
+    [item.category, item.dishCategory, item.name].filter(Boolean).forEach(value => {
+      couponCategoryAliases(value).forEach(alias => {
+        if(alias) categories.add(alias);
+      });
+    });
+  });
+  return categories;
+}
+
+function couponCategoryMatches(couponCategory, cartCategorySet){
+  const aliases = couponCategoryAliases(couponCategory);
+  for(const alias of aliases){
+    if(cartCategorySet.has(alias)) return true;
+    for(const cartCategory of cartCategorySet){
+      if(alias && cartCategory && (alias.includes(cartCategory) || cartCategory.includes(alias))) return true;
+    }
+  }
+  return false;
 }
 
 function validateCoupon(coupon, subtotal = getCartSubtotal()){
@@ -2658,7 +2807,7 @@ function validateCoupon(coupon, subtotal = getCartSubtotal()){
   }
   if(Array.isArray(coupon.applicableCategories) && coupon.applicableCategories.length){
     const categories = cartCategories();
-    const matched = coupon.applicableCategories.some(category => categories.has(category));
+    const matched = coupon.applicableCategories.some(category => couponCategoryMatches(category, categories));
     if(!matched) return { ok:false, message:"Coupon is not valid for these items" };
   }
   if(coupon.firstOrderOnly && !auth.currentUser?.uid){
@@ -2694,7 +2843,8 @@ function calculateCouponPricing(subtotal = getCartSubtotal()){
 function renderCouponPanel(result = calculateInvoicePricing(getCartSubtotal())){
   const applied = document.getElementById("appliedCoupon");
   if(applied){
-    applied.innerHTML = activeCoupon
+    const activeValidation = activeCoupon ? validateCoupon(activeCoupon) : { ok:false };
+    applied.innerHTML = activeCoupon && activeValidation.ok
       ? `<strong>${escapeHTML(activeCoupon.code)}</strong><span>Saved ${formatCurrency(result.couponDiscount + result.freeDeliveryDiscount)}</span><button type="button" onclick="removeCoupon()">Remove</button>`
       : "";
   }
@@ -2726,6 +2876,7 @@ function renderAvailableCoupons(){
   };
   const cards = availableCoupons
     .filter(isCustomerVisibleCoupon)
+    .filter(coupon => validateCoupon(coupon, subtotal).ok || String(coupon.code || "").toUpperCase() === String(activeCoupon?.code || "").toUpperCase())
     .slice(0, 6)
     .map(coupon => {
       const valid = validateCoupon(coupon, subtotal);
@@ -2746,7 +2897,9 @@ function validateActiveCoupon(){
   const validation = validateCoupon(activeCoupon);
   if(!validation.ok){
     activeCoupon = null;
-    alert(validation.message);
+    const input = document.getElementById("couponInput");
+    if(input) input.value = "";
+    persistGuestState();
   }
 }
 
@@ -3999,6 +4152,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 window.addEventListener("scroll", ()=>{
+  if(menuCategoryGroups.length) return;
   if(categoryScrollRaf) return;
   categoryScrollRaf = true;
   requestAnimationFrame(() => {
