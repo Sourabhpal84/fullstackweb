@@ -1999,7 +1999,11 @@ function renderVisibleMenuCategories({ scroll = false } = {}){
   if(scroll && activeMenuCategory){
     requestAnimationFrame(() => {
       const target = document.getElementById(activeMenuCategory);
-      target?.scrollIntoView({ behavior:"smooth", block:"start" });
+      if(!target) return;
+      const sticky = document.querySelector(".sticky-area");
+      const offset = (sticky?.getBoundingClientRect().height || 0) + 10;
+      const top = target.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top:Math.max(0, top), behavior:"smooth" });
     });
   }
 }

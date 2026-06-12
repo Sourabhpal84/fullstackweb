@@ -7100,6 +7100,7 @@ body.dark-theme .menu-subcategory-chip{
 .inline-menu-section .category-block{
   margin-top:0;
   overflow:visible !important;
+  scroll-margin-top:156px !important;
 }
 
 .inline-menu-section .grid{
@@ -7242,6 +7243,10 @@ body .inline-menu-section .new-card .card-body h3{
 }
 
 @media(max-width:560px){
+  .inline-menu-section .category-block{
+    scroll-margin-top:146px !important;
+  }
+
   .inline-menu-section .new-card,
   body .inline-menu-section .new-card{
     width:calc((100vw - 44px) / 2) !important;
