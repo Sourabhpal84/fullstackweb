@@ -1900,7 +1900,8 @@ function renderMenuSubcategoryNav(group){
     <div class="menu-subcategory-nav" id="menuSubcategoryNav" aria-label="${escapeHTML(group.label)} categories">
       ${group.categories.map((category, index) => `
         <button type="button" class="menu-subcategory-chip ${index === 0 ? "active" : ""}" data-menu-category="${escapeHTML(category.id)}">
-          ${escapeHTML(category.name)}
+          ${categoryImageMarkup(category, category.name)}
+          <span class="category-tab-label">${escapeHTML(category.name)}</span>
         </button>
       `).join("")}
     </div>
