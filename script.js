@@ -1946,7 +1946,6 @@ function renderVisibleMenuCategories({ scroll = false } = {}){
     block.classList.toggle("menu-category-active", isActive);
     block.hidden = !isActive;
   });
-  if(scroll) document.getElementById(activeMenuCategory)?.scrollIntoView({ behavior:"smooth", block:"start" });
 }
 
 function categoryJumpFooter(categories = [], index = 0){

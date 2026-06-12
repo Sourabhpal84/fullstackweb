@@ -6965,9 +6965,8 @@ body .category-nav button.category-tab.active{
 }
 
 .menu-category-browser{
-  position:sticky;
-  top:78px;
-  z-index:20;
+  position:relative;
+  z-index:1;
   margin:0 0 18px;
   padding:14px;
   border:1px solid var(--border,rgba(15,23,42,.10));
@@ -7084,7 +7083,6 @@ body.dark-theme .menu-subcategory-chip{
 
 @media(max-width:560px){
   .menu-category-browser{
-    top:66px;
     margin-inline:-4px;
     padding:12px;
     border-radius:14px;
