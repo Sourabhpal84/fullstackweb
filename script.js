@@ -1929,7 +1929,7 @@ function renderMenuSubcategoryNav(group){
   return `
     <div class="menu-subcategory-nav" id="menuSubcategoryNav" aria-label="${escapeHTML(group.label)} categories">
       ${group.categories.map((category, index) => `
-        <button type="button" class="menu-subcategory-chip ${index === 0 ? "active" : ""}" data-menu-category="${escapeHTML(category.id)}">
+        <button type="button" class="menu-subcategory-chip ${category.id === activeMenuCategory ? "active" : ""}" data-menu-category="${escapeHTML(category.id)}">
           ${categoryImageMarkup(category, category.name)}
           <span class="category-tab-label">${escapeHTML(category.name)}</span>
         </button>
@@ -1944,7 +1944,7 @@ function selectMenuGroup(groupKey, shouldScroll = true){
   menuBrowserOpen = true;
   menuBrowserHideOnNextScroll = false;
   activeMenuGroup = group.key;
-  activeMenuCategory = group.categories[0]?.id || "";
+  activeMenuCategory = "";
   document.querySelectorAll("[data-menu-group]").forEach(button => {
     button.classList.toggle("active", button.dataset.menuGroup === activeMenuGroup);
   });
@@ -1957,6 +1957,15 @@ function selectMenuCategory(categoryId){
   renderVisibleMenuCategories({ scroll:true });
 }
 
+function orderedGroupCategoryIds(group){
+  if(!group) return [];
+  const ids = group.categories.map(category => category.id);
+  if(activeMenuCategory && ids.includes(activeMenuCategory)){
+    return [activeMenuCategory, ...ids.filter(id => id !== activeMenuCategory)];
+  }
+  return ids;
+}
+
 function renderVisibleMenuCategories({ scroll = false } = {}){
   const group = menuCategoryGroups.find(item => item.key === activeMenuGroup) || menuCategoryGroups[0];
   const browser = document.getElementById("menuCategoryBrowser");
@@ -1964,9 +1973,6 @@ function renderVisibleMenuCategories({ scroll = false } = {}){
   if(!menuBrowserOpen){
     closeMenuBrowser();
     return;
-  }
-  if(!activeMenuCategory || !group.categories.some(category => category.id === activeMenuCategory)){
-    activeMenuCategory = group.categories[0]?.id || "";
   }
   browser.innerHTML = `
     <div class="menu-browser-head">
@@ -1979,10 +1985,16 @@ function renderVisibleMenuCategories({ scroll = false } = {}){
     button.classList.toggle("active", button.dataset.menuCategory === activeMenuCategory);
     button.addEventListener("click", () => selectMenuCategory(button.dataset.menuCategory));
   });
+  const visibleIds = orderedGroupCategoryIds(group);
   document.querySelectorAll(".category-block").forEach(block => {
-    const isActive = block.id === activeMenuCategory;
-    block.classList.toggle("menu-category-active", isActive);
-    block.hidden = !isActive;
+    const isVisible = visibleIds.includes(block.id);
+    block.classList.toggle("menu-category-active", block.id === activeMenuCategory);
+    block.hidden = !isVisible;
+    if(isVisible){
+      block.style.order = String(visibleIds.indexOf(block.id) + 1);
+    }else{
+      block.style.removeProperty("order");
+    }
   });
 }
 
@@ -4217,6 +4229,14 @@ window.addEventListener("scroll", ()=>{
     });
   });
 }, { passive:true });
+
+["touchstart","wheel"].forEach(eventName => {
+  window.addEventListener(eventName, event => {
+    if(!menuBrowserHideOnNextScroll) return;
+    if(event.target?.closest?.("#menuCategoryBrowser")) return;
+    hideMenuCategoryPicker();
+  }, { passive:true });
+});
 
 // LOCATION POPUP ONLY AFTER LOGIN
 
