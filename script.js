@@ -1996,6 +1996,12 @@ function renderVisibleMenuCategories({ scroll = false } = {}){
       block.style.removeProperty("order");
     }
   });
+  if(scroll && activeMenuCategory){
+    requestAnimationFrame(() => {
+      const target = document.getElementById(activeMenuCategory);
+      target?.scrollIntoView({ behavior:"smooth", block:"start" });
+    });
+  }
 }
 
 function categoryJumpFooter(categories = [], index = 0){
