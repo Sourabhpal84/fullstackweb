@@ -2010,7 +2010,7 @@ function loadCategories(){
       });
 
       if(nav) renderMenuGroupNav(menuCategoryGroups);
-      if(container) container.innerHTML = `<section class="menu-category-browser" id="menuCategoryBrowser"></section>${categoryHTML.join("")}`;
+      if(container) container.innerHTML = categoryHTML.join("");
       if(select) select.innerHTML = selectHTML.join("");
       categoryGridIds = nextGridIds;
       categoriesReady = true;

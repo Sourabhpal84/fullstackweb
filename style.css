@@ -6967,10 +6967,11 @@ body .category-nav button.category-tab.active{
 .menu-category-browser{
   position:relative;
   z-index:1;
-  margin:0 0 18px;
-  padding:14px;
+  width:min(1200px,calc(100% - 24px));
+  margin:-2px auto 12px;
+  padding:10px 12px;
   border:1px solid var(--border,rgba(15,23,42,.10));
-  border-radius:18px;
+  border-radius:14px;
   background:color-mix(in srgb,var(--card-bg,#ffffff) 92%,transparent);
   box-shadow:0 14px 38px rgba(15,23,42,.10);
   backdrop-filter:blur(14px);
@@ -6987,7 +6988,7 @@ body.dark-theme .menu-category-browser{
   align-items:center;
   justify-content:space-between;
   gap:12px;
-  margin-bottom:10px;
+  margin-bottom:8px;
 }
 
 .menu-browser-head span{
@@ -7038,8 +7039,8 @@ body.dark-theme .menu-direct-note{
 
 .menu-subcategory-chip{
   flex:0 0 auto;
-  min-height:42px;
-  padding:0 15px;
+  min-height:38px;
+  padding:0 13px;
   border:1px solid var(--border,#e5e7eb);
   border-radius:999px;
   background:var(--surface,#ffffff);
@@ -7083,9 +7084,10 @@ body.dark-theme .menu-subcategory-chip{
 
 @media(max-width:560px){
   .menu-category-browser{
-    margin-inline:-4px;
-    padding:12px;
-    border-radius:14px;
+    width:calc(100% - 16px);
+    margin:-4px auto 10px;
+    padding:9px;
+    border-radius:13px;
   }
   .menu-subcategory-chip{
     min-height:38px;
