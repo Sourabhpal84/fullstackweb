@@ -10,7 +10,10 @@ service firebase.storage {
     function isAdmin() {
       return signedIn()
         && request.auth.token.email != null
-        && request.auth.token.email == "magneeto73@gmail.com";
+        && request.auth.token.email in [
+          "magneeto73@gmail.com",
+          "sourabhpal982@gmail.com"
+        ];
     }
 
     function validImage() {

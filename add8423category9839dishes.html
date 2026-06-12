@@ -315,7 +315,7 @@ const IMAGE_VARIANTS = [
   { key:"thumbnail", width:320, quality:.72 },
   { key:"mobile", width:400, quality:.78 },
   { key:"tablet", width:800, quality:.78 },
-  { key:"desktop", width:1200, quality:.8 }
+  { key:"desktop", width:1000, quality:.78 }
 ];
 
 function formatCurrency(amount){
@@ -408,12 +408,19 @@ async function uploadBlobWithProgress(path, blob, contentType, onProgress){
     contentType,
     cacheControl:"public,max-age=31536000,immutable"
   });
-  await new Promise((resolve, reject) => {
+  const uploadPromise = new Promise((resolve, reject) => {
     task.on("state_changed", snap => {
       const pct = snap.totalBytes ? Math.round((snap.bytesTransferred / snap.totalBytes) * 100) : 0;
       onProgress?.(pct);
     }, reject, resolve);
   });
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => {
+      try{ task.cancel(); }catch(_){}
+      reject(new Error("Storage upload timeout. Check internet or deploy storage rules."));
+    }, 18000);
+  });
+  await Promise.race([uploadPromise, timeoutPromise]);
   return getDownloadURL(task.snapshot.ref);
 }
 
@@ -423,26 +430,33 @@ async function createAndUploadImageSet(file, folder, statusFn){
   const variants = {};
   let fallback = "";
   try{
+    statusFn("Optimizing WebP sizes...", 8);
+    const prepared = [];
     for(let i = 0; i < IMAGE_VARIANTS.length; i++){
       const spec = IMAGE_VARIANTS[i];
-      statusFn(`Optimizing ${spec.key}...`, Math.round((i / IMAGE_VARIANTS.length) * 45));
+      statusFn(`Optimizing ${spec.key}...`, 8 + Math.round((i / IMAGE_VARIANTS.length) * 35));
       const variant = await makeImageVariant(source, spec.width, spec.quality);
-      statusFn(`Uploading ${spec.key}...`, 45 + Math.round((i / IMAGE_VARIANTS.length) * 45));
-      const url = await uploadBlobWithProgress(
+      prepared.push({ spec, variant });
+    }
+    statusFn("Uploading optimized images...", 48);
+    const uploads = await Promise.allSettled(prepared.map(({ spec, variant }, index) =>
+      uploadBlobWithProgress(
         `${folder}/${baseName}/${spec.key}-${variant.width}.${variant.ext}`,
         variant.blob,
         variant.contentType,
-        pct => statusFn(`Uploading ${spec.key} ${pct}%`, 45 + Math.round(((i + pct / 100) / IMAGE_VARIANTS.length) * 50))
-      );
-      variants[spec.key] = {
-        url,
-        width:variant.width,
-        height:variant.height,
-        contentType:variant.contentType
-      };
+        pct => statusFn(`Uploading ${spec.key} ${pct}%`, 48 + Math.round(((index + pct / 100) / prepared.length) * 45))
+      ).then(url => ({ spec, variant, url }))
+    ));
+    uploads.forEach(result => {
+      if(result.status !== "fulfilled") return;
+      const { spec, variant, url } = result.value;
+      variants[spec.key] = { url, width:variant.width, height:variant.height, contentType:variant.contentType };
       if(spec.key === "mobile") fallback = url;
+    });
+    if(!Object.keys(variants).length){
+      throw new Error("Storage upload did not complete. Check internet or Firebase Storage rules.");
     }
-    statusFn("Optimized WebP images ready.", 100);
+    statusFn(fallback ? "Optimized images ready." : "Image uploaded with partial optimized sizes.", 100);
     return {
       url:fallback || variants.desktop?.url || variants.thumbnail?.url || "",
       variants,

@@ -121,7 +121,7 @@ const IMAGE_VARIANTS=[
   {key:"thumbnail",width:320,quality:.72},
   {key:"mobile",width:400,quality:.78},
   {key:"tablet",width:800,quality:.78},
-  {key:"desktop",width:1200,quality:.8}
+  {key:"desktop",width:1000,quality:.78}
 ];
 function loadImageFile(file){
   return new Promise((resolve,reject)=>{
@@ -151,7 +151,12 @@ async function makeImageVariant(source,width,quality){
 }
 async function uploadBlob(path,blob,contentType){
   const task=uploadBytesResumable(ref(storage,path),blob,{contentType,cacheControl:"public,max-age=31536000,immutable"});
-  await new Promise((resolve,reject)=>task.on("state_changed",null,reject,resolve));
+  const uploadPromise=new Promise((resolve,reject)=>task.on("state_changed",null,reject,resolve));
+  const timeoutPromise=new Promise((_,reject)=>setTimeout(()=>{
+    try{task.cancel();}catch(_){}
+    reject(new Error("Storage upload timeout. Check internet or deploy storage rules."));
+  },18000));
+  await Promise.race([uploadPromise,timeoutPromise]);
   return getDownloadURL(task.snapshot.ref);
 }
 async function createHeroImageSet(file,index=0){
@@ -159,11 +164,21 @@ async function createHeroImageSet(file,index=0){
   const baseName=`${Date.now()}-${index}-${file.name.replace(/[^a-z0-9]/gi,"-").toLowerCase()}`;
   const variants={};
   try{
+    const prepared=[];
     for(const spec of IMAGE_VARIANTS){
       const variant=await makeImageVariant(source,spec.width,spec.quality);
-      const url=await uploadBlob(`hero-images/${baseName}/${spec.key}-${variant.width}.${variant.ext}`,variant.blob,variant.contentType);
-      variants[spec.key]={url,width:variant.width,height:variant.height,contentType:variant.contentType};
+      prepared.push({spec,variant});
     }
+    const uploads=await Promise.allSettled(prepared.map(({spec,variant})=>
+      uploadBlob(`hero-images/${baseName}/${spec.key}-${variant.width}.${variant.ext}`,variant.blob,variant.contentType)
+        .then(url=>({spec,variant,url}))
+    ));
+    uploads.forEach(result=>{
+      if(result.status!=="fulfilled") return;
+      const {spec,variant,url}=result.value;
+      variants[spec.key]={url,width:variant.width,height:variant.height,contentType:variant.contentType};
+    });
+    if(!Object.keys(variants).length) throw new Error("Storage upload did not complete.");
     return {
       url:variants.mobile?.url || variants.desktop?.url || variants.thumbnail?.url || "",
       variants,
