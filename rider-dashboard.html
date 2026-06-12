@@ -909,9 +909,13 @@ async function getRiderLocation(){
 }
 
 function activeDeliveryOrder(){
+  const activeStatuses = ["Rider Accepted","Picked Up","Out For Delivery","Reached Nearby","Collect Payment","Cash Collected","Payment Settled","Delivery Code Pending","Payment Completed"];
   return allOrders.find(order =>
     order.id === rider?.currentActiveOrderId &&
-    ["Rider Accepted","Picked Up","Out For Delivery","Reached Nearby","Collect Payment","Cash Collected","Payment Settled","Delivery Code Pending","Payment Completed"].includes(normalizeStatus(order.status))
+    activeStatuses.includes(normalizeStatus(order.status))
+  ) || allOrders.find(order =>
+    (order.assignedRiderId === rider?.riderId || order.riderId === rider?.riderId) &&
+    activeStatuses.includes(normalizeStatus(order.status))
   );
 }
 

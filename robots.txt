@@ -16,4 +16,17 @@ Disallow: /super-admin-dashboard.html
 Disallow: /theme-studio-admin.html
 Disallow: /whatsapp-marketing-admin.html
 
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
 Sitemap: https://magneetoz.com/sitemap.xml
+Host: https://magneetoz.com

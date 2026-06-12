@@ -1106,15 +1106,13 @@ img{
 .auth-box button:hover    { background: var(--brand-dark); }
 .auth-box button:disabled { opacity: .6; cursor: not-allowed; }
 
-/* reCAPTCHA fits inside the modal on tiny screens */
 #recaptcha-container {
-  margin: 8px 0;
-  display: flex;
-  justify-content: center;
-}
-#recaptcha-container > div { max-width: 100%; transform-origin: 0 0; }
-@media (max-width: 360px) {
-  #recaptcha-container > div { transform: scale(.85); }
+  position:absolute;
+  width:1px;
+  height:1px;
+  overflow:hidden;
+  opacity:0;
+  pointer-events:none;
 }
 
 /* ===== MAIN WRAPPER (single, deduplicated) ===== */
@@ -2449,6 +2447,19 @@ img{
   text-decoration:none;
 }
 
+.rider-live-map-pending{
+  padding:12px;
+  border:1px dashed rgba(255,255,255,.18);
+  border-radius:16px;
+  background:rgba(15,23,42,.48);
+}
+
+.rider-live-map-pending p{
+  margin:0;
+  color:#cbd5e1;
+  font-size:12px;
+}
+
 /* =========================================
    SERVICE AREA POPUP
 ========================================= */
@@ -3651,9 +3662,12 @@ body.auth-success #authPopup{
 }
 
 #recaptcha-container{
-  display:grid;
-  place-items:center;
-  min-height:78px;
+  position:absolute;
+  width:1px;
+  height:1px;
+  overflow:hidden;
+  opacity:0;
+  pointer-events:none;
 }
 
 .premium-auth-toast{
@@ -6615,4 +6629,96 @@ body #heroSecondaryBtnText{
 
 body .hero-field-hidden{
   display:none !important;
+}
+
+/* ============================================================
+   SCROLL PERFORMANCE PATCH
+   Keeps existing features while reducing paint/layout work.
+   ============================================================ */
+:root{
+  --scroll-card-size:260px 420px;
+}
+
+html{
+  scroll-padding-top:78px;
+}
+
+body{
+  overscroll-behavior-y:contain;
+}
+
+.sticky-area,
+.category-nav,
+.combo-rail,
+.cart-panel,
+.tracking-container{
+  -webkit-overflow-scrolling:touch;
+}
+
+.experience-grid,
+.combo-section,
+#menuSection,
+.footer{
+  content-visibility:auto;
+  contain-intrinsic-size:1px 680px;
+}
+
+.new-card,
+.combo-card,
+.offer-card,
+.smart-result-card,
+.recommendation-card,
+.quick-preview-card,
+.profile-card-premium,
+.cart-item,
+.order-track-card{
+  content-visibility:auto;
+  contain:layout paint style;
+  contain-intrinsic-size:var(--scroll-card-size);
+  backface-visibility:hidden;
+  transform:translateZ(0);
+}
+
+.card-img,
+.new-card picture,
+.new-card img,
+.offer-card img,
+.combo-card img,
+.smart-result-card img,
+.cart-item img{
+  contain:layout paint;
+  backface-visibility:hidden;
+}
+
+.new-card,
+.combo-card,
+.offer-card,
+.category-nav a,
+.bottom-nav button,
+.cart-wrapper,
+.hero-btn,
+.hero-secondary{
+  transition-property:transform,opacity,box-shadow,border-color,background-color,color !important;
+}
+
+.new-card:hover .card-img img{
+  will-change:transform;
+}
+
+.new-card:not(:hover) .card-img img{
+  will-change:auto;
+}
+
+@media (max-width:720px){
+  .floating-food,
+  .cinema-glow,
+  .scroll-progress{
+    display:none !important;
+  }
+
+  .new-card:hover,
+  .combo-card:hover,
+  .offer-card:hover{
+    transform:none !important;
+  }
 }

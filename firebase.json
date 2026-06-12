@@ -27,7 +27,28 @@
         "headers": [
           { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
         ]
+      },
+      {
+        "source": "/llms.txt",
+        "headers": [
+          { "key": "Content-Type", "value": "text/plain; charset=utf-8" },
+          { "key": "Cache-Control", "value": "public, max-age=3600" }
+        ]
+      },
+      {
+        "source": "{/8423order9839status.html,/8423total_sell9839.html,/add8423category9839dishes.html,/admin-login.html,/coupons-admin.html,/delivery-logic-admin.html,/feedback-admin.html,/offers-admin.html,/rider-dashboard.html,/rider-login.html,/rider-settlements-admin.html,/riders-admin.html,/super-admin-dashboard.html,/theme-studio-admin.html,/whatsapp-marketing-admin.html}",
+        "headers": [
+          { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" },
+          { "key": "Cache-Control", "value": "private, no-store" }
+        ]
       }
+    ],
+    "redirects": [
+      { "source": "/about", "destination": "/about-us.html", "type": 301 },
+      { "source": "/contact", "destination": "/contact-us.html", "type": 301 },
+      { "source": "/privacy", "destination": "/privacy-policy.html", "type": 301 },
+      { "source": "/terms", "destination": "/terms-and-conditions.html", "type": 301 },
+      { "source": "/feedback", "destination": "/givefeedback.html", "type": 301 }
     ],
     "ignore": [
       "firebase.json",

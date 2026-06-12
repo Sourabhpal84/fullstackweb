@@ -265,6 +265,24 @@ function renderHeroPizzaSlider(images = []){
   }
 }
 
+function warmVisibleMenuImages(){
+  const run = () => {
+    document.querySelectorAll(".new-card img, .offer-card img, .combo-card img").forEach((img, index) => {
+      if(index < 10){
+        img.loading = "eager";
+        img.fetchPriority = index < 4 ? "high" : "auto";
+      }
+      img.decoding = "async";
+      img.decode?.().catch(() => {});
+    });
+  };
+  if("requestIdleCallback" in window){
+    requestIdleCallback(run, { timeout:1200 });
+  }else{
+    setTimeout(run, 120);
+  }
+}
+
 function syncHeroEmptyState(hero = {}){
   const heroSection = document.querySelector(".hero");
   if(!heroSection) return;
@@ -2130,6 +2148,7 @@ function loadMenu(){
       notifyPremiumUI("magneetoz:menu-rendered", {
         count: document.querySelectorAll(".new-card").length
       });
+      warmVisibleMenuImages();
       renderSmartAssistant();
       applyRestaurantAvailability();
     });
@@ -4468,7 +4487,7 @@ order.status === "Delivered"
       ${paymentHTML}
 
       ${
-        order.riderName
+        (order.riderName || order.assignedRider?.name || order.riderLocation)
         ? `
 
         <div class="rider-box">
@@ -4478,11 +4497,11 @@ order.status === "Delivered"
           </h4>
 
           <p>
-            ${order.riderName}
+            ${order.riderName || order.assignedRider?.name || "Delivery partner"}
           </p>
 
           <p>
-            📞 ${order.riderPhone || ""}
+            📞 ${order.riderPhone || order.assignedRider?.phone || ""}
           </p>
 
           <p>
@@ -4513,9 +4532,19 @@ function buildRiderLiveMapHTML(order){
   const riderLng = Number(location.lng);
   const customerLat = Number(order.location?.lat || order.customerLocation?.lat);
   const customerLng = Number(order.location?.lng || order.customerLocation?.lng);
-  const canShow = Number.isFinite(riderLat) && Number.isFinite(riderLng) &&
-    ["Out For Delivery","Reached Nearby","Collect Payment","Cash Collected","Payment Settled","Delivery Code Pending","Payment Completed"].includes(order.status);
-  if(!canShow) return "";
+  const liveStatus = ["Out For Delivery","Reached Nearby","Collect Payment","Cash Collected","Payment Settled","Delivery Code Pending","Payment Completed"].includes(normalizeTimelineStatus(order.status));
+  if(!liveStatus) return "";
+  if(!Number.isFinite(riderLat) || !Number.isFinite(riderLng)){
+    return `
+      <div class="rider-live-map rider-live-map-pending">
+        <div class="rider-live-map-head">
+          <strong>Live rider map</strong>
+          <span>Waiting for rider GPS</span>
+        </div>
+        <p>Rider location will appear here once the rider allows location and the dashboard sends the first update.</p>
+      </div>
+    `;
+  }
   const markerQuery = Number.isFinite(customerLat) && Number.isFinite(customerLng)
     ? `marker=${customerLat},${customerLng}&marker=${riderLat},${riderLng}`
     : `marker=${riderLat},${riderLng}`;

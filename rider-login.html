@@ -123,7 +123,7 @@ button:disabled{opacity:.62;cursor:not-allowed}
 .primary{background:linear-gradient(135deg,var(--green),#8df5b2);color:#06110a}
 .secondary{background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.11)}
 button:not(:disabled):active{transform:scale(.98)}
-#recaptcha-container{margin-top:12px;display:grid;place-items:center;min-height:78px}
+#recaptcha-container{position:absolute;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none}
 .otp-zone{display:none}
 .otp-zone.show{display:block;animation:rise .35s ease both}
 .status{
@@ -298,6 +298,7 @@ let confirmationResult = null;
 let recaptchaVerifier = null;
 let approvalUnsub = null;
 let otpCooldownUntil = 0;
+let otpVerifyInFlight = false;
 let deferredInstallPrompt = null;
 
 const els = {
@@ -405,8 +406,10 @@ async function passwordLogin(){
 
 async function ensureRecaptcha(){
   if(recaptchaVerifier) return recaptchaVerifier;
+  document.getElementById("recaptcha-container").innerHTML = "";
   recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
-    size:"normal",
+    size:"invisible",
+    callback:() => toast("Security verified. Sending OTP...", "info"),
     "expired-callback":() => toast("reCAPTCHA expired. Try again.", "error")
   });
   await recaptchaVerifier.render();
@@ -443,6 +446,7 @@ async function sendOtp(){
 }
 
 async function verifyOtp(){
+  if(otpVerifyInFlight) return;
   const code = els.otp.value.trim();
   if(!confirmationResult){
     toast("Send OTP first", "error");
@@ -453,6 +457,7 @@ async function verifyOtp(){
     return;
   }
 
+  otpVerifyInFlight = true;
   setBusy(els.verify, true, "Verifying...");
   try{
     await confirmationResult.confirm(code);
@@ -461,6 +466,8 @@ async function verifyOtp(){
     console.error(error);
     toast("Wrong OTP", "error");
     setBusy(els.verify, false);
+  }finally{
+    otpVerifyInFlight = false;
   }
 }
 
@@ -655,6 +662,10 @@ els.installBtn?.addEventListener("click", installRiderApp);
 els.installPanelBtn?.addEventListener("click", installRiderApp);
 els.otp.addEventListener("keyup", (event) => {
   if(event.key === "Enter") verifyOtp();
+});
+els.otp.addEventListener("input", () => {
+  els.otp.value = els.otp.value.replace(/\D/g, "").slice(0, 6);
+  if(els.otp.value.length === 6) verifyOtp();
 });
 
 window.addEventListener("beforeinstallprompt", event => {

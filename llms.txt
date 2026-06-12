@@ -1,0 +1,27 @@
+# MAGNEETOZ
+
+MAGNEETOZ is a Greater Noida pizza and fast food delivery brand.
+
+## Key URLs
+- Homepage and menu: https://magneetoz.com/
+- About: https://magneetoz.com/about-us.html
+- Contact: https://magneetoz.com/contact-us.html
+- Privacy: https://magneetoz.com/privacy-policy.html
+- Terms: https://magneetoz.com/terms-and-conditions.html
+
+## Business Entity
+- Name: MAGNEETOZ
+- Alternate name: MAGNEETOZ Pizza
+- Slogan: Taste of Attraction
+- Cuisine: Pizza, burgers, fast food, combos
+- Area served: Greater Noida, Uttar Pradesh, India
+- Phone: +91 8303614331
+- Email: magneetozgravito@gmail.com
+
+## Site Capabilities
+- Online food ordering
+- Cash on Delivery
+- Secure online payments
+- Realtime order tracking
+- Rider delivery flow
+- Customer support

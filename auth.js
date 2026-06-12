@@ -29,6 +29,7 @@ let confirmationResult = null;
 let recaptchaVerifier = null;
 let otpCooldownUntil = 0;
 let otpInFlight = false;
+let otpVerifyInFlight = false;
 let pushRegistrationInFlight = false;
 let pendingAuthResolve = null;
 let authNullTimer = null;
@@ -192,8 +193,12 @@ async function ensureRecaptcha(){
   if(recaptchaVerifier) return recaptchaVerifier;
   const container = $("recaptcha-container");
   if(!container) throw new Error("Login security container missing");
+  container.innerHTML = "";
   recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
-    size: "normal",
+    size: "invisible",
+    callback: () => {
+      toast("Security verified. Sending OTP...", "info");
+    },
     "expired-callback": () => {
       toast("Security check expired. Please try again.", "error");
       resetRecaptcha();
@@ -246,6 +251,7 @@ async function sendOTP(){
 }
 
 async function verifyOTP(){
+  if(otpVerifyInFlight) return;
   const button = $("verifyOtpBtn");
   const code = ($("otp")?.value || "").trim();
 
@@ -260,6 +266,7 @@ async function verifyOTP(){
     return;
   }
 
+  otpVerifyInFlight = true;
   setButton(button, true, "Verifying...");
 
   try{
@@ -269,6 +276,8 @@ async function verifyOTP(){
     console.error("verifyOTP error:", error);
     toast("Wrong OTP. Please try again.", "error");
     setButton(button, false);
+  }finally{
+    otpVerifyInFlight = false;
   }
 }
 
@@ -341,6 +350,12 @@ function bindAuthUI(){
   $("sendOtpBtn")?.addEventListener("click", sendOTP);
   $("verifyOtpBtn")?.addEventListener("click", verifyOTP);
   $("closeAuthPopup")?.addEventListener("click", closeAuthPopup);
+  $("otp")?.addEventListener("input", () => {
+    const input = $("otp");
+    if(!input) return;
+    input.value = input.value.replace(/\D/g, "").slice(0, 6);
+    if(input.value.length === 6) verifyOTP();
+  });
   $("otp")?.addEventListener("keydown", (event) => {
     if(event.key === "Enter") verifyOTP();
   });
