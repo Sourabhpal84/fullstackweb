@@ -3375,13 +3375,18 @@ async function buildPaidOnlineOrderDraft(){
   const pricing = calculateInvoicePricing(subtotal);
   const checkoutId = checkoutInFlightId || `co_${user.uid}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   checkoutInFlightId = checkoutId;
+  const safeCartImage = value => {
+    const url = String(value || "");
+    if(!url || /^data:/i.test(url)) return "";
+    return url.slice(0, 700);
+  };
   const itemsSnapshot = cart.map(item => ({
     id:item.id || "",
     name:item.name || "",
     price:Number(item.price || 0),
     qty:Number(item.qty || item.quantity || 1),
     quantity:Number(item.quantity || item.qty || 1),
-    image:item.image || "",
+    image:safeCartImage(item.image || item.imageUrl || item.thumbnail || ""),
     category:item.category || ""
   }));
 

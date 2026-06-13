@@ -180,6 +180,81 @@ function stripUndefined(value) {
   );
 }
 
+function compactText(value, max = 500) {
+  return String(value || "").slice(0, max);
+}
+
+function compactImageUrl(value) {
+  const url = compactText(value, 700);
+  if (!url || /^data:/i.test(url)) return "";
+  return url;
+}
+
+function compactCartItem(item = {}) {
+  return stripUndefined({
+    id: compactText(item.id, 120),
+    name: compactText(item.name, 160),
+    size: compactText(item.size, 80),
+    variant: compactText(item.variant, 80),
+    category: compactText(item.category, 120),
+    price: Number(item.price || 0),
+    qty: Number(item.qty || item.quantity || 1),
+    quantity: Number(item.quantity || item.qty || 1),
+    image: compactImageUrl(item.image || item.imageUrl || item.thumbnail || "")
+  });
+}
+
+function compactCart(items) {
+  return Array.isArray(items) ? items.slice(0, 80).map(compactCartItem) : [];
+}
+
+function compactOrderDraft(draft = {}, cartSnapshot = []) {
+  const items = compactCart(draft.items || cartSnapshot);
+  return stripUndefined({
+    checkoutId: compactText(draft.checkoutId, 160),
+    checkoutSignature: compactText(draft.checkoutSignature, 220),
+    customerName: compactText(draft.customerName, 120),
+    phone: compactText(draft.phone, 20),
+    email: compactText(draft.email, 160),
+    address: compactText(draft.address, 700),
+    landmark: compactText(draft.landmark, 220),
+    addressLat: draft.addressLat ?? null,
+    addressLng: draft.addressLng ?? null,
+    location: draft.location || null,
+    items,
+    subtotalAmount: Number(draft.subtotalAmount || draft.subtotal || 0),
+    totalAmount: Number(draft.totalAmount || draft.grandTotal || draft.finalAmount || 0),
+    deliveryDistance: Number(draft.deliveryDistance || 0),
+    actualRoadDistance: Number(draft.actualRoadDistance || 0),
+    deliveryDistanceText: compactText(draft.deliveryDistanceText, 80),
+    estimatedTravelTime: compactText(draft.estimatedTravelTime, 80),
+    distanceSource: compactText(draft.distanceSource, 80),
+    deliveryCharge: Number(draft.deliveryCharge || 0),
+    originalDeliveryCharge: Number(draft.originalDeliveryCharge || 0),
+    couponId: compactText(draft.couponId, 120),
+    couponCode: compactText(draft.couponCode, 80),
+    couponPgName: compactText(draft.couponPgName, 160),
+    couponPgCode: compactText(draft.couponPgCode, 80),
+    couponDiscount: Number(draft.couponDiscount || 0),
+    freeDeliveryDiscount: Number(draft.freeDeliveryDiscount || 0),
+    freeDelivery: Boolean(draft.freeDelivery),
+    gstPercent: Number(draft.gstPercent || 0),
+    gstAmount: Number(draft.gstAmount || 0),
+    handlingCharge: Number(draft.handlingCharge || 0),
+    subtotal: Number(draft.subtotal || draft.subtotalAmount || 0),
+    grandTotal: Number(draft.grandTotal || draft.totalAmount || 0),
+    finalAmount: Number(draft.finalAmount || draft.grandTotal || draft.totalAmount || 0),
+    orderSource: compactText(draft.orderSource || "online", 80),
+    restaurantId: compactText(draft.restaurantId || "primary", 120),
+    restaurantName: compactText(draft.restaurantName || "MAGNEETOZ", 160),
+    restaurantLocation: draft.restaurantLocation || null,
+    restaurantDistance: Number(draft.restaurantDistance || 0),
+    maxDeliveryDistance: Number(draft.maxDeliveryDistance || 0),
+    restaurantRoutingMode: compactText(draft.restaurantRoutingMode, 80),
+    userId: compactText(draft.userId, 160)
+  });
+}
+
 function verifyCheckoutSignature({ razorpayOrderId, razorpayPaymentId, razorpaySignature }) {
   const secret = env("RAZORPAY_KEY_SECRET");
   const expected = crypto
@@ -504,7 +579,8 @@ exports.createPaymentSession = onRequest(
       if (!idempotencyKey) throw Object.assign(new Error("Missing idempotency key"), { status: 400 });
       const razorpayKeyId = env("RAZORPAY_KEY_ID");
       if (!razorpayKeyId) throw Object.assign(new Error("Razorpay key is not configured"), { status: 500 });
-      const draft = body.orderDraft || {};
+      const incomingCart = compactCart(body.cart);
+      const draft = compactOrderDraft(body.orderDraft || {}, incomingCart);
       const customerName = String(draft.customerName || body.customerName || "Magneetoz Customer").slice(0, 120);
       const customerPhone = String(draft.phone || body.phone || "").replace(/\D/g, "").slice(-10);
       const customerEmail = String(draft.email || body.email || "").trim();
@@ -586,7 +662,7 @@ exports.createPaymentSession = onRequest(
         amount,
         amountPaise,
         currency: "INR",
-        cart: Array.isArray(body.cart) ? body.cart : [],
+        cart: incomingCart,
         orderDraft: draft,
         razorpayOrderId: razorpayOrder.id,
         razorpayPaymentLinkId: "",
@@ -601,7 +677,7 @@ exports.createPaymentSession = onRequest(
       await db.collection("orders").doc(orderId).set({
         orderId,
         userId: user.uid,
-        cartSnapshot: Array.isArray(body.cart) ? body.cart : [],
+        cartSnapshot: incomingCart,
         addressSnapshot: {
           customerName,
           phone: customerPhone,
@@ -624,7 +700,7 @@ exports.createPaymentSession = onRequest(
         paymentSessionId: sessionId,
         razorpayOrderId: razorpayOrder.id,
         razorpayPaymentLinkId: "",
-        cart: Array.isArray(body.cart) ? body.cart : [],
+        cart: incomingCart,
         orderDraft: draft,
         timeline: [
           { status: "payment_pending", source: "backend", at: Date.now() }
