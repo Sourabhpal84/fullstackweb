@@ -1021,6 +1021,10 @@ function startRiderHeartbeat(){
   riderHeartbeatTimer = setInterval(() => {
     if(!riderRef || !(rider?.online || rider?.isOnline)) return;
     updateDoc(riderRef, {
+      online:true,
+      isOnline:true,
+      status:"online",
+      availabilityStatus:"online",
       lastSeenAt:serverTimestamp(),
       isAvailable:!hasActiveDelivery(),
       activeOrderId:rider?.currentActiveOrderId || rider?.activeOrderId || null
@@ -1052,6 +1056,8 @@ async function setOnline(online){
   await updateDoc(riderRef, {
     online,
     isOnline:online,
+    status:online ? "online" : "offline",
+    availabilityStatus:online ? "online" : "offline",
     isAvailable:online ? !activeOrderId : false,
     activeOrderId:activeOrderId || null,
     ...(location ? { location, currentLocation:location, lastLocationUpdateAt:serverTimestamp() } : {}),

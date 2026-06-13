@@ -368,15 +368,23 @@ function tsMillis(value){
 }
 
 function riderPresence(rider = {}){
-  const onlineFlag = rider.online === true || rider.isOnline === true;
-  const lastSeen = Math.max(tsMillis(rider.lastSeenAt), tsMillis(rider.lastLocationUpdateAt), tsMillis(rider.location?.updatedAt));
-  const stale = onlineFlag && lastSeen && Date.now() - lastSeen > 90 * 1000;
-  const busy = !!(rider.currentActiveOrderId || rider.activeOrderId) || rider.isAvailable === false;
+  const onlineFlag = rider.online === true
+    || rider.isOnline === true
+    || rider.status === "online"
+    || rider.availabilityStatus === "online";
+  const lastSeen = Math.max(
+    tsMillis(rider.lastSeenAt),
+    tsMillis(rider.lastLocationUpdateAt),
+    tsMillis(rider.location?.updatedAt),
+    tsMillis(rider.currentLocation?.updatedAt)
+  );
+  const stale = onlineFlag && lastSeen && Date.now() - lastSeen > 5 * 60 * 1000;
+  const busy = !!(rider.currentActiveOrderId || rider.activeOrderId);
   return {
     onlineFlag,
     stale,
     busy,
-    assignable:onlineFlag && !busy,
+    assignable:onlineFlag && !stale && !busy,
     label:!onlineFlag ? "Offline" : stale ? "Location stale" : busy ? "Busy" : "Online"
   };
 }
@@ -667,7 +675,7 @@ window.fixCapturedPaymentOrders = async function(){
 };
 
 function riderOnline(rider){
-  return riderPresence(rider).onlineFlag;
+  return riderPresence(rider).assignable;
 }
 
 onSnapshot(collection(db,"riders"), snap => {

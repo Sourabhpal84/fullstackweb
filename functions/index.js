@@ -1431,6 +1431,37 @@ function customerPointForOrder(order = {}) {
   return pointFrom(order.customerLocation || order.location || order.dropLocation);
 }
 
+function tsMillis(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (value.seconds) return Number(value.seconds) * 1000;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function riderPresence(rider = {}) {
+  const onlineFlag = rider.online === true
+    || rider.isOnline === true
+    || rider.status === "online"
+    || rider.availabilityStatus === "online";
+  const lastSeen = Math.max(
+    tsMillis(rider.lastSeenAt),
+    tsMillis(rider.lastLocationUpdateAt),
+    tsMillis(rider.location?.updatedAt),
+    tsMillis(rider.currentLocation?.updatedAt)
+  );
+  const stale = onlineFlag && lastSeen && Date.now() - lastSeen > 5 * 60 * 1000;
+  const activeOrderId = rider.currentActiveOrderId || rider.activeOrderId || "";
+  const busy = !!activeOrderId;
+  return {
+    online: onlineFlag && !stale,
+    onlineFlag,
+    stale,
+    busy,
+    available: onlineFlag && !stale && !busy
+  };
+}
+
 function isDeliveryPaymentEligible(order = {}) {
   const method = String(order.paymentMethod || order.paymentMode || "").toLowerCase();
   const status = String(order.paymentStatus || "").toLowerCase();
@@ -1478,8 +1509,7 @@ async function findNearestAvailableRider(order = {}, excludeIds = []) {
   const candidates = ridersSnap.docs
     .map(item => ({ id: item.id, ...item.data() }))
     .filter(rider => rider.approved === true && rider.active !== false && rider.blocked !== true)
-    .filter(rider => rider.online || rider.isOnline)
-    .filter(rider => !rider.currentActiveOrderId && !rider.activeOrderId && rider.isAvailable !== false)
+    .filter(rider => riderPresence(rider).available)
     .filter(rider => !excluded.has(rider.id))
     .map(rider => {
       const location = rider.currentLocation || rider.location;
@@ -1768,8 +1798,7 @@ async function findCandidateRiders(order = {}) {
   const onlineRiders = ridersSnap.docs
     .map(item => ({ id: item.id, ...item.data() }))
     .filter(rider => rider.approved === true && rider.active !== false)
-    .filter(rider => rider.online || rider.isOnline)
-    .filter(rider => !rider.currentActiveOrderId && !rider.activeOrderId && rider.isAvailable !== false);
+    .filter(rider => riderPresence(rider).available);
 
   if (!hasOrderLocation) return onlineRiders.map(rider => ({
     id: rider.id,
@@ -1842,10 +1871,11 @@ exports.assignRiderToOrder = onRequest(
         riderSnap = await db.collection("riders").doc(manualRiderId).get();
         if (!riderSnap.exists) throw Object.assign(new Error("Selected rider not found"), { status: 404 });
         const rider = { id: manualRiderId, ...riderSnap.data() };
-        if (rider.approved !== true || rider.active === false || rider.blocked === true || rider.currentActiveOrderId || rider.activeOrderId) {
+        const presence = riderPresence(rider);
+        if (rider.approved !== true || rider.active === false || rider.blocked === true || presence.busy) {
           throw Object.assign(new Error("Selected rider is not online and available"), { status: 409 });
         }
-        if (!(rider.online || rider.isOnline) && !manualOverride) {
+        if (!presence.onlineFlag && !manualOverride) {
           throw Object.assign(new Error("Selected rider is offline. Confirm override to assign manually."), { status: 409 });
         }
         match = { rider, radius: null, restaurantLocation: await restaurantPointForOrder(order) };
@@ -1902,7 +1932,8 @@ exports.assignRiderToOrder = onRequest(
         const lockedOrder = lockedOrderSnap.data() || {};
         const lockedRider = lockedRiderSnap.data() || {};
         if (lockedOrder.assignedRiderId || lockedOrder.riderId) throw Object.assign(new Error("A rider is already assigned"), { status: 409 });
-        if (lockedRider.currentActiveOrderId || lockedRider.activeOrderId || (!manualRiderId && lockedRider.isAvailable === false) || (!(lockedRider.online || lockedRider.isOnline) && !manualOverride)) {
+        const lockedPresence = riderPresence(lockedRider);
+        if (lockedPresence.busy || (!manualRiderId && !lockedPresence.available) || (!lockedPresence.onlineFlag && !manualOverride)) {
           throw Object.assign(new Error("Rider became unavailable. Please retry."), { status: 409 });
         }
         if (!manualRiderId) {

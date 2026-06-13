@@ -1782,6 +1782,14 @@ function compactCartForStorage(items = []){
   });
 }
 
+function estimateJsonBytes(value){
+  try{
+    return new Blob([JSON.stringify(value)]).size;
+  }catch(_error){
+    return 0;
+  }
+}
+
 function persistGuestState(){
   clearTimeout(guestStatePersistTimer);
   guestStatePersistTimer = setTimeout(() => {
@@ -3295,7 +3303,7 @@ async function createOrderSafely({ paymentMethod, paymentStatus, paymentId = "",
   const orderRef = doc(collection(db, "orders"));
   const counterRef = doc(db, "counters", "orders");
   const orderTimes = buildOrderTimestamps();
-  const itemsSnapshot = cart.map(item => ({ ...item }));
+  const itemsSnapshot = compactCartForStorage(cart);
 
   logDistanceDebug("order_payload_distance_ready");
   const result = await timedStep("createOrderSafely:orderTransaction", () => retryAsync(async () => {
@@ -3354,6 +3362,23 @@ async function createOrderSafely({ paymentMethod, paymentStatus, paymentId = "",
         ...orderTimes,
         placedAt:serverTimestamp()
       };
+      const estimatedOrderBytes = estimateJsonBytes(orderData);
+      if(estimatedOrderBytes > 850000){
+        console.warn("[ORDER PAYLOAD] Large order payload trimmed", {
+          estimatedOrderBytes,
+          itemCount:itemsSnapshot.length
+        });
+        orderData.items = compactCartForStorage(itemsSnapshot).map(item => ({
+          id:item.id,
+          name:item.name,
+          size:item.size,
+          category:item.category,
+          price:item.price,
+          qty:item.qty,
+          quantity:item.quantity,
+          image:""
+        }));
+      }
       transaction.set(counterRef, {
         lastOrderNumber:nextOrderNumber,
         updatedAt:serverTimestamp()
@@ -5347,13 +5372,11 @@ function buildCancelWindowHTML(order){
 function canPayForOrder(order = {}){
   const statusText = normalizeTimelineStatus(order.status || order.orderStatus || order.lifecycleStatus || "");
   const paymentStatus = String(order.paymentStatus || "").toLowerCase();
-  const method = String(order.paymentMethod || order.paymentMode || "").toLowerCase();
   const paid = paymentStatus === "paid" || paymentStatus === "collected" || order.paymentCaptured === true || !!order.razorpayPaymentId;
   const amount = Number(order.totalAmount || order.amount || order.amountToCollect || order.grandTotal || order.finalAmount || 0);
   return !paid
     && !["Delivered","Cancelled","Rejected"].includes(statusText)
-    && amount >= 10
-    && (method === "online" || method === "upi" || method === "cod" || method === "cash" || paymentStatus === "pending");
+    && amount >= 10;
 }
 
 function buildPayNowActionHTML(order = {}){
@@ -5374,7 +5397,7 @@ function buildPayNowActionHTML(order = {}){
 }
 
 function buildPaymentTrackingHTML(order){
-  const statusText = normalizeTimelineStatus(order.status);
+  const statusText = normalizeTimelineStatus(order.status || order.orderStatus || order.lifecycleStatus || "");
   const paymentStatus = String(order.paymentStatus || "").toLowerCase();
   const paymentMethod = String(order.paymentMethod || order.paymentMode || "").toLowerCase();
   const paid = paymentStatus === "paid" || paymentStatus === "collected" || order.paymentCaptured === true || !!order.razorpayPaymentId;
