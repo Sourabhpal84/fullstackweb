@@ -550,8 +550,8 @@ exports.createPaymentSession = onRequest(
           amount: data.amount,
           amountPaise: existingAmountPaise,
           currency: data.currency || "INR",
-          paymentLinkId: data.razorpayPaymentLinkId || "",
-          paymentLinkUrl: data.razorpayPaymentLinkUrl || "",
+          paymentLinkId: "",
+          paymentLinkUrl: "",
           keyId: razorpayKeyId
         });
       }
@@ -568,39 +568,13 @@ exports.createPaymentSession = onRequest(
           source: "customer_checkout"
         }
       });
-      const verifiedRazorpayOrder = await getRazorpay().orders.fetch(razorpayOrder.id);
-      const paymentLink = await getRazorpay().paymentLink.create({
-        amount: amountPaise,
-        currency: "INR",
-        accept_partial: false,
-        reference_id: sessionId.slice(0, 40),
-        description: `Magneetoz order payment`,
-        customer: {
-          name: customerName,
-          contact: customerPhone || undefined,
-          email: customerEmail || undefined
-        },
-        notify: {
-          sms: false,
-          email: false
-        },
-        reminder_enable: false,
-        callback_url: `${publicWebsiteUrl(req)}/?paymentSessionId=${encodeURIComponent(sessionId)}`,
-        callback_method: "get",
-        notes: {
-          paymentSessionId: sessionId,
-          orderId,
-          userId: user.uid,
-          source: "customer_payment_link"
-        }
-      });
       logger.info("ORDER_RESPONSE", {
         paymentSessionId: sessionId,
         razorpayOrderId: razorpayOrder.id,
-        amount: verifiedRazorpayOrder.amount,
-        currency: verifiedRazorpayOrder.currency,
-        status: verifiedRazorpayOrder.status,
-        receipt: verifiedRazorpayOrder.receipt,
+        amount: razorpayOrder.amount,
+        currency: razorpayOrder.currency,
+        status: razorpayOrder.status,
+        receipt: razorpayOrder.receipt,
         keyId: razorpayKeyId
       });
 
@@ -615,8 +589,8 @@ exports.createPaymentSession = onRequest(
         cart: Array.isArray(body.cart) ? body.cart : [],
         orderDraft: draft,
         razorpayOrderId: razorpayOrder.id,
-        razorpayPaymentLinkId: paymentLink.id,
-        razorpayPaymentLinkUrl: paymentLink.short_url,
+        razorpayPaymentLinkId: "",
+        razorpayPaymentLinkUrl: "",
         status: "created",
         lockState: "open",
         attempts: 0,
@@ -649,7 +623,7 @@ exports.createPaymentSession = onRequest(
         checkoutSource: "razorpay_payment_pending",
         paymentSessionId: sessionId,
         razorpayOrderId: razorpayOrder.id,
-        razorpayPaymentLinkId: paymentLink.id,
+        razorpayPaymentLinkId: "",
         cart: Array.isArray(body.cart) ? body.cart : [],
         orderDraft: draft,
         timeline: [
@@ -675,9 +649,9 @@ exports.createPaymentSession = onRequest(
         amount,
         amountPaise,
         currency: "INR",
-        orderStatus: verifiedRazorpayOrder.status,
-        paymentLinkId: paymentLink.id,
-        paymentLinkUrl: paymentLink.short_url,
+        orderStatus: razorpayOrder.status || "created",
+        paymentLinkId: "",
+        paymentLinkUrl: "",
         keyId: razorpayKeyId
       });
     } catch (error) {
