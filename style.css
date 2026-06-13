@@ -3923,6 +3923,12 @@ body.auth-success #authPopup{
 .offer-card h3{font-size:15px;margin:3px 0;color:#fff}
 .offer-card p{font-size:12px;color:#cbd5e1;line-height:1.45;margin:0 0 8px}
 .offer-card button{border:0;border-radius:999px;background:linear-gradient(135deg,#ff7b00,#22c55e);color:#08100b;font-weight:900;padding:8px 12px}
+.offer-card-size{align-items:start}
+.offer-size-list{display:grid;gap:6px;margin:8px 0}
+.offer-size-row{display:flex;align-items:center;gap:8px;justify-content:space-between;padding:6px 8px;border-radius:10px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.08)}
+.offer-size-row b{font-size:11px;color:#fff}
+.offer-size-row strong{font-size:12px;color:#86efac}
+.offer-size-row del{font-size:10px;color:#94a3b8}
 @keyframes servicePulse{
   0%,100%{box-shadow:0 16px 50px rgba(239,68,68,.22)}
   50%{box-shadow:0 16px 65px rgba(255,123,0,.42)}
@@ -6667,6 +6673,43 @@ body .hero-field-hidden{
   display:none !important;
 }
 
+@media(max-width:640px){
+  body .trust-board{
+    display:flex !important;
+    gap:8px;
+    overflow-x:auto;
+    padding:8px 12px;
+    margin:10px 12px;
+    border-radius:14px;
+    scroll-snap-type:x mandatory;
+  }
+  body .trust-board div,
+  body .trust-board article{
+    flex:0 0 auto;
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    min-width:auto;
+    padding:7px 10px !important;
+    border-radius:999px;
+    scroll-snap-align:start;
+  }
+  body .trust-board strong{
+    display:inline !important;
+    font-size:12px !important;
+    line-height:1 !important;
+  }
+  body .trust-board span{
+    display:inline !important;
+    font-size:10px !important;
+    line-height:1 !important;
+    white-space:nowrap;
+  }
+  body .offer-size-row{
+    padding:5px 7px;
+  }
+}
+
 /* ============================================================
    SCROLL PERFORMANCE PATCH
    Keeps existing features while reducing paint/layout work.
@@ -7447,5 +7490,38 @@ body .category-jump-footer a{
   body .category-jump-footer a{
     width:100%;
     justify-content:center;
+  }
+}
+
+@media(max-width:640px){
+  body .trust-board{
+    display:flex !important;
+    gap:8px !important;
+    overflow-x:auto !important;
+    grid-template-columns:none !important;
+    padding:8px 12px !important;
+    margin:10px 12px !important;
+    border-radius:14px !important;
+  }
+  body .trust-board div,
+  body .trust-board article{
+    flex:0 0 auto !important;
+    display:inline-flex !important;
+    align-items:center !important;
+    gap:5px !important;
+    min-width:auto !important;
+    padding:7px 10px !important;
+    border-radius:999px !important;
+  }
+  body .trust-board strong{
+    display:inline !important;
+    font-size:12px !important;
+    line-height:1 !important;
+  }
+  body .trust-board span{
+    display:inline !important;
+    font-size:10px !important;
+    line-height:1 !important;
+    white-space:nowrap !important;
   }
 }

@@ -26,6 +26,7 @@ const OTP_RE = /^\d{6}$/;
 
 let confirmationResult = null;
 let recaptchaVerifier = null;
+let recaptchaRenderPromise = null;
 let otpCooldownUntil = 0;
 let otpInFlight = false;
 let otpVerifyInFlight = false;
@@ -212,6 +213,10 @@ function cleanPhone(){
 }
 
 async function ensureRecaptcha(){
+  if(recaptchaVerifier && recaptchaRenderPromise){
+    await recaptchaRenderPromise;
+    return recaptchaVerifier;
+  }
   if(recaptchaVerifier) return recaptchaVerifier;
   const container = $("recaptcha-container");
   if(!container) throw new Error("Login security container missing");
@@ -226,13 +231,20 @@ async function ensureRecaptcha(){
       resetRecaptcha();
     }
   });
-  await recaptchaVerifier.render();
+  recaptchaRenderPromise = recaptchaVerifier.render().catch(error => {
+    resetRecaptcha();
+    throw error;
+  });
+  await recaptchaRenderPromise;
   return recaptchaVerifier;
 }
 
 function resetRecaptcha(){
   try{ recaptchaVerifier?.clear(); }catch(_){}
   recaptchaVerifier = null;
+  recaptchaRenderPromise = null;
+  const container = $("recaptcha-container");
+  if(container) container.innerHTML = "";
 }
 
 function maskPhone(phone){
@@ -343,7 +355,8 @@ function setOtpValue(value = "", { autoVerify = false } = {}){
   return code;
 }
 
-async function sendOTP(){
+async function sendOTP(options = {}){
+  const retryAfterRecaptchaReset = options?.retryAfterRecaptchaReset === true;
   if(otpInFlight) return;
   const button = $("sendOtpBtn");
   const phone = cleanPhone();
@@ -373,7 +386,10 @@ async function sendOTP(){
     if(otpInput){
       prepareOtpInput();
       setOtpValue("");
-      otpInput.focus();
+      requestAnimationFrame(() => {
+        otpInput.focus({ preventScroll:true });
+        otpInput.click?.();
+      });
     }
     setAuthStatus(`OTP sent to ${maskPhone(phone)}. Auto-detecting OTP...`, "success");
     toast("OTP sent", "success");
@@ -381,6 +397,14 @@ async function sendOTP(){
     startOtpListener();
   }catch(error){
     devLog("sendOTP error:", error);
+    const rawMessage = String(error?.message || error?.code || "");
+    if(!retryAfterRecaptchaReset && /already.*rendered|reCAPTCHA has already been rendered/i.test(rawMessage)){
+      resetRecaptcha();
+      otpInFlight = false;
+      setButton(button, false);
+      setAuthStatus("Refreshing security check. Sending OTP again...", "info");
+      return sendOTP({ retryAfterRecaptchaReset:true });
+    }
     const message = friendlyAuthError(error);
     setAuthStatus(message, "error");
     toast(message, "error");

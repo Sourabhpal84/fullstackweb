@@ -475,7 +475,7 @@ Verify OTP
           </p>
 
           <div class="hero-actions">
-            <a href="#menuSection" class="hero-btn" id="heroPrimaryBtnText">
+            <a href="#combosSection" class="hero-btn" id="heroPrimaryBtnText">
               Explore Menu
             </a>
 
@@ -546,10 +546,6 @@ Verify OTP
       <section class="menu-category-browser" id="menuCategoryBrowser" aria-label="Selected food categories"></section>
 
     </div>
-    <main id="menuSection" class="inline-menu-section">
-      <div id="categoryContainer"></div>
-    </main>
-
     <section class="premium-search-band">
       <button type="button" class="smart-search-trigger" id="smartSearchTrigger">
         <span>Search pizzas, snacks, combos...</span>
@@ -559,6 +555,28 @@ Verify OTP
         <i></i>
         <span id="liveActivityText">12 customers are exploring MAGNEETOZ now</span>
       </div>
+    </section>
+
+    <section class="premium-rails reveal-on-scroll" id="combosSection">
+      <div class="rail-head">
+        <div>
+          <p>Combo management</p>
+          <h2>Active Combos</h2>
+        </div>
+        <button type="button" data-scroll-target="#menuSection">Add more</button>
+      </div>
+      <div class="combo-rail" id="comboRail"></div>
+    </section>
+
+    <section class="premium-rails reveal-on-scroll" id="offersSection">
+      <div class="rail-head">
+        <div>
+          <p>Live offers</p>
+          <h2>MAGNEETOZ Deals</h2>
+        </div>
+        <button type="button" onclick="enableMagneetozOffers()">Enable Alerts</button>
+      </div>
+      <div class="offer-rail" id="offerRail"></div>
     </section>
 
     <section class="trust-board reveal-on-scroll">
@@ -579,6 +597,10 @@ Verify OTP
       <div class="recommendation-rail" id="recommendedRail"></div>
     </section>
 
+    <main id="menuSection" class="inline-menu-section">
+      <div id="categoryContainer"></div>
+    </main>
+
     <section class="smart-food-assistant reveal-on-scroll" aria-label="Smart food assistant">
       <div class="smart-assistant-copy">
         <p>Smart Food Assistant</p>
@@ -594,28 +616,6 @@ Verify OTP
         <button type="button" data-ai-intent="freeDelivery">Free delivery help</button>
       </div>
       <div class="smart-assistant-results" id="smartAssistantResults"></div>
-    </section>
-
-    <section class="premium-rails reveal-on-scroll" id="offersSection">
-      <div class="rail-head">
-        <div>
-          <p>Live offers</p>
-          <h2>MAGNEETOZ Deals</h2>
-        </div>
-        <button type="button" onclick="enableMagneetozOffers()">Enable Alerts</button>
-      </div>
-      <div class="offer-rail" id="offerRail"></div>
-    </section>
-
-    <section class="premium-rails reveal-on-scroll" id="combosSection">
-      <div class="rail-head">
-        <div>
-          <p>Combo management</p>
-          <h2>Active Combos</h2>
-        </div>
-        <button type="button" data-scroll-target="#menuSection">Add more</button>
-      </div>
-      <div class="combo-rail" id="comboRail"></div>
     </section>
 
     <section class="experience-grid reveal-on-scroll">
@@ -1149,7 +1149,7 @@ Verify OTP
 
   <!-- MODULES -->
   <script type="module" src="./firebase.js?v=20260524-restaurant-location"></script>
-  <script type="module" src="./auth.js?v=20260613-otp-autofill"></script>
+  <script type="module" src="./auth.js?v=20260613-recaptcha-otp-fix"></script>
 <script type="module" src="./script.js?v=20260613-production-flow"></script>
 
 <script>

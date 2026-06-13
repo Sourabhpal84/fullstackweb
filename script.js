@@ -2896,23 +2896,61 @@ registerGlobalSnapshot(onSnapshot(query(collection(db, "offers"), orderBy("creat
     .map(item => ({ id:item.id, ...item.data() }))
     .filter(offer => offer.active !== false && offer.deleted !== true)
     .slice(0, 8);
-  host.innerHTML = offers.map(offer => `
-    <article class="offer-card">
-      <img src="${escapeHTML(normalizeImageUrl(offer.image))}" alt="${escapeHTML(offer.title || "Offer")}" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
-      <div>
-        <span>${offer.couponCode ? "Use code" : "Magneetoz offer"}</span>
-        <h3>${escapeHTML(offer.title || "Special Offer")}</h3>
-        <p>${escapeHTML(offer.description || offer.notificationBody || "")}</p>
-        ${offer.couponCode ? `<button type="button" onclick="applyCoupon('${escapeHTML(offer.couponCode)}')">${escapeHTML(offer.couponCode)}</button>` : ""}
-      </div>
-    </article>
-  `).join("") || `<p class="coupon-empty">Fresh offers will appear here.</p>`;
+  host.innerHTML = offers.map(renderLiveOfferCard).join("") || `<p class="coupon-empty">Fresh offers will appear here.</p>`;
   const newest = offers[0];
   if(newest && sessionStorage.getItem("lastOfferSeen") !== newest.id){
     sessionStorage.setItem("lastOfferSeen", newest.id);
     notifyPremiumUI("magneetoz:offer-live", newest);
   }
 }));
+
+function offerSizeRows(offer = {}){
+  const raw = offer.sizePrices || offer.sizes || offer.variants || offer.priceOptions || [];
+  if(Array.isArray(raw)){
+    return raw.map(item => ({
+      label:item.label || item.name || item.size || "",
+      price:Number(item.price || item.offerPrice || item.discountedPrice || 0),
+      oldPrice:Number(item.oldPrice || item.originalPrice || item.marketPrice || 0)
+    })).filter(item => item.label && item.price > 0).slice(0, 4);
+  }
+  if(raw && typeof raw === "object"){
+    return Object.entries(raw).map(([label, value]) => ({
+      label,
+      price:Number(typeof value === "object" ? (value.price || value.offerPrice || value.discountedPrice) : value),
+      oldPrice:Number(typeof value === "object" ? (value.oldPrice || value.originalPrice || value.marketPrice || 0) : 0)
+    })).filter(item => item.label && item.price > 0).slice(0, 4);
+  }
+  return [];
+}
+
+function renderLiveOfferCard(offer = {}){
+  const code = String(offer.couponCode || "").trim();
+  const image = normalizeImageUrl(offer.image || offer.imageUrl || offer.photo || "logo_tran.jpeg");
+  const sizes = offerSizeRows(offer);
+  const isSizeBased = sizes.length || offer.cardType === "size_based" || offer.offerType === "size_based";
+  return `
+    <article class="offer-card ${isSizeBased ? "offer-card-size" : "offer-card-simple"}">
+      <img src="${escapeHTML(image)}" alt="${escapeHTML(offer.title || "Offer")}" width="92" height="92" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
+      <div>
+        <span>${isSizeBased ? "Size based offer" : (code ? "Use code" : "Magneetoz offer")}</span>
+        <h3>${escapeHTML(offer.title || "Special Offer")}</h3>
+        <p>${escapeHTML(offer.description || offer.notificationBody || "")}</p>
+        ${isSizeBased ? `
+          <div class="offer-size-list">
+            ${sizes.map(size => `
+              <div class="offer-size-row">
+                <b>${escapeHTML(size.label)}</b>
+                <strong>${formatCurrency(size.price)}</strong>
+                ${size.oldPrice ? `<del>${formatCurrency(size.oldPrice)}</del>` : ""}
+              </div>
+            `).join("") || `<div class="offer-size-row"><b>Multiple sizes</b><strong>Live</strong></div>`}
+          </div>
+        ` : ""}
+        ${code ? `<button type="button" onclick="applyCoupon('${escapeHTML(code)}')">${escapeHTML(code)}</button>` : ""}
+      </div>
+    </article>
+  `;
+}
 
 registerGlobalSnapshot(onSnapshot(query(collection(db, "combos"), orderBy("createdAt", "desc")), (snapshot) => {
   const host = document.getElementById("comboRail");
