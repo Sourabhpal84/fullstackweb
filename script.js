@@ -478,6 +478,10 @@ async function retryCapturedPaymentRecovery(){
     }
   }catch(error){
     console.warn("Payment recovery retry failed", error);
+    if(/belongs to another user/i.test(error?.message || "")){
+      clearRazorpayPaymentRecovery();
+      setCheckoutLoading(false);
+    }
   }
 }
 
@@ -1196,6 +1200,7 @@ function setCheckoutLoading(active, message = "Processing your order..."){
 function setCheckoutRetry(message, retryFn){
   const loader = document.getElementById("globalLoader");
   if(!loader) return;
+  document.body?.classList.add("checkout-busy");
   loader.style.display = "flex";
   const isPaymentStatus = /payment|confirming|paid/i.test(message || "");
   loader.innerHTML = `<div class="checkout-loader-card"><b>${escapeHTML(message)}</b><span>Your cart is safe. Try again when the connection is stable.</span><button type="button" id="checkoutRetryBtn">${isPaymentStatus ? "Check payment status" : "Retry"}</button></div>`;
@@ -1754,11 +1759,28 @@ async function saveCustomerProfile(user){
   }
 }
 
+function compactCartForStorage(items = []){
+  return (Array.isArray(items) ? items : []).map(item => {
+    const image = String(item.image || item.imageUrl || item.thumbnail || "");
+    return {
+      id:String(item.id || "").slice(0, 120),
+      name:String(item.name || "").slice(0, 160),
+      size:String(item.size || "").slice(0, 80),
+      category:String(item.category || "").slice(0, 120),
+      price:Number(item.price || 0),
+      qty:Number(item.qty || item.quantity || 1),
+      quantity:Number(item.quantity || item.qty || 1),
+      image:!image || /^data:/i.test(image) ? "" : image.slice(0, 700)
+    };
+  });
+}
+
 function persistGuestState(){
   clearTimeout(guestStatePersistTimer);
   guestStatePersistTimer = setTimeout(() => {
+    const compactCart = compactCartForStorage(cart);
     localStorage.setItem(GUEST_CART_KEY, JSON.stringify({
-      cart,
+      cart:compactCart,
       activeCouponCode:activeCoupon?.code || "",
       updatedAt:Date.now()
     }));
@@ -1804,11 +1826,12 @@ async function mergeGuestCartWithUser(user){
   if(!activeCoupon) applyReferralCouponIfPossible();
   updateCart();
   if(user?.uid){
+    const compactCart = compactCartForStorage(cart);
     await setDoc(doc(db, "users", user.uid), {
       uid:user.uid,
       guestCartMergedAt:serverTimestamp(),
       lastCheckoutState:{
-        cart,
+        cart:compactCart,
         couponCode:activeCoupon?.code || "",
         ...getCheckoutFields()
       }
@@ -4248,6 +4271,106 @@ console.timeEnd("UPI_ORDER_TOTAL");
 }
 }
 
+async function payPendingOrder(orderId){
+  if(!orderId) return;
+  if (typeof Razorpay === "undefined") {
+    alert("Payment gateway is loading. Please try again in a moment.");
+    return;
+  }
+  if(razorpayInFlight){
+    alert("Payment is already opening. Please wait.");
+    return;
+  }
+  razorpayInFlight = true;
+  isOrderProcessing = true;
+  let razorpayOpened = false;
+  let paymentSession = null;
+  try{
+    setCheckoutLoading(true, "Opening secure payment...");
+    paymentSession = await callPaymentFunction("resumeOrderPayment", { orderId }, 20000);
+    if(paymentSession.alreadyPaid){
+      finishSuccessfulCheckout(paymentSession.orderNumber, { clearCart:false });
+      return;
+    }
+    const sessionAmount = Number(paymentSession.amount);
+    const sessionAmountPaise = Number(paymentSession.amountPaise || Math.round(sessionAmount * 100));
+    if(!paymentSession.paymentSessionId || !paymentSession.razorpayOrderId || !paymentSession.keyId || !Number.isFinite(sessionAmountPaise) || sessionAmountPaise <= 0){
+      throw new Error("Payment session was not created correctly. Please try again.");
+    }
+    rememberPaymentSessionRecovery({
+      paymentSessionId:paymentSession.paymentSessionId,
+      razorpayOrderId:paymentSession.razorpayOrderId,
+      amount:sessionAmount
+    });
+    setCheckoutLoading(false);
+    const options = {
+      key:paymentSession.keyId,
+      amount:sessionAmountPaise,
+      currency:String(paymentSession.currency || "INR").toUpperCase(),
+      name:"Magneetoz",
+      description:"Complete your order payment",
+      order_id:String(paymentSession.razorpayOrderId),
+      theme:{ color:"#ff7b00" },
+      handler:async function(response){
+        let keepRetryOverlay = false;
+        try{
+          rememberPaymentSessionRecovery({
+            paymentId:response.razorpay_payment_id,
+            razorpayOrderId:response.razorpay_order_id,
+            razorpaySignature:response.razorpay_signature,
+            paymentSessionId:paymentSession.paymentSessionId,
+            amount:sessionAmount
+          });
+          setCheckoutLoading(true, "Verifying payment and updating your order...");
+          const verifiedOrder = await callPaymentFunction("verifyPaymentAndCreateOrder", {
+            paymentSessionId:paymentSession.paymentSessionId,
+            razorpay_order_id:response.razorpay_order_id,
+            razorpay_payment_id:response.razorpay_payment_id,
+            razorpay_signature:response.razorpay_signature
+          }, 35000);
+          clearRazorpayPaymentRecovery();
+          finishSuccessfulCheckout(verifiedOrder.orderNumber, { clearCart:false });
+        }catch(error){
+          console.error("PAY NOW ERROR:", error);
+          keepRetryOverlay = true;
+          setCheckoutRetry("Payment received. We are updating your order safely.", async () => {
+            await recoverPendingPaymentSession(paymentSession.paymentSessionId);
+          });
+          recoverPendingPaymentSession(paymentSession.paymentSessionId).catch(() => {});
+        }finally{
+          if(!keepRetryOverlay){
+            setCheckoutLoading(false);
+            resetRazorpayCheckoutState();
+          }else{
+            isOrderProcessing = false;
+            razorpayInFlight = false;
+          }
+        }
+      },
+      modal:{
+        ondismiss:function(){
+          resetRazorpayCheckoutState();
+        }
+      }
+    };
+    const rzp = new Razorpay(options);
+    rzp.on("payment.failed", function(response){
+      resetRazorpayCheckoutState();
+      alert(response?.error?.description || "Payment failed. You can try again from this order.");
+    });
+    razorpayOpened = true;
+    rzp.open();
+    armRazorpayOpenWatchdog();
+  }catch(error){
+    console.error("PAY NOW OPEN ERROR:", error);
+    setCheckoutRetry(error?.message || "Payment could not open. Please try again.", () => payPendingOrder(orderId));
+  }finally{
+    if(!razorpayOpened && razorpayInFlight) resetRazorpayCheckoutState();
+  }
+}
+
+window.payPendingOrder = payPendingOrder;
+
 /* ================= WHATSAPP ================= */
 
 function showOrderSuccess(orderNumber){
@@ -4271,10 +4394,13 @@ const popup = document.getElementById("orderPopup");
 if(popup) popup.style.display="none";
 }
 
-function finishSuccessfulCheckout(orderNumber){
+function finishSuccessfulCheckout(orderNumber, options = {}){
+  const shouldClearCart = options.clearCart !== false;
+  try{ setCheckoutLoading(false); }catch(error){ console.warn("Checkout loader close skipped", error); }
+  try{ resetRazorpayCheckoutState(); }catch(error){ console.warn("Razorpay state reset skipped", error); }
   try{ closePaymentPopup(); }catch(error){ console.warn("Payment popup close skipped", error); }
   try{ showOrderSuccess(orderNumber); }catch(error){ console.warn("Order success popup skipped", error); }
-  try{ resetCart(); }catch(error){ console.warn("Cart reset skipped", error); }
+  if(shouldClearCart) try{ resetCart(); }catch(error){ console.warn("Cart reset skipped", error); }
   try{ clearRazorpayPaymentRecovery(); }catch(error){ console.warn("Payment recovery clear skipped", error); }
 }
 
@@ -4596,6 +4722,8 @@ document.getElementById("trackingLoader");
 
 const emptyOrders =
 document.getElementById("emptyOrders");
+const trackingStatusStrip =
+document.getElementById("trackingStatusStrip");
 
 /* STORE */
 
@@ -4781,6 +4909,7 @@ function renderOrders(){
     );
 
   });
+  updateTrackingStatusStrip(filtered);
 
   /* EMPTY */
 
@@ -5021,6 +5150,39 @@ order.status === "Delivered"
 
 }
 
+function updateTrackingStatusStrip(orders = []){
+  if(!trackingStatusStrip) return;
+  const active = orders.filter(order => !["Delivered","Cancelled","Rejected"].includes(normalizeTimelineStatus(order.status)));
+  if(!active.length){
+    trackingStatusStrip.classList.remove("show");
+    trackingStatusStrip.innerHTML = "";
+    return;
+  }
+  const latest = active[0];
+  const status = normalizeTimelineStatus(latest.status);
+  const labelMap = {
+    Pending:"Order received",
+    payment_pending:"Payment pending",
+    "Payment Pending":"Payment pending",
+    Accepted:"Accepted",
+    Preparing:"Preparing",
+    "Searching For Rider":"Finding rider",
+    "Rider Assigned":"Rider assigned",
+    "Picked Up":"Picked up",
+    "Out For Delivery":"Out for delivery",
+    Nearby:"Nearby",
+    "Delivery Code Pending":"Delivery OTP ready",
+    "Payment Completed":"Payment completed"
+  };
+  const totalActive = active.length;
+  trackingStatusStrip.classList.add("show");
+  trackingStatusStrip.innerHTML = `
+    <span class="tracking-status-dot"></span>
+    <strong>${escapeHTML(labelMap[status] || status || "Order updating")}</strong>
+    <small>${totalActive > 1 ? `${totalActive} active orders` : `Order #${escapeHTML(latest.orderNumber || latest.id || "")}`}</small>
+  `;
+}
+
 function buildRiderLiveMapHTML(order){
   const location = order.riderLocation || {};
   const riderLat = Number(location.lat);
@@ -5112,10 +5274,14 @@ function buildCancelWindowHTML(order){
 }
 
 function buildPaymentTrackingHTML(order){
-  if(!["Out For Delivery","Reached Nearby","Collect Payment","Cash Collected","Payment Settled","Payment Completed","Delivery Code Pending","Delivered"].includes(order.status)) return "";
+  const statusText = normalizeTimelineStatus(order.status);
   const paymentStatus = String(order.paymentStatus || "").toLowerCase();
   const paymentMethod = String(order.paymentMethod || order.paymentMode || "").toLowerCase();
   const paid = paymentStatus === "paid" || paymentStatus === "collected" || order.paymentCaptured === true || !!order.razorpayPaymentId;
+  const canPayNow = !paid
+    && !["Delivered","Cancelled","Rejected"].includes(statusText)
+    && Number(order.totalAmount || order.amount || order.amountToCollect || 0) >= 10;
+  if(!canPayNow && !["Out For Delivery","Reached Nearby","Collect Payment","Cash Collected","Payment Settled","Payment Completed","Delivery Code Pending","Delivered"].includes(order.status)) return "";
   const methodLabel = paymentMethod === "online" || paymentMethod === "upi" ? "Online" : paymentMethod === "cod" || paymentMethod === "cash" ? "COD" : (order.paymentMethod || "CASH/UPI");
   const codeExpiresAt = timestampToMillis(order.deliveryAuthorizationCodeExpiresAt);
   const showDeliveryCode = (order.status === "Delivery Code Pending" || order.deliveryOtpStatus === "active") && (!codeExpiresAt || Date.now() < codeExpiresAt);
@@ -5132,6 +5298,7 @@ function buildPaymentTrackingHTML(order){
       <span class="${paid ? "paid" : "pending"}">${paid ? "Payment Received" : "Payment Pending"}</span>
       <strong>${methodLabel}</strong>
       <p>Status: ${paid ? "paid" : (order.paymentStatus || "pending")}</p>
+      ${canPayNow ? `<button type="button" class="pay-now-order-btn" onclick="payPendingOrder('${escapeHTML(order.id)}')">Pay now</button>` : ""}
       ${showDeliveryCode ? `<p><strong>Delivery OTP: <span data-delivery-code-order="${escapeHTML(order.id)}">Loading</span></strong></p><p>${codeHelp}</p>` : ""}
       ${prepaidOtpPending ? `<p><strong>Delivery OTP: generating...</strong></p><p>${codeHelp}</p>` : ""}
     </div>

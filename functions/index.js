@@ -835,6 +835,142 @@ exports.verifyPaymentAndCreateOrder = onRequest(
   }
 );
 
+exports.resumeOrderPayment = onRequest(
+  {
+    region: "asia-south1",
+    cors: allowedWebOrigins()
+  },
+  async (req, res) => {
+    if (req.method === "OPTIONS") return sendJson(res, 204, {});
+    if (req.method !== "POST") return sendJson(res, 405, { ok: false, error: "Method not allowed" });
+    try {
+      const user = await requireAuth(req);
+      const orderId = compactText(req.body?.orderId, 160);
+      if (!orderId) throw Object.assign(new Error("Order id is required"), { status: 400 });
+      const razorpayKeyId = env("RAZORPAY_KEY_ID");
+      if (!razorpayKeyId) throw Object.assign(new Error("Razorpay key is not configured"), { status: 500 });
+
+      const orderRef = db.collection("orders").doc(orderId);
+      const orderSnap = await orderRef.get();
+      if (!orderSnap.exists) throw Object.assign(new Error("Order not found"), { status: 404 });
+      const order = { orderId, ...orderSnap.data() };
+      if (order.userId !== user.uid) throw Object.assign(new Error("This order belongs to another user"), { status: 403 });
+      if (String(order.paymentStatus || "").toLowerCase() === "paid" || order.paymentCaptured === true) {
+        return sendJson(res, 200, {
+          ok: true,
+          alreadyPaid: true,
+          orderId,
+          orderNumber: order.orderNumber || "",
+          paymentStatus: "paid"
+        });
+      }
+      if (["Delivered", "Cancelled", "Rejected"].includes(order.status)) {
+        throw Object.assign(new Error("Payment cannot be changed for this order."), { status: 409 });
+      }
+
+      const amount = normalizeAmount(order.totalAmount || order.amount || order.amountToCollect || order.grandTotal || order.finalAmount);
+      if (amount < 10) throw Object.assign(new Error("Online payment is available for orders of ₹10 or more."), { status: 400 });
+      const amountPaise = Math.round(amount * 100);
+      const existingSessionId = compactText(order.paymentSessionId, 160);
+      if (existingSessionId) {
+        const sessionSnap = await db.collection("paymentSessions").doc(existingSessionId).get();
+        const session = sessionSnap.exists ? sessionSnap.data() || {} : {};
+        if (
+          sessionSnap.exists &&
+          session.userId === user.uid &&
+          session.orderId === orderId &&
+          session.razorpayOrderId &&
+          Number(session.amountPaise) === amountPaise &&
+          session.status !== "order_created"
+        ) {
+          return sendJson(res, 200, {
+            ok: true,
+            paymentSessionId: existingSessionId,
+            razorpayOrderId: session.razorpayOrderId,
+            amount: session.amount || amount,
+            amountPaise,
+            currency: session.currency || "INR",
+            keyId: razorpayKeyId,
+            orderId
+          });
+        }
+      }
+
+      const paymentSessionId = crypto.createHash("sha256").update(`${user.uid}:${orderId}:${amountPaise}:resume-order-payment-v1`).digest("hex");
+      const sessionRef = db.collection("paymentSessions").doc(paymentSessionId);
+      const existingSession = await sessionRef.get();
+      if (existingSession.exists && existingSession.data().razorpayOrderId) {
+        const session = existingSession.data();
+        return sendJson(res, 200, {
+          ok: true,
+          paymentSessionId,
+          razorpayOrderId: session.razorpayOrderId,
+          amount: session.amount || amount,
+          amountPaise,
+          currency: session.currency || "INR",
+          keyId: razorpayKeyId,
+          orderId
+        });
+      }
+
+      const cartSnapshot = compactCart(order.items || order.cart || order.cartSnapshot || []);
+      const draft = compactOrderDraft(order.orderDraft || order, cartSnapshot);
+      const razorpayOrder = await getRazorpay().orders.create({
+        amount: amountPaise,
+        currency: "INR",
+        receipt: paymentSessionId.slice(0, 40),
+        notes: {
+          paymentSessionId,
+          orderId,
+          userId: user.uid,
+          source: "customer_pay_now"
+        }
+      });
+
+      await sessionRef.set({
+        id: paymentSessionId,
+        idempotencyKey: `pay-now:${orderId}`,
+        userId: user.uid,
+        orderId,
+        amount,
+        amountPaise,
+        currency: "INR",
+        cart: cartSnapshot,
+        orderDraft: draft,
+        razorpayOrderId: razorpayOrder.id,
+        status: "created",
+        lockState: "open",
+        attempts: 0,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: false });
+
+      await orderRef.set({
+        paymentSessionId,
+        razorpayOrderId: razorpayOrder.id,
+        paymentStatus: "pending",
+        onlinePaymentAvailable: true,
+        updatedAt: FieldValue.serverTimestamp(),
+        timeline: FieldValue.arrayUnion({ status: "payment_retry_created", source: "customer_pay_now", at: Date.now() })
+      }, { merge: true });
+
+      return sendJson(res, 200, {
+        ok: true,
+        paymentSessionId,
+        razorpayOrderId: razorpayOrder.id,
+        amount,
+        amountPaise,
+        currency: "INR",
+        keyId: razorpayKeyId,
+        orderId
+      });
+    } catch (error) {
+      logger.error("resumeOrderPayment failed", { error: error.message });
+      return sendJson(res, error.status || 500, { ok: false, error: error.message || "Payment resume failed" });
+    }
+  }
+);
+
 exports.verifyPaymentLinkAndCreateOrder = onRequest(
   {
     region: "asia-south1",
