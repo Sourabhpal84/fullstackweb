@@ -656,6 +656,7 @@ const ORDER_STATUS_FLOW = [
   "Pending",
   "Accepted",
   "Preparing",
+  "Ready",
   "Searching For Rider",
   "Rider Assigned",
   "Picked Up",
@@ -4990,6 +4991,7 @@ const timelineSteps = [
   "Pending",
   "Accepted",
   "Preparing",
+  "Ready",
   "Searching For Rider",
   "Rider Assigned",
   "Picked Up",
@@ -5307,7 +5309,11 @@ function buildRiderLiveMapHTML(order){
 
 function normalizeTimelineStatus(status){
   if(status === "Assigned To Delivery Boy") return "Rider Accepted";
-  if(status === "Ready") return "Preparing";
+  if(status === "Ready" || status === "ready_for_pickup") return "Ready";
+  if(status === "rider_searching") return "Searching For Rider";
+  if(status === "rider_assigned" || status === "rider_accepted") return "Rider Assigned";
+  if(status === "picked_up") return "Picked Up";
+  if(status === "out_for_delivery") return "Out For Delivery";
   if(status === "Searching Rider") return "Searching For Rider";
   if(status === "Rider Accepted") return "Rider Assigned";
   if(status === "Collect Payment" || status === "Reached Nearby") return "Nearby";
@@ -5341,11 +5347,13 @@ function buildCancelWindowHTML(order){
 function canPayForOrder(order = {}){
   const statusText = normalizeTimelineStatus(order.status || order.orderStatus || order.lifecycleStatus || "");
   const paymentStatus = String(order.paymentStatus || "").toLowerCase();
+  const method = String(order.paymentMethod || order.paymentMode || "").toLowerCase();
   const paid = paymentStatus === "paid" || paymentStatus === "collected" || order.paymentCaptured === true || !!order.razorpayPaymentId;
   const amount = Number(order.totalAmount || order.amount || order.amountToCollect || order.grandTotal || order.finalAmount || 0);
   return !paid
     && !["Delivered","Cancelled","Rejected"].includes(statusText)
-    && amount >= 10;
+    && amount >= 10
+    && (method === "online" || method === "upi" || method === "cod" || method === "cash" || paymentStatus === "pending");
 }
 
 function buildPayNowActionHTML(order = {}){
@@ -5371,7 +5379,7 @@ function buildPaymentTrackingHTML(order){
   const paymentMethod = String(order.paymentMethod || order.paymentMode || "").toLowerCase();
   const paid = paymentStatus === "paid" || paymentStatus === "collected" || order.paymentCaptured === true || !!order.razorpayPaymentId;
   const canPayNow = canPayForOrder(order);
-  if(!canPayNow && !["Out For Delivery","Reached Nearby","Collect Payment","Cash Collected","Payment Settled","Payment Completed","Delivery Code Pending","Delivered"].includes(order.status)) return "";
+  if(!canPayNow && !["Out For Delivery","Reached Nearby","Nearby","Collect Payment","Cash Collected","Payment Settled","Payment Completed","Delivery Code Pending","Delivered"].includes(statusText)) return "";
   const methodLabel = paymentMethod === "online" || paymentMethod === "upi" ? "Online" : paymentMethod === "cod" || paymentMethod === "cash" ? "COD" : (order.paymentMethod || "CASH/UPI");
   const codeExpiresAt = timestampToMillis(order.deliveryAuthorizationCodeExpiresAt);
   const showDeliveryCode = (order.status === "Delivery Code Pending" || order.deliveryOtpStatus === "active") && (!codeExpiresAt || Date.now() < codeExpiresAt);

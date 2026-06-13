@@ -484,19 +484,24 @@ window.loadOrders = function(filter) {
   ordersUnsub = onSnapshot(q, (snap) => {
     const container = document.getElementById("orders");
     container.innerHTML = "";
-    snap.forEach(docSnap => {
+    const docs = [];
+    snap.forEach(docSnap => docs.push(docSnap));
+    docs
+      .sort((a,b) => tsMillis(b.data().createdAt) - tsMillis(a.data().createdAt))
+      .forEach(docSnap => {
       const d = docSnap.data();
+      const displayStatus = normalizeStatus(d.status || d.orderStatus || "Pending");
       const method = String(d.paymentMethod || d.paymentMode || "").toLowerCase();
       const paidOnline = (method === "online" || method === "upi") && (String(d.paymentStatus || "").toLowerCase() === "paid" || d.paymentCaptured === true || !!d.razorpayPaymentId);
       const pendingOnlineDraft = (method === "online" || method === "upi") && !paidOnline;
       if(pendingOnlineDraft && filter !== "Payment Pending") return;
-      if (filter !== "All" && d.status !== filter) return;
+      if (filter !== "All" && displayStatus !== normalizeStatus(filter)) return;
       const badge = paymentBadge(d);
       const paymentLocked = isUnpaidOnline(d);
       
       container.innerHTML += `
         <div class="order-card">
-          <span class="status-badge ${d.status}">${d.status}</span>
+          <span class="status-badge ${displayStatus}">${displayStatus}</span>
           <span class="payment-badge ${badge.cls}">${badge.label}</span>
           <h3>#${d.orderNumber || d.orderId} - ${d.customerName}</h3>
           <div class="info-row">📞 ${d.phone}</div>
@@ -734,21 +739,6 @@ window.requestNearbyRiders = async function(orderId){
     paymentFix.paymentCaptured = true;
     paymentFix.amountToCollect = 0;
   }
-  await updateDoc(orderRef, {
-    status:"Searching For Rider",
-    orderStatus:"Searching For Rider",
-    deliveryStatus:"rider_searching",
-    ...paymentFix,
-    sentToRider:false,
-    riderStatus:"Searching for nearby rider",
-    riderRequest:{
-      status:"queued",
-      candidateRiderIds:[],
-      candidates:[],
-      declinedRiderIds:order.riderRequest?.declinedRiderIds || [],
-      requestedAt:serverTimestamp()
-    }
-  });
   logStructured("RIDER ASSIGNMENT", {
     orderId,
     candidates:"backend_route_selection_pending",
@@ -758,6 +748,9 @@ window.requestNearbyRiders = async function(orderId){
 
   try{
     const result = await callAdminFunction("assignRiderToOrder", { orderId });
+    if(Object.keys(paymentFix).length){
+      await updateDoc(orderRef, paymentFix);
+    }
     toast(result.skipped ? "Rider already assigned" : (result.message || `Rider request sent: ${result.riderName || "Magneetoz Rider"}`));
   }catch(error){
     alert(error.message || "No rider is online right now.");

@@ -378,6 +378,7 @@ let riderUnsub = null;
 let ordersUnsub = null;
 let legacyOrdersUnsub = null;
 let requestOrdersUnsub = null;
+let directRequestsUnsub = null;
 let payoutUnsub = null;
 let riderAuthNullTimer = null;
 let riderHeartbeatTimer = null;
@@ -562,6 +563,8 @@ function normalizeStatus(status){
   if(map[key]) return map[key];
   if(status === "Assigned To Delivery Boy") return "Rider Accepted";
   if(status === "Collect Payment") return "Reached Nearby";
+  if(status === "Ready") return "Ready For Pickup";
+  if(status === "Searching Rider") return "Searching For Rider";
   return status || "Pending";
 }
 
@@ -856,6 +859,7 @@ function listenOrders(){
   ordersUnsub?.();
   legacyOrdersUnsub?.();
   requestOrdersUnsub?.();
+  directRequestsUnsub?.();
 
   const assignedQuery = query(
     collection(db,"orders"),
@@ -903,9 +907,7 @@ function listenOrders(){
   }, error => console.warn("[FIRESTORE LISTENER] Rider request orders failed", error));
 
   const activeRequestStatuses = new Set(["pending", "accepted"]);
-  requestOrdersUnsub = (() => {
-    const embeddedUnsub = requestOrdersUnsub;
-    const directUnsub = onSnapshot(directRequestQuery, async (snap)=>{
+  directRequestsUnsub = onSnapshot(directRequestQuery, async (snap)=>{
       const requestDocs = snap.docs
         .map(item => ({ id:item.id, ...item.data() }))
         .filter(item => activeRequestStatuses.has(String(item.status || "").toLowerCase()));
@@ -934,11 +936,6 @@ function listenOrders(){
       rebuildOrders();
       logStructured("FIRESTORE LISTENER", { name:"riderRequests-direct", count:requestDocs.length });
     }, error => console.warn("[FIRESTORE LISTENER] Direct rider requests failed", error));
-    return () => {
-      embeddedUnsub?.();
-      directUnsub?.();
-    };
-  })();
 }
 
 function enterDashboard(){
@@ -1000,6 +997,8 @@ async function publishRiderLocation(position){
   };
   await updateDoc(riderRef, {
     location,
+    currentLocation:location,
+    lastLocationUpdateAt:serverTimestamp(),
     lastSeenAt:serverTimestamp()
   }).catch(error => console.warn("Rider location profile update skipped:", error));
   const order = activeDeliveryOrder();
@@ -1055,7 +1054,7 @@ async function setOnline(online){
     isOnline:online,
     isAvailable:online ? !activeOrderId : false,
     activeOrderId:activeOrderId || null,
-    ...(location ? { location } : {}),
+    ...(location ? { location, currentLocation:location, lastLocationUpdateAt:serverTimestamp() } : {}),
     lastSeenAt:serverTimestamp()
   });
   if(online){
