@@ -385,6 +385,7 @@ let allOrders = [];
 let assignedOrderDocs = [];
 let legacyAssignedOrderDocs = [];
 let requestOrderDocs = [];
+let directRequestOrderDocs = [];
 let currentFilter = "Requests";
 let riderLocationWatchId = null;
 let lastRiderLocationWriteAt = 0;
@@ -868,10 +869,14 @@ function listenOrders(){
     collection(db,"orders"),
     where("riderRequest.candidateRiderIds","array-contains",rider.riderId)
   );
+  const directRequestQuery = query(
+    collection(db,"riderRequests"),
+    where("riderId","==",rider.riderId)
+  );
 
   const rebuildOrders = () => {
     const byId = new Map();
-    [...assignedOrderDocs, ...legacyAssignedOrderDocs, ...requestOrderDocs].forEach(d => byId.set(d.id, {
+    [...assignedOrderDocs, ...legacyAssignedOrderDocs, ...requestOrderDocs, ...directRequestOrderDocs].forEach(d => byId.set(d.id, {
       id:d.id,
       ...d.data()
     }));
@@ -896,6 +901,24 @@ function listenOrders(){
     rebuildOrders();
     logStructured("FIRESTORE LISTENER", { name:"rider-request-orders", count:snap.size });
   }, error => console.warn("[FIRESTORE LISTENER] Rider request orders failed", error));
+
+  const activeRequestStatuses = new Set(["pending", "accepted"]);
+  requestOrdersUnsub = (() => {
+    const embeddedUnsub = requestOrdersUnsub;
+    const directUnsub = onSnapshot(directRequestQuery, async (snap)=>{
+      const requestDocs = snap.docs
+        .map(item => ({ id:item.id, ...item.data() }))
+        .filter(item => activeRequestStatuses.has(String(item.status || "").toLowerCase()));
+      const orderSnaps = await Promise.all(requestDocs.map(item => getDoc(doc(db,"orders",item.orderId))));
+      directRequestOrderDocs = orderSnaps.filter(item => item.exists());
+      rebuildOrders();
+      logStructured("FIRESTORE LISTENER", { name:"riderRequests-direct", count:requestDocs.length });
+    }, error => console.warn("[FIRESTORE LISTENER] Direct rider requests failed", error));
+    return () => {
+      embeddedUnsub?.();
+      directUnsub?.();
+    };
+  })();
 }
 
 function enterDashboard(){

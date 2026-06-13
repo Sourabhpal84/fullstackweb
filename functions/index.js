@@ -1481,14 +1481,22 @@ async function findNearestAvailableRider(order = {}, excludeIds = []) {
     .filter(rider => rider.online || rider.isOnline)
     .filter(rider => !rider.currentActiveOrderId && !rider.activeOrderId && rider.isAvailable !== false)
     .filter(rider => !excluded.has(rider.id))
-    .map(rider => ({
-      ...rider,
-      distanceKm: distanceKmBetween(restaurantLocation, rider.location || rider.currentLocation)
-    }))
-    .filter(rider => Number.isFinite(rider.distanceKm) && rider.distanceKm < Number.MAX_SAFE_INTEGER)
+    .map(rider => {
+      const location = rider.currentLocation || rider.location;
+      const distanceKm = distanceKmBetween(restaurantLocation, location);
+      return {
+        ...rider,
+        normalizedLocation: pointFrom(location),
+        distanceKm,
+        distanceAvailable: Number.isFinite(distanceKm) && distanceKm < Number.MAX_SAFE_INTEGER
+      };
+    })
     .sort((a, b) => a.distanceKm - b.distanceKm);
-  const radius = [2, 5, 10].find(limit => candidates.some(rider => rider.distanceKm <= limit)) || null;
-  const rider = radius ? candidates.find(item => item.distanceKm <= radius) : null;
+  const withDistance = candidates.filter(rider => rider.distanceAvailable);
+  const radius = [2, 5, 10].find(limit => withDistance.some(rider => rider.distanceKm <= limit)) || null;
+  const rider = radius
+    ? withDistance.find(item => item.distanceKm <= radius)
+    : (withDistance.length ? null : (candidates[0] || null));
   return { rider, radius, candidates, restaurantLocation };
 }
 
@@ -1805,7 +1813,6 @@ async function findCandidateRiders(order = {}) {
     }
   }));
   return routed
-    .filter(rider => Number.isFinite(rider.distance) && rider.distance < Number.MAX_SAFE_INTEGER)
     .sort((a, b) => a.distance - b.distance)
     .slice(0, 8);
 }
@@ -1818,6 +1825,7 @@ exports.assignRiderToOrder = onRequest(
       const adminUser = await requireAdmin(req);
       const orderId = String(req.body?.orderId || "");
       const manualRiderId = String(req.body?.riderId || "");
+      const manualOverride = req.body?.overrideOffline === true;
       if (!orderId) throw Object.assign(new Error("Order id is required"), { status: 400 });
       const orderRef = db.collection("orders").doc(orderId);
       const orderSnap = await orderRef.get();
@@ -1834,19 +1842,29 @@ exports.assignRiderToOrder = onRequest(
         riderSnap = await db.collection("riders").doc(manualRiderId).get();
         if (!riderSnap.exists) throw Object.assign(new Error("Selected rider not found"), { status: 404 });
         const rider = { id: manualRiderId, ...riderSnap.data() };
-        if (rider.approved !== true || rider.active === false || rider.blocked === true || !(rider.online || rider.isOnline) || rider.currentActiveOrderId || rider.activeOrderId || rider.isAvailable === false) {
+        if (rider.approved !== true || rider.active === false || rider.blocked === true || rider.currentActiveOrderId || rider.activeOrderId) {
           throw Object.assign(new Error("Selected rider is not online and available"), { status: 409 });
+        }
+        if (!(rider.online || rider.isOnline) && !manualOverride) {
+          throw Object.assign(new Error("Selected rider is offline. Confirm override to assign manually."), { status: 409 });
         }
         match = { rider, radius: null, restaurantLocation: await restaurantPointForOrder(order) };
       } else {
         match = await findNearestAvailableRider(order, order.riderRequest?.declinedRiderIds || []);
         if (!match.rider) {
+          const hasOnlineCandidates = Array.isArray(match.candidates) && match.candidates.length > 0;
+          const hasAnyLocation = hasOnlineCandidates && match.candidates.some(item => item.distanceAvailable);
+          const errorMessage = !hasOnlineCandidates
+            ? "No rider is online right now."
+            : !hasAnyLocation
+              ? "Riders are online, but their live location is unavailable."
+              : "No rider found within 10 km. You can manually assign any online rider.";
           await orderRef.set({
             status: "Searching For Rider",
             orderStatus: "Searching For Rider",
             deliveryStatus: "rider_searching",
-            riderStatus: "No rider available within 10 km. Try reassign.",
-            failedAssignmentReason: "no_available_rider_within_10km",
+            riderStatus: errorMessage,
+            failedAssignmentReason: !hasOnlineCandidates ? "no_online_rider" : !hasAnyLocation ? "rider_location_unavailable" : "no_rider_within_10km",
             riderRequest: {
               ...(order.riderRequest || {}),
               status: "no_rider_available",
@@ -1862,7 +1880,7 @@ exports.assignRiderToOrder = onRequest(
             createdBy: adminUser.uid,
             createdAt: FieldValue.serverTimestamp()
           });
-          return sendJson(res, 409, { ok: false, error: "No online available rider found within 10 km" });
+          return sendJson(res, 409, { ok: false, error: errorMessage });
         }
         riderSnap = await db.collection("riders").doc(match.rider.id).get();
       }
@@ -1884,8 +1902,52 @@ exports.assignRiderToOrder = onRequest(
         const lockedOrder = lockedOrderSnap.data() || {};
         const lockedRider = lockedRiderSnap.data() || {};
         if (lockedOrder.assignedRiderId || lockedOrder.riderId) throw Object.assign(new Error("A rider is already assigned"), { status: 409 });
-        if (lockedRider.currentActiveOrderId || lockedRider.activeOrderId || lockedRider.isAvailable === false || !(lockedRider.online || lockedRider.isOnline)) {
+        if (lockedRider.currentActiveOrderId || lockedRider.activeOrderId || (!manualRiderId && lockedRider.isAvailable === false) || (!(lockedRider.online || lockedRider.isOnline) && !manualOverride)) {
           throw Object.assign(new Error("Rider became unavailable. Please retry."), { status: 409 });
+        }
+        if (!manualRiderId) {
+          transaction.set(requestRef, {
+            orderId,
+            riderId: rider.id,
+            restaurantLocation: match.restaurantLocation,
+            customerLocation,
+            pickupAddress,
+            dropAddress,
+            estimatedDistance,
+            estimatedEarning: earning,
+            expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 60 * 1000),
+            status: "pending",
+            createdAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+          transaction.update(orderRef, {
+            status: "Searching For Rider",
+            orderStatus: "Searching For Rider",
+            deliveryStatus: "rider_searching",
+            sentToRider: true,
+            riderStatus: "Rider request sent",
+            riderRequest: {
+              ...(lockedOrder.riderRequest || {}),
+              status: "searching",
+              requestId: requestRef.id,
+              candidateRiderIds: [rider.id],
+              candidates: [{
+                id: rider.id,
+                name: rider.name || rider.riderName || "Magneetoz Rider",
+                phone: rider.phone || rider.phoneDigits || "",
+                distance: rider.distanceKm || null,
+                distanceAvailable: rider.distanceAvailable === true
+              }],
+              declinedRiderIds: lockedOrder.riderRequest?.declinedRiderIds || [],
+              requestedAt: FieldValue.serverTimestamp(),
+              searchRadiusKm: match.radius || null
+            },
+            restaurantLocation: match.restaurantLocation,
+            customerLocation: customerLocation || lockedOrder.customerLocation || lockedOrder.location || null,
+            lastStatusUpdatedAt: FieldValue.serverTimestamp()
+          });
+          addDeliveryEvent(transaction, orderId, "RIDER_REQUEST_SENT", { riderId: rider.id, autoAccepted: false });
+          addOrderAudit(transaction, orderId, "RIDER_REQUEST_SENT", { riderId: rider.id, autoAccepted: false });
+          return;
         }
         transaction.set(requestRef, {
           orderId,
@@ -1950,7 +2012,15 @@ exports.assignRiderToOrder = onRequest(
         addDeliveryEvent(transaction, orderId, "RIDER_ASSIGNED", { riderId: rider.id, autoAccepted: true });
         addOrderAudit(transaction, orderId, "RIDER_ASSIGNED", { riderId: rider.id, autoAccepted: true });
       });
-      return sendJson(res, 200, { ok: true, orderId, riderId: rider.id, riderName: rider.name || rider.riderName || "Magneetoz Rider" });
+      return sendJson(res, 200, {
+        ok: true,
+        orderId,
+        riderId: rider.id,
+        riderName: rider.name || rider.riderName || "Magneetoz Rider",
+        requestSent: !manualRiderId,
+        assigned: !!manualRiderId,
+        message: manualRiderId ? "Rider assigned successfully." : "Rider request sent."
+      });
     } catch (error) {
       logger.error("assignRiderToOrder failed", { error: error.message });
       return sendJson(res, error.status || 500, { ok: false, error: error.message || "Rider assignment failed" });

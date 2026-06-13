@@ -669,8 +669,12 @@ window.openManualAssign = async function(orderId){
 
 async function assignSpecificRider(orderId, rider){
   try{
-    const result = await callAdminFunction("assignRiderToOrder", { orderId, riderId:rider.id });
-    toast(result.skipped ? "Rider already assigned" : "Rider assigned");
+    const presence = riderPresence(rider);
+    const overrideOffline = !presence.onlineFlag
+      ? confirm("Selected rider is offline. Assign anyway?")
+      : false;
+    const result = await callAdminFunction("assignRiderToOrder", { orderId, riderId:rider.id, overrideOffline });
+    toast(result.skipped ? "Rider already assigned" : (result.message || "Rider assigned successfully."));
   }catch(error){
     alert(error.message || "Unable to assign rider.");
   }
@@ -728,9 +732,9 @@ window.requestNearbyRiders = async function(orderId){
 
   try{
     const result = await callAdminFunction("assignRiderToOrder", { orderId });
-    toast(result.skipped ? "Rider already assigned" : `Rider assigned: ${result.riderName || "Magneetoz Rider"}`);
+    toast(result.skipped ? "Rider already assigned" : (result.message || `Rider request sent: ${result.riderName || "Magneetoz Rider"}`));
   }catch(error){
-    alert(error.message || "No rider available. Try reassign later.");
+    alert(error.message || "No rider is online right now.");
   }
   logStructured("RIDER MATCHING", { orderId, source:"backend_google_routes" });
 };
