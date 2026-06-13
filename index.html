@@ -367,9 +367,10 @@ Resend OTP
 
       <!-- OTP -->
       <input
-  type="text"
+  type="tel"
   id="otp"
   name="otp"
+  aria-label="One time password"
   placeholder="Enter 6-digit OTP"
   autocomplete="one-time-code"
   inputmode="numeric"
@@ -1148,7 +1149,7 @@ Verify OTP
 
   <!-- MODULES -->
   <script type="module" src="./firebase.js?v=20260524-restaurant-location"></script>
-<script type="module" src="./auth.js?v=20260613-otp-flow"></script>
+  <script type="module" src="./auth.js?v=20260613-otp-autofill"></script>
 <script type="module" src="./script.js?v=20260613-production-flow"></script>
 
 <script>

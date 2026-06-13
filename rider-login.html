@@ -241,7 +241,7 @@ button:not(:disabled):active{transform:scale(.98)}
     <div class="otp-zone" id="otpZone">
       <div class="field">
         <label for="otp">OTP</label>
-        <input id="otp" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="Enter 6 digit OTP">
+        <input id="otp" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" aria-label="One time password" placeholder="Enter 6 digit OTP">
       </div>
       <div class="row">
       <button class="primary" id="verifyOtpBtn">Verify and Continue</button>
@@ -299,6 +299,8 @@ let recaptchaVerifier = null;
 let approvalUnsub = null;
 let otpCooldownUntil = 0;
 let otpVerifyInFlight = false;
+let riderWebOtpController = null;
+let lastRiderAutoOtp = "";
 let deferredInstallPrompt = null;
 
 const els = {
@@ -371,6 +373,37 @@ function phoneValue(){
   return raw;
 }
 
+function prepareRiderOtpInput(){
+  if(!els.otp) return null;
+  els.otp.setAttribute("type", "tel");
+  els.otp.setAttribute("autocomplete", "one-time-code");
+  els.otp.setAttribute("inputmode", "numeric");
+  els.otp.setAttribute("pattern", "[0-9]*");
+  els.otp.setAttribute("maxlength", "6");
+  return els.otp;
+}
+
+function setRiderOtpValue(value = "", { autoVerify = false } = {}){
+  const input = prepareRiderOtpInput();
+  if(!input) return "";
+  const code = String(value || "").replace(/\D/g, "").slice(0, 6);
+  input.value = code;
+  if(code.length < 6){
+    lastRiderAutoOtp = "";
+    return code;
+  }
+  if(autoVerify && /^\d{6}$/.test(code) && !otpVerifyInFlight && lastRiderAutoOtp !== code){
+    lastRiderAutoOtp = code;
+    setTimeout(() => verifyOtp(), 150);
+  }
+  return code;
+}
+
+function stopRiderOtpAutofill(){
+  try{ riderWebOtpController?.abort(); }catch(_){}
+  riderWebOtpController = null;
+}
+
 function riderLoginEmail(phone){
   return `rider.${phone}@magneetoz.local`;
 }
@@ -432,8 +465,9 @@ async function sendOtp(){
     confirmationResult = await signInWithPhoneNumber(auth, `+91${raw}`, await ensureRecaptcha());
     otpCooldownUntil = Date.now() + 30000;
     els.otpZone.classList.add("show");
+    setRiderOtpValue("");
     els.otp.focus();
-    toast("OTP sent successfully", "success");
+    toast("OTP sent. Auto-detecting OTP...", "success");
     startOtpAutofill();
   }catch(error){
     console.error(error);
@@ -461,9 +495,9 @@ async function verifyOtp(){
   setBusy(els.verify, true, "Verifying...");
   try{
     await confirmationResult.confirm(code);
+    stopRiderOtpAutofill();
     toast("OTP verified", "success");
   }catch(error){
-    console.error(error);
     toast("Wrong OTP", "error");
     setBusy(els.verify, false);
   }finally{
@@ -640,17 +674,21 @@ async function handleUser(user){
 
 async function startOtpAutofill(){
   if(!("OTPCredential" in window)) return;
+  stopRiderOtpAutofill();
   try{
-    const ac = new AbortController();
-    setTimeout(() => ac.abort(), 60000);
-    const otp = await navigator.credentials.get({ otp:{ transport:["sms"] }, signal:ac.signal });
+    riderWebOtpController = new AbortController();
+    setTimeout(() => riderWebOtpController?.abort(), 60000);
+    const otp = await navigator.credentials.get({ otp:{ transport:["sms"] }, signal:riderWebOtpController.signal });
     if(otp?.code){
-      els.otp.value = otp.code;
-      verifyOtp();
+      setRiderOtpValue(otp.code, { autoVerify:true });
     }
   }catch(_){}
+  finally{
+    riderWebOtpController = null;
+  }
 }
 
+prepareRiderOtpInput();
 els.phone.addEventListener("input", phoneValue);
 els.send.addEventListener("click", sendOtp);
 els.resend.addEventListener("click", sendOtp);
@@ -664,8 +702,7 @@ els.otp.addEventListener("keyup", (event) => {
   if(event.key === "Enter") verifyOtp();
 });
 els.otp.addEventListener("input", () => {
-  els.otp.value = els.otp.value.replace(/\D/g, "").slice(0, 6);
-  if(els.otp.value.length === 6) verifyOtp();
+  setRiderOtpValue(els.otp.value, { autoVerify:true });
 });
 
 window.addEventListener("beforeinstallprompt", event => {

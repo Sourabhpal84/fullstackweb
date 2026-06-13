@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:Poppins,system-ui,sans-serif;background:#080d14;color:#fff;padding:18px}.admin-auth-checking body{display:none}.wrap{max-width:1180px;margin:auto}.head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:18px}.admin-logout-btn,button{border:0;border-radius:13px;min-height:42px;padding:0 14px;font-weight:900;cursor:pointer}.admin-logout-btn,.soft{background:#1d2938;color:#fff}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}.card,.panel{background:linear-gradient(145deg,#111827,#1b2534);border:1px solid #2b3648;border-radius:20px;padding:16px;box-shadow:0 18px 60px rgba(0,0,0,.28)}.preview{height:110px;border-radius:16px;margin-bottom:12px;border:1px solid rgba(255,255,255,.12);display:grid;place-items:center;font-weight:900}.actions{display:flex;gap:8px;flex-wrap:wrap}.apply{background:linear-gradient(135deg,#ff7b00,#ffd166);color:#111}.panel{margin-top:18px}textarea{width:100%;min-height:170px;border-radius:16px;background:#0b0f14;color:#fff;border:1px solid #334155;padding:12px;font:700 12px ui-monospace,Consolas,monospace}.hero-upload{margin-top:10px;border:1px dashed #334155;border-radius:16px;padding:14px;background:#0b0f14;color:#cbd5e1;font-weight:800}.hero-upload input{height:auto;padding:10px}.upload-note{display:block;margin-top:8px;color:#94a3b8;font-size:12px}.builder{display:grid;grid-template-columns:1.05fr .95fr;gap:16px;align-items:start}.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}label{display:grid;gap:7px;color:#cbd5e1;font-size:12px;font-weight:800}input,select{width:100%;height:42px;border-radius:12px;border:1px solid #334155;background:#0b0f14;color:#fff;padding:0 10px;font-weight:800}input[type=color]{padding:4px}.food-preview{background:var(--menu-card-bg);border:1px solid var(--menu-card-border);box-shadow:var(--menu-card-shadow);border-radius:24px;padding:14px;max-width:280px}.food-preview .img{height:120px;border-radius:18px;background:linear-gradient(135deg,#ff7b00,#22c55e);margin-bottom:14px}.food-preview h3{width:max-content;max-width:100%;padding:8px 12px;border-radius:12px;background:var(--menu-title-bg);color:var(--menu-title-text);margin:0 0 8px;font-size:26px;line-height:1.08;font-weight:950}.food-preview p{color:var(--menu-desc-text);font-weight:800;margin:0 0 12px}.food-preview .price{display:inline-flex;padding:5px 9px;border-radius:999px;background:var(--menu-price-bg);color:var(--menu-price-text);font-weight:950}.food-preview del{color:var(--menu-old-price-text);margin-left:8px}.food-preview .qty{display:flex;justify-content:space-between;align-items:center;margin:12px 0;padding:8px;background:var(--menu-qty-bg);color:var(--menu-qty-text);border:1px solid var(--menu-card-border)}.food-preview .qty b{background:var(--menu-qty-btn-bg);color:var(--menu-qty-btn-text);border-radius:999px;padding:2px 9px}.food-preview .add{display:inline-flex;padding:10px 22px;border-radius:999px;background:var(--menu-add-bg);color:var(--menu-add-text);font-weight:900}@media(max-width:820px){.builder{grid-template-columns:1fr}}
+.hero-manager{display:grid;grid-template-columns:1fr 320px;gap:14px;margin-top:14px}.hero-list{display:grid;gap:10px}.hero-item{display:grid;grid-template-columns:84px 1fr auto;gap:10px;align-items:center;padding:10px;border:1px solid #334155;border-radius:16px;background:#0b0f14}.hero-item img{width:84px;height:58px;object-fit:cover;border-radius:12px;background:#111827}.hero-item strong{display:block;font-size:12px}.hero-item small{display:block;color:#94a3b8;font-size:11px}.hero-item .mini-actions{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}.hero-item button{min-height:32px;padding:0 9px;border-radius:10px}.hero-item.inactive{opacity:.48}.hero-preview{height:210px;border-radius:18px;overflow:hidden;border:1px solid #334155;background:#0b0f14;position:relative}.hero-preview img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;animation:heroAdminPreview 12s infinite}.hero-preview img:nth-child(1){animation-delay:0s}.hero-preview img:nth-child(2){animation-delay:3s}.hero-preview img:nth-child(3){animation-delay:6s}.hero-preview img:nth-child(4){animation-delay:9s}.progress-track{display:block;width:100%;height:8px;border-radius:99px;background:#1e293b;overflow:hidden;margin-top:8px}.progress-track i{display:block;width:0;height:100%;background:linear-gradient(90deg,#22c55e,#facc15);transition:.2s}@keyframes heroAdminPreview{0%,22%{opacity:1}28%,100%{opacity:0}}@media(max-width:820px){.hero-manager{grid-template-columns:1fr}.hero-item{grid-template-columns:72px 1fr}.hero-item .mini-actions{grid-column:1/-1;justify-content:flex-start}}
 </style>
 </head>
 <body>
@@ -44,7 +45,18 @@
     <label class="hero-upload">Upload optimized hero images
       <input id="heroImageFiles" type="file" accept="image/*" multiple>
       <span class="upload-note" id="heroUploadStatus">Uploads create WebP thumbnail/mobile/tablet/desktop variants.</span>
+      <span class="progress-track"><i id="heroUploadProgress"></i></span>
     </label>
+    <div class="hero-manager">
+      <div>
+        <h3>Hero Images</h3>
+        <div id="heroImageList" class="hero-list"></div>
+      </div>
+      <div>
+        <h3>Preview</h3>
+        <div id="heroPreviewSlider" class="hero-preview"></div>
+      </div>
+    </div>
     <div class="actions" style="margin-top:14px">
       <button class="apply" id="applyModeHero">Apply Mode & Hero</button>
       <button class="soft" id="resetHeroSettings">Reset Hero</button>
@@ -116,12 +128,12 @@ const heroDefaults={
   backgroundBlur:0,
   backgroundBlackIntensity:24
 };
-let uploadedHeroImageSets=[];
+let managedHeroImages=[];
 const IMAGE_VARIANTS=[
-  {key:"thumbnail",width:320,quality:.72},
-  {key:"mobile",width:400,quality:.78},
-  {key:"tablet",width:800,quality:.78},
-  {key:"desktop",width:1000,quality:.78}
+  {key:"thumbnail",width:200,quality:.68,target:160 * 1024},
+  {key:"mobile",width:400,quality:.76,target:320 * 1024},
+  {key:"tablet",width:800,quality:.72,target:520 * 1024},
+  {key:"desktop",width:1200,quality:.7,target:800 * 1024}
 ];
 function loadImageFile(file){
   return new Promise((resolve,reject)=>{
@@ -149,13 +161,25 @@ async function makeImageVariant(source,width,quality){
   const jpeg=await canvasToBlob(canvas,"image/jpeg",quality);
   return {blob:jpeg,ext:"jpg",contentType:"image/jpeg",width:canvas.width,height:canvas.height};
 }
-async function uploadBlob(path,blob,contentType){
+async function makeTargetImageVariant(source,spec){
+  let quality=spec.quality;
+  let variant=await makeImageVariant(source,spec.width,quality);
+  while(variant.blob?.size > spec.target && quality > .46){
+    quality=Math.round((quality-.08)*100)/100;
+    variant=await makeImageVariant(source,spec.width,quality);
+  }
+  return variant;
+}
+async function uploadBlob(path,blob,contentType,onProgress=()=>{}){
   const task=uploadBytesResumable(ref(storage,path),blob,{contentType,cacheControl:"public,max-age=31536000,immutable"});
-  const uploadPromise=new Promise((resolve,reject)=>task.on("state_changed",null,reject,resolve));
+  const uploadPromise=new Promise((resolve,reject)=>task.on("state_changed",snap=>{
+    const pct=snap.totalBytes?Math.round((snap.bytesTransferred/snap.totalBytes)*100):0;
+    onProgress(pct);
+  },reject,resolve));
   const timeoutPromise=new Promise((_,reject)=>setTimeout(()=>{
     try{task.cancel();}catch(_){}
     reject(new Error("Storage upload timeout. Check internet or deploy storage rules."));
-  },18000));
+  },30000));
   await Promise.race([uploadPromise,timeoutPromise]);
   return getDownloadURL(task.snapshot.ref);
 }
@@ -166,11 +190,23 @@ async function createHeroImageSet(file,index=0){
   try{
     const prepared=[];
     for(const spec of IMAGE_VARIANTS){
-      const variant=await makeImageVariant(source,spec.width,spec.quality);
+      const variant=await makeTargetImageVariant(source,spec);
       prepared.push({spec,variant});
     }
-    const uploads=await Promise.allSettled(prepared.map(({spec,variant})=>
-      uploadBlob(`hero-images/${baseName}/${spec.key}-${variant.width}.${variant.ext}`,variant.blob,variant.contentType)
+    const primary=prepared.find(item=>item.spec.key==="mobile")||prepared[0];
+    heroUploadStatus.textContent=`Uploading ${file.name} mobile image...`;
+    const primaryUrl=await uploadBlob(
+      `hero-images/${baseName}/${primary.spec.key}-${primary.variant.width}.${primary.variant.ext}`,
+      primary.variant.blob,
+      primary.variant.contentType,
+      pct=>heroUploadProgress.style.width=`${Math.min(70,pct*.7)}%`
+    );
+    variants[primary.spec.key]={url:primaryUrl,width:primary.variant.width,height:primary.variant.height,contentType:primary.variant.contentType};
+    const remaining=prepared.filter(item=>item!==primary);
+    const uploads=await Promise.allSettled(remaining.map(({spec,variant},variantIndex)=>
+      uploadBlob(`hero-images/${baseName}/${spec.key}-${variant.width}.${variant.ext}`,variant.blob,variant.contentType,pct=>{
+        heroUploadProgress.style.width=`${70+Math.round(((variantIndex+pct/100)/Math.max(1,remaining.length))*28)}%`;
+      })
         .then(url=>({spec,variant,url}))
     ));
     uploads.forEach(result=>{
@@ -180,12 +216,18 @@ async function createHeroImageSet(file,index=0){
     });
     if(!Object.keys(variants).length) throw new Error("Storage upload did not complete.");
     return {
+      id:`hero_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,
       url:variants.mobile?.url || variants.desktop?.url || variants.thumbnail?.url || "",
+      mobileUrl:variants.mobile?.url || variants.thumbnail?.url || "",
+      desktopUrl:variants.desktop?.url || variants.tablet?.url || variants.mobile?.url || "",
+      tabletUrl:variants.tablet?.url || variants.mobile?.url || "",
       variants,
       width:source.width,
       height:source.height,
       optimized:true,
       storageFolder:`hero-images/${baseName}`,
+      order:index,
+      active:true,
       createdAt:Date.now()
     };
   }finally{
@@ -311,6 +353,77 @@ function clampHeroBlackIntensity(value){
   if(!Number.isFinite(number)) return 24;
   return Math.max(0,Math.min(85,Math.round(number)));
 }
+function legacyHeroImagesToManaged(hero={}){
+  if(Array.isArray(hero.heroImages) && hero.heroImages.length){
+    return hero.heroImages.map((item,index)=>({
+      id:item.id || `hero_${index}_${Date.now()}`,
+      url:item.url || item.mobileUrl || item.desktopUrl || "",
+      mobileUrl:item.mobileUrl || item.url || "",
+      tabletUrl:item.tabletUrl || item.url || "",
+      desktopUrl:item.desktopUrl || item.url || "",
+      variants:item.variants || item.imageSet?.variants || {},
+      order:Number(item.order ?? index),
+      active:item.active !== false,
+      createdAt:item.createdAt || Date.now()
+    })).sort((a,b)=>a.order-b.order);
+  }
+  const images=Array.isArray(hero.images)?hero.images:[];
+  const sets=Array.isArray(hero.imageSets)?hero.imageSets:[];
+  return images.map((url,index)=>({
+    id:`hero_${index}_${Date.now()}`,
+    url,
+    mobileUrl:sets[index]?.variants?.mobile?.url || sets[index]?.url || url,
+    tabletUrl:sets[index]?.variants?.tablet?.url || url,
+    desktopUrl:sets[index]?.variants?.desktop?.url || url,
+    variants:sets[index]?.variants || {},
+    order:index,
+    active:true,
+    createdAt:sets[index]?.createdAt || Date.now()
+  }));
+}
+function syncHeroTextarea(){
+  heroImages.value=managedHeroImages
+    .filter(item=>item.active !== false)
+    .sort((a,b)=>a.order-b.order)
+    .map(item=>item.url || item.mobileUrl || item.desktopUrl)
+    .filter(Boolean)
+    .join("\n");
+}
+function renderHeroImageManager(){
+  managedHeroImages=managedHeroImages.map((item,index)=>({...item,order:index}));
+  syncHeroTextarea();
+  heroImageList.innerHTML=managedHeroImages.length?managedHeroImages.map((item,index)=>`
+    <article class="hero-item ${item.active===false?"inactive":""}">
+      <img src="${item.mobileUrl || item.url || item.desktopUrl}" alt="Hero ${index+1}">
+      <div>
+        <strong>Hero image ${index+1}</strong>
+        <small>${item.active===false?"Inactive":"Active"} · ${item.desktopUrl?"desktop ready":"mobile ready"}</small>
+      </div>
+      <div class="mini-actions">
+        <button type="button" onclick="moveHeroImage(${index},-1)">↑</button>
+        <button type="button" onclick="moveHeroImage(${index},1)">↓</button>
+        <button type="button" onclick="toggleHeroImage(${index})">${item.active===false?"Enable":"Disable"}</button>
+        <button type="button" onclick="deleteHeroImage(${index})">Delete</button>
+      </div>
+    </article>
+  `).join(""):`<p style="color:#94a3b8">No uploaded hero images yet.</p>`;
+  const active=managedHeroImages.filter(item=>item.active!==false).slice(0,4);
+  heroPreviewSlider.innerHTML=active.length?active.map(item=>`<img src="${item.desktopUrl || item.url || item.mobileUrl}" alt="">`).join(""):`<div style="display:grid;place-items:center;height:100%;color:#94a3b8">Upload hero images to preview slider</div>`;
+}
+window.moveHeroImage=(index,delta)=>{
+  const next=index+delta;
+  if(next<0||next>=managedHeroImages.length) return;
+  [managedHeroImages[index],managedHeroImages[next]]=[managedHeroImages[next],managedHeroImages[index]];
+  renderHeroImageManager();
+};
+window.toggleHeroImage=(index)=>{
+  managedHeroImages[index].active=managedHeroImages[index].active===false;
+  renderHeroImageManager();
+};
+window.deleteHeroImage=(index)=>{
+  managedHeroImages.splice(index,1);
+  renderHeroImageManager();
+};
 function paintHeroForm(hero={}){
   heroKicker.value=("kicker" in hero) ? hero.kicker : heroDefaults.kicker;
   heroTitle.value=("title" in hero) ? hero.title : heroDefaults.title;
@@ -323,27 +436,28 @@ function paintHeroForm(hero={}){
   heroSubtitleColor.value=colors.subtitle || heroDefaults.colors.subtitle;
   heroPrimaryColor.value=colors.primaryButton || heroDefaults.colors.primaryButton;
   heroSecondaryColor.value=colors.secondaryButton || heroDefaults.colors.secondaryButton;
-  heroImages.value=Array.isArray(hero.images) ? hero.images.join("\n") : "";
+  managedHeroImages=legacyHeroImagesToManaged(hero);
+  renderHeroImageManager();
   heroBgBlur.value=clampHeroBlur(hero.backgroundBlur ?? heroDefaults.backgroundBlur);
   heroBgBlurValue.textContent=`${heroBgBlur.value}px`;
   heroBgBlackIntensity.value=clampHeroBlackIntensity(hero.backgroundBlackIntensity ?? heroDefaults.backgroundBlackIntensity);
   heroBgBlackIntensityValue.textContent=`${heroBgBlackIntensity.value}%`;
-  uploadedHeroImageSets=Array.isArray(hero.imageSets) ? hero.imageSets : [];
 }
 heroImageFiles.onchange=async()=>{
   const files=[...(heroImageFiles.files||[])].filter(file=>file.type.startsWith("image/")).slice(0,8);
   if(!files.length) return;
   heroUploadStatus.textContent="Optimizing and uploading hero images...";
+  heroUploadProgress.style.width="4%";
   try{
     const sets=[];
     for(let i=0;i<files.length;i++){
       heroUploadStatus.textContent=`Uploading hero image ${i+1}/${files.length}...`;
       sets.push(await createHeroImageSet(files[i],i));
     }
-    uploadedHeroImageSets=[...uploadedHeroImageSets,...sets].slice(-8);
-    const current=heroImages.value.split(/\n+/).map(item=>item.trim()).filter(Boolean);
-    heroImages.value=[...current,...sets.map(item=>item.url)].slice(-8).join("\n");
-    heroUploadStatus.textContent="Hero WebP images uploaded. Click Apply Mode & Hero.";
+    managedHeroImages=[...managedHeroImages,...sets].slice(-12);
+    renderHeroImageManager();
+    heroUploadProgress.style.width="100%";
+    heroUploadStatus.textContent="Hero images uploaded. Click Apply Mode & Hero.";
   }catch(error){
     heroUploadStatus.textContent=`Hero upload failed: ${error?.message || "Please try again."}`;
     alert("Hero image upload failed. You can paste image URLs as fallback.");
@@ -381,7 +495,7 @@ resetHeroSettings.onclick=async()=>{
     name:current.name || "Custom Theme",
     mode:siteMode.value || current.mode || "dark",
     variables:current.variables || {},
-    hero:{...heroDefaults},
+    hero:{...heroDefaults,heroImages:[],imageSets:[]},
     updatedAt:serverTimestamp()
   },{merge:true});
   alert("Hero reset to defaults.");
@@ -393,6 +507,23 @@ siteMode.onchange=()=>{
 };
 applyModeHero.onclick=async()=>{
   const current=await readCurrentTheme();
+  const manualUrls=heroImages.value.split(/\n+/).map(item=>item.trim()).filter(Boolean);
+  const managedUrls=new Set(managedHeroImages.map(item=>item.url || item.mobileUrl || item.desktopUrl));
+  const manualManaged=manualUrls
+    .filter(url=>!managedUrls.has(url))
+    .map((url,index)=>({
+      id:`manual_${Date.now()}_${index}`,
+      url,
+      mobileUrl:url,
+      desktopUrl:url,
+      order:managedHeroImages.length+index,
+      active:true,
+      createdAt:Date.now()
+    }));
+  const heroImagesManaged=[...managedHeroImages,...manualManaged]
+    .map((item,index)=>({...item,order:index}))
+    .slice(0,12);
+  const activeHeroImages=heroImagesManaged.filter(item=>item.active!==false).sort((a,b)=>a.order-b.order);
   await setDoc(doc(db,"settings","theme"),{
     name:current.name || "Custom Theme",
     mode:siteMode.value,
@@ -410,8 +541,9 @@ applyModeHero.onclick=async()=>{
         primaryButton:heroPrimaryColor.value,
         secondaryButton:heroSecondaryColor.value
       },
-      images:heroImages.value.split(/\n+/).map(item => item.trim()).filter(Boolean).slice(0, 8),
-      imageSets:uploadedHeroImageSets.filter(item => heroImages.value.includes(item.url)).slice(0, 8),
+      heroImages:heroImagesManaged,
+      images:activeHeroImages.map(item=>item.url || item.mobileUrl || item.desktopUrl).filter(Boolean).slice(0, 12),
+      imageSets:activeHeroImages.map(item=>({ url:item.url, variants:item.variants || {}, createdAt:item.createdAt })).slice(0, 12),
       backgroundBlur:clampHeroBlur(heroBgBlur.value),
       backgroundBlackIntensity:clampHeroBlackIntensity(heroBgBlackIntensity.value)
     },

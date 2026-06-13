@@ -285,6 +285,37 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /riderRequests/{requestId} {
+      allow read: if isAdmin()
+        || (signedIn() && resource.data.riderId == request.auth.uid)
+        || (signedIn()
+          && exists(/databases/$(database)/documents/orders/$(resource.data.orderId))
+          && get(/databases/$(database)/documents/orders/$(resource.data.orderId)).data.userId == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    match /riderLocations/{riderId} {
+      allow read: if isAdmin()
+        || (signedIn() && riderId == request.auth.uid)
+        || (signedIn()
+          && resource.data.activeOrderId is string
+          && exists(/databases/$(database)/documents/orders/$(resource.data.activeOrderId))
+          && get(/databases/$(database)/documents/orders/$(resource.data.activeOrderId)).data.userId == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    match /deliveryEvents/{eventId} {
+      allow read: if isAdmin()
+        || (signedIn()
+          && exists(/databases/$(database)/documents/orders/$(resource.data.orderId))
+          && (
+            get(/databases/$(database)/documents/orders/$(resource.data.orderId)).data.userId == request.auth.uid
+            || get(/databases/$(database)/documents/orders/$(resource.data.orderId)).data.assignedRiderId == request.auth.uid
+            || get(/databases/$(database)/documents/orders/$(resource.data.orderId)).data.riderId == request.auth.uid
+          ));
+      allow create, update, delete: if false;
+    }
+
     match /complaintTickets/{ticketId} {
       allow read, update, delete: if isAdmin();
       allow create: if false;

@@ -226,23 +226,35 @@ function hasVisibleRazorpayCheckout(){
     });
 }
 
-function renderHeroPizzaSlider(images = [], imageSets = []){
+function renderHeroPizzaSlider(images = [], imageSets = [], heroImages = []){
   const slider = document.getElementById("heroPizzaSlider");
   const bgSlider = document.getElementById("heroBgSlider");
-  const cleanImages = images
+  const managed = Array.isArray(heroImages) ? heroImages
+    .filter(item => item && item.active !== false)
+    .sort((a,b) => Number(a.order || 0) - Number(b.order || 0))
+    .map(item => ({
+      url:normalizeImageUrl(item.url || item.mobileUrl || item.desktopUrl),
+      mobileUrl:normalizeImageUrl(item.mobileUrl || item.url),
+      desktopUrl:normalizeImageUrl(item.desktopUrl || item.url),
+      imageSet:{ url:item.url, variants:item.variants || {} }
+    })) : [];
+  const legacy = images
     .map((image, index) => ({
       url:normalizeImageUrl(image),
+      mobileUrl:normalizeImageUrl(imageSets[index]?.variants?.mobile?.url || image),
+      desktopUrl:normalizeImageUrl(imageSets[index]?.variants?.desktop?.url || image),
       imageSet:imageSets[index] || null
-    }))
+    }));
+  const cleanImages = (managed.length ? managed : legacy)
     .filter(item => item.url)
-    .slice(0, 8);
+    .slice(0, 12);
   const slides = cleanImages.length ? cleanImages : [{ url:"logo_tran.jpeg", imageSet:null }];
   const markup = slides.map((slide, index) => {
     const srcset = buildImageSrcset(slide.imageSet);
     const srcsetAttr = srcset ? `srcset="${escapeHTML(srcset)}" sizes="(max-width: 720px) 62vw, 420px"` : "";
     return `
     <img
-      src="${escapeHTML(bestImageUrl(slide.url, slide.imageSet))}"
+      src="${escapeHTML(slide.mobileUrl || bestImageUrl(slide.url, slide.imageSet))}"
       ${srcsetAttr}
       alt="MAGNEETOZ pizza slide ${index + 1}"
       width="420"
@@ -265,7 +277,7 @@ function renderHeroPizzaSlider(images = [], imageSets = []){
       const srcsetAttr = srcset ? `srcset="${escapeHTML(srcset)}" sizes="100vw"` : "";
       return `
       <img
-        src="${escapeHTML(bestImageUrl(slide.url, slide.imageSet))}"
+        src="${escapeHTML(slide.desktopUrl || bestImageUrl(slide.url, slide.imageSet))}"
         ${srcsetAttr}
         alt=""
         width="1200"
@@ -406,23 +418,39 @@ function rememberCapturedOrderPayment({ paymentId, amount, orderId, orderNumber 
 }
 
 async function markOrderPaidFromRazorpay(orderId, paymentId){
-  if(!orderId || !paymentId) throw new Error("Missing payment recovery details.");
-  await updateDoc(doc(db, "orders", orderId), {
-    status:"Pending",
-    orderStatus:"Pending",
-    paymentStatus:"paid",
-    paymentMethod:"online",
-    amountToCollect:0,
-    paymentCaptured:true,
-    paymentId,
-    razorpayPaymentId:paymentId,
-    transactionId:paymentId,
-    paymentCollectedAt:serverTimestamp(),
-    checkoutSource:"razorpay",
-    paymentStage:"Payment Completed",
-    lastStatusUpdatedAt:serverTimestamp()
+  throw new Error("Legacy payment recovery needs backend verification. Please use Check payment status.");
+}
+
+async function checkPaymentSessionStatus(paymentSessionId){
+  if(!paymentSessionId) throw new Error("Missing payment session.");
+  return callPaymentFunction("checkPaymentSessionStatus", { paymentSessionId }, 15000);
+}
+
+async function pollPaymentSessionUntilPlaced(paymentSessionId, { timeoutMs = 60000, intervalMs = 3000 } = {}){
+  const started = Date.now();
+  let lastStatus = null;
+  while(Date.now() - started < timeoutMs){
+    lastStatus = await checkPaymentSessionStatus(paymentSessionId);
+    if(lastStatus?.paid && lastStatus.orderNumber){
+      return lastStatus;
+    }
+    await sleep(intervalMs);
+  }
+  return lastStatus || { paid:false, paymentSessionId };
+}
+
+async function recoverPendingPaymentSession(paymentSessionId){
+  setCheckoutLoading(true, "Payment received. Confirming your order...");
+  const status = await pollPaymentSessionUntilPlaced(paymentSessionId);
+  if(status?.paid && status.orderNumber){
+    clearRazorpayPaymentRecovery();
+    finishSuccessfulCheckout(status.orderNumber);
+    return status;
+  }
+  setCheckoutRetry("Payment is still confirming. Please tap Check payment status.", async () => {
+    await recoverPendingPaymentSession(paymentSessionId);
   });
-  logStructured("PAYMENT VERIFIED", { orderId, paymentId, paymentStatus:"paid", amountToCollect:0 });
+  return status;
 }
 
 async function retryCapturedPaymentRecovery(){
@@ -441,10 +469,13 @@ async function retryCapturedPaymentRecovery(){
       logStructured("PAYMENT RECOVERY", { event:"session_recovered", orderId:verifiedOrder.orderId, paymentId:recovery.paymentId });
       return;
     }
-    if(!recovery?.orderId || !recovery?.paymentId) return;
-    await markOrderPaidFromRazorpay(recovery.orderId, recovery.paymentId);
-    clearRazorpayPaymentRecovery();
-    logStructured("PAYMENT RECOVERY", { event:"recovered", orderId:recovery.orderId, paymentId:recovery.paymentId });
+    if(recovery?.mode === "payment_session" && recovery.paymentSessionId){
+      await recoverPendingPaymentSession(recovery.paymentSessionId);
+      return;
+    }
+    if(recovery?.orderId || recovery?.paymentId){
+      console.warn("Legacy payment recovery cannot mark order paid from client. Waiting for backend/webhook.", recovery);
+    }
   }catch(error){
     console.warn("Payment recovery retry failed", error);
   }
@@ -1166,7 +1197,8 @@ function setCheckoutRetry(message, retryFn){
   const loader = document.getElementById("globalLoader");
   if(!loader) return;
   loader.style.display = "flex";
-  loader.innerHTML = `<div class="checkout-loader-card"><b>${escapeHTML(message)}</b><span>Your cart is safe. Try again when the connection is stable.</span><button type="button" id="checkoutRetryBtn">Retry</button></div>`;
+  const isPaymentStatus = /payment|confirming|paid/i.test(message || "");
+  loader.innerHTML = `<div class="checkout-loader-card"><b>${escapeHTML(message)}</b><span>Your cart is safe. Try again when the connection is stable.</span><button type="button" id="checkoutRetryBtn">${isPaymentStatus ? "Check payment status" : "Retry"}</button></div>`;
   document.getElementById("checkoutRetryBtn")?.addEventListener("click", () => {
     setCheckoutLoading(false);
     retryFn?.();
@@ -2401,7 +2433,11 @@ registerGlobalSnapshot(onSnapshot(doc(db, "settings", "theme"), snap => {
   applyHeroColors(hero);
   applyHeroBackgroundBlur(hero);
   syncHeroEmptyState(hero);
-  renderHeroPizzaSlider(Array.isArray(hero.images) ? hero.images : [], Array.isArray(hero.imageSets) ? hero.imageSets : []);
+  renderHeroPizzaSlider(
+    Array.isArray(hero.images) ? hero.images : [],
+    Array.isArray(hero.imageSets) ? hero.imageSets : [],
+    Array.isArray(hero.heroImages) ? hero.heroImages : []
+  );
   setThemeParticles(String(vars["--particle-bg"] || "").trim() === "founder-gold");
 }));
 
@@ -4100,9 +4136,14 @@ setCheckoutRetry("Payment received. We are safely creating your order.", async (
     clearRazorpayPaymentRecovery();
     finishSuccessfulCheckout(verifiedOrder.orderNumber);
   }catch(retryError){
-    setCheckoutRetry(retryError?.message || "Still retrying paid order recovery.", null);
+    try{
+      await recoverPendingPaymentSession(paymentSession.paymentSessionId);
+    }catch(statusError){
+      setCheckoutRetry(statusError?.message || retryError?.message || "Still retrying paid order recovery.", async () => recoverPendingPaymentSession(paymentSession.paymentSessionId));
+    }
   }
 });
+recoverPendingPaymentSession(paymentSession.paymentSessionId).catch(() => {});
 alert("Payment received. We are safely creating your order. Payment id: " + (response.razorpay_payment_id || ""));
 
 }finally{
@@ -4956,6 +4997,19 @@ function buildRiderLiveMapHTML(order){
       </div>
     `;
   }
+  const updatedMillis = timestampToMillis(order.riderLocationUpdatedAt) || (location.updatedAt ? Date.parse(location.updatedAt) : 0);
+  const isStale = !updatedMillis || Date.now() - updatedMillis > 60 * 1000;
+  if(isStale){
+    return `
+      <div class="rider-live-map rider-live-map-pending">
+        <div class="rider-live-map-head">
+          <strong>Live rider map</strong>
+          <span>Location updating</span>
+        </div>
+        <p>Rider GPS is refreshing. We will show the live map again after a fresh update.</p>
+      </div>
+    `;
+  }
   const markerQuery = Number.isFinite(customerLat) && Number.isFinite(customerLng)
     ? `marker=${customerLat},${customerLng}&marker=${riderLat},${riderLng}`
     : `marker=${riderLat},${riderLng}`;
@@ -4963,7 +5017,7 @@ function buildRiderLiveMapHTML(order){
   const north = Number.isFinite(customerLat) ? Math.max(customerLat, riderLat) + .012 : riderLat + .018;
   const west = Number.isFinite(customerLng) ? Math.min(customerLng, riderLng) - .012 : riderLng - .018;
   const east = Number.isFinite(customerLng) ? Math.max(customerLng, riderLng) + .012 : riderLng + .018;
-  const updatedAt = location.updatedAt ? new Date(location.updatedAt).toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" }) : "Live";
+  const updatedAt = new Date(updatedMillis).toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
   return `
     <div class="rider-live-map">
       <div class="rider-live-map-head">

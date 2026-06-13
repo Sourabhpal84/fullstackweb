@@ -315,10 +315,10 @@ let uploadedDishImageSet = null;
 let uploadedCategoryImageSet = null;
 let activeUploadTask = null;
 const IMAGE_VARIANTS = [
-  { key:"thumbnail", width:200, quality:.72 },
-  { key:"mobile", width:400, quality:.78 },
-  { key:"tablet", width:800, quality:.78 },
-  { key:"desktop", width:1200, quality:.76 }
+  { key:"thumbnail", width:200, quality:.7, target:120 * 1024 },
+  { key:"mobile", width:400, quality:.74, target:220 * 1024 },
+  { key:"tablet", width:800, quality:.72, target:340 * 1024 },
+  { key:"desktop", width:1200, quality:.68, target:400 * 1024 }
 ];
 
 const UPLOAD_DEBUG = true;
@@ -451,6 +451,16 @@ async function makeImageVariant(source, width, quality){
   return { blob:jpeg, ext:"jpg", contentType:"image/jpeg", width:canvas.width, height:canvas.height };
 }
 
+async function makeTargetImageVariant(source, spec){
+  let quality = spec.quality;
+  let variant = await makeImageVariant(source, spec.width, quality);
+  while(variant.blob?.size > spec.target && quality > .44){
+    quality = Math.round((quality - .08) * 100) / 100;
+    variant = await makeImageVariant(source, spec.width, quality);
+  }
+  return variant;
+}
+
 async function uploadBlobWithProgress(path, blob, contentType, onProgress, timeoutMs = 30000){
   const user = await waitForAdminUser();
   const storageRef = ref(storage, path);
@@ -527,7 +537,7 @@ async function createAndUploadImageSet(file, folder, statusFn){
     for(let i = 0; i < IMAGE_VARIANTS.length; i++){
       const spec = IMAGE_VARIANTS[i];
       statusFn(`Optimizing ${spec.key}...`, 8 + Math.round((i / IMAGE_VARIANTS.length) * 35));
-      const variant = await makeImageVariant(source, spec.width, spec.quality);
+      const variant = await makeTargetImageVariant(source, spec);
       uploadLog("file_after_optimization", {
         variant:spec.key,
         width:variant.width,

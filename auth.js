@@ -34,6 +34,7 @@ let pendingAuthResolve = null;
 let authNullTimer = null;
 let resendTimer = null;
 let webOtpController = null;
+let lastAutoVerifyCode = "";
 const VAPID_KEY_RE = /^[A-Za-z0-9_-]{80,}$/;
 const DEV_LOGS = ["localhost", "127.0.0.1"].includes(location.hostname) || location.search.includes("debugAuth=1");
 
@@ -294,6 +295,7 @@ function cleanupOtpSession({ keepRecaptcha = false } = {}){
   otpCooldownUntil = 0;
   otpInFlight = false;
   otpVerifyInFlight = false;
+  lastAutoVerifyCode = "";
   stopResendTimer();
   stopOtpListener();
   $("authPopup")?.classList.remove("otp-sent");
@@ -311,6 +313,34 @@ function cleanupOtpSession({ keepRecaptcha = false } = {}){
     resendButton.style.display = "none";
   }
   if(!keepRecaptcha) resetRecaptcha();
+}
+
+function prepareOtpInput(){
+  const input = $("otp");
+  if(!input) return null;
+  input.setAttribute("autocomplete", "one-time-code");
+  input.setAttribute("inputmode", "numeric");
+  input.setAttribute("pattern", "[0-9]*");
+  input.setAttribute("maxlength", "6");
+  input.setAttribute("type", "tel");
+  input.setAttribute("aria-label", "One time password");
+  return input;
+}
+
+function setOtpValue(value = "", { autoVerify = false } = {}){
+  const input = prepareOtpInput();
+  if(!input) return "";
+  const code = String(value || "").replace(/\D/g, "").slice(0, 6);
+  input.value = code;
+  if(code.length < 6){
+    lastAutoVerifyCode = "";
+    return code;
+  }
+  if(autoVerify && OTP_RE.test(code) && !otpVerifyInFlight && lastAutoVerifyCode !== code){
+    lastAutoVerifyCode = code;
+    setTimeout(() => verifyOTP(), 150);
+  }
+  return code;
 }
 
 async function sendOTP(){
@@ -341,10 +371,11 @@ async function sendOTP(){
     $("authPopup")?.classList.add("otp-sent");
     const otpInput = $("otp");
     if(otpInput){
-      otpInput.value = "";
+      prepareOtpInput();
+      setOtpValue("");
       otpInput.focus();
     }
-    setAuthStatus(`OTP sent to ${maskPhone(phone)}`, "success");
+    setAuthStatus(`OTP sent to ${maskPhone(phone)}. Auto-detecting OTP...`, "success");
     toast("OTP sent", "success");
     startResendTimer(30);
     startOtpListener();
@@ -448,9 +479,7 @@ async function startOtpListener(){
       signal:webOtpController.signal
     });
     if(otp?.code){
-      input.value = String(otp.code).replace(/\D/g, "").slice(0, 6);
-      input.dispatchEvent(new Event("input", { bubbles:true }));
-      if(OTP_RE.test(input.value)) setTimeout(verifyOTP, 250);
+      setOtpValue(otp.code, { autoVerify:true });
     }
   }catch(error){
     devLog("Auto OTP unavailable:", error);
@@ -460,16 +489,15 @@ async function startOtpListener(){
 }
 
 function bindAuthUI(){
+  prepareOtpInput();
   $("phoneNumber")?.addEventListener("input", cleanPhone);
   $("sendOtpBtn")?.addEventListener("click", sendOTP);
   $("resendOtpBtn")?.addEventListener("click", sendOTP);
   $("verifyOtpBtn")?.addEventListener("click", verifyOTP);
   $("closeAuthPopup")?.addEventListener("click", closeAuthPopup);
   $("otp")?.addEventListener("input", () => {
-    const input = $("otp");
-    if(!input) return;
-    input.value = input.value.replace(/\D/g, "").slice(0, 6);
-    if(input.value.length === 6) verifyOTP();
+    const code = setOtpValue($("otp")?.value || "", { autoVerify:true });
+    if(code.length < 6) setAuthStatus("Auto-detecting OTP...", "info");
   });
   $("otp")?.addEventListener("keydown", (event) => {
     if(event.key === "Enter") verifyOTP();

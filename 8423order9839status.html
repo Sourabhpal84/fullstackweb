@@ -246,13 +246,15 @@
 
   <script type="module">
 import { protectAdminPage, mountAdminLogout } from "./admin-guard.js";
-import { db } from "./firebase-config.js";
+import { auth, db } from "./firebase-config.js";
+import { getIdToken } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { 
   deleteDoc, getDoc, getDocs, 
   collection, onSnapshot, updateDoc, doc, query, where, serverTimestamp, deleteField, setDoc, addDoc, runTransaction
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 let onlineRiders = [];
 let ordersUnsub = null;
+const FUNCTIONS_BASE_URL = "https://asia-south1-magneetoz.cloudfunctions.net";
 protectAdminPage();
 mountAdminLogout(document.body);
 const riderControlledStatuses = new Set(["Picked Up","Out For Delivery","Reached Nearby","Collect Payment","Payment Completed","Delivered"]);
@@ -280,6 +282,30 @@ function toast(message){
   node.classList.add("show");
   clearTimeout(node._t);
   node._t = setTimeout(() => node.classList.remove("show"), 2600);
+}
+
+async function callAdminFunction(name, payload = {}, timeoutMs = 25000){
+  const user = auth.currentUser;
+  if(!user) throw new Error("Please login again.");
+  const token = await getIdToken(user, true);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try{
+    const response = await fetch(`${FUNCTIONS_BASE_URL}/${name}`, {
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "Authorization":`Bearer ${token}`
+      },
+      body:JSON.stringify(payload),
+      signal:controller.signal
+    });
+    const data = await response.json().catch(() => ({}));
+    if(!response.ok || data.ok === false) throw new Error(data.error || "Request failed.");
+    return data;
+  }finally{
+    clearTimeout(timer);
+  }
 }
 
 function formatCurrency(amount){
@@ -419,6 +445,10 @@ window.loadOrders = function(filter) {
     container.innerHTML = "";
     snap.forEach(docSnap => {
       const d = docSnap.data();
+      const method = String(d.paymentMethod || d.paymentMode || "").toLowerCase();
+      const paidOnline = (method === "online" || method === "upi") && (String(d.paymentStatus || "").toLowerCase() === "paid" || d.paymentCaptured === true || !!d.razorpayPaymentId);
+      const pendingOnlineDraft = (method === "online" || method === "upi") && !paidOnline;
+      if(pendingOnlineDraft && filter !== "Payment Pending") return;
       if (filter !== "All" && d.status !== filter) return;
       const badge = paymentBadge(d);
       const paymentLocked = isUnpaidOnline(d);
@@ -592,40 +622,12 @@ window.openManualAssign = async function(orderId){
 };
 
 async function assignSpecificRider(orderId, rider){
-  const orderRef = doc(db, "orders", orderId);
-  await updateDoc(orderRef, {
-    status:"Rider Accepted",
-    orderStatus:"Rider Accepted",
-    sentToRider:true,
-    riderId:rider.id,
-    assignedRiderId:rider.id,
-    assignedRiderName:rider.name || rider.riderName || "Magneetoz Rider",
-    riderName:rider.name || rider.riderName || "Magneetoz Rider",
-    riderPhone:rider.phone || rider.phoneDigits || "",
-    assignedRider:{
-      id:rider.id,
-      name:rider.name || rider.riderName || "Magneetoz Rider",
-      phone:rider.phone || rider.phoneDigits || ""
-    },
-    riderStatus:"Manually assigned by admin",
-    riderRequest:{
-      status:"assigned",
-      candidateRiderIds:[rider.id],
-      candidates:[{
-        id:rider.id,
-        name:rider.name || rider.riderName || "Magneetoz Rider",
-        phone:rider.phone || rider.phoneDigits || ""
-      }],
-      declinedRiderIds:[],
-      acceptedRiderId:rider.id,
-      assignedManually:true,
-      requestedAt:serverTimestamp(),
-      acceptedAt:serverTimestamp()
-    },
-    assignedAt:serverTimestamp(),
-    assignedBy:"admin"
-  });
-  toast("Rider assigned");
+  try{
+    const result = await callAdminFunction("assignRiderToOrder", { orderId, riderId:rider.id });
+    toast(result.skipped ? "Rider already assigned" : "Rider assigned");
+  }catch(error){
+    alert(error.message || "Unable to assign rider.");
+  }
 }
 
 window.requestNearbyRiders = async function(orderId){
@@ -659,14 +661,15 @@ window.requestNearbyRiders = async function(orderId){
   await updateDoc(orderRef, {
     status:"Searching For Rider",
     orderStatus:"Searching For Rider",
+    deliveryStatus:"rider_searching",
     ...paymentFix,
     sentToRider:false,
-    riderStatus:"Searching for nearby rider by road route",
+    riderStatus:"Searching for nearby rider",
     riderRequest:{
       status:"queued",
       candidateRiderIds:[],
       candidates:[],
-      declinedRiderIds:[],
+      declinedRiderIds:order.riderRequest?.declinedRiderIds || [],
       requestedAt:serverTimestamp()
     }
   });
@@ -677,21 +680,13 @@ window.requestNearbyRiders = async function(orderId){
     amountToCollect:paymentFix.amountToCollect ?? order.amountToCollect ?? order.totalAmount ?? 0
   });
 
-  await addDoc(collection(db, "riderNotificationQueue"), {
-    orderId,
-    status:"pending",
-    needsCandidateSelection:true,
-    candidateRiderIds:[],
-    title:"New Delivery Request",
-    body:`Order #${order.orderNumber || orderId} • ${formatCurrency(order.totalAmount || 0)}`,
-    orderNumber:order.orderNumber || "",
-    customerName:order.customerName || "",
-    amount:order.totalAmount || 0,
-    createdAt:serverTimestamp()
-  });
+  try{
+    const result = await callAdminFunction("assignRiderToOrder", { orderId });
+    toast(result.skipped ? "Rider already assigned" : `Rider assigned: ${result.riderName || "Magneetoz Rider"}`);
+  }catch(error){
+    alert(error.message || "No rider available. Try reassign later.");
+  }
   logStructured("RIDER MATCHING", { orderId, source:"backend_google_routes" });
-
-  alert("Rider search started. Nearby riders will be selected by backend road-route distance.");
 };
 
 loadOrders('Pending');

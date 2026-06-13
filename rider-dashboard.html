@@ -548,24 +548,7 @@ function statusRank(status){
 }
 
 async function updateAssignedOrderStatus(orderId, nextStatus, extra = {}){
-  const orderRef = doc(db, "orders", orderId);
-  await runTransaction(db, async transaction => {
-    const snap = await transaction.get(orderRef);
-    if(!snap.exists()) throw new Error("Order not found.");
-    const order = snap.data();
-    if(order.assignedRiderId !== rider?.riderId && order.riderId !== rider?.riderId){
-      throw new Error("This order is not assigned to you.");
-    }
-    if(statusRank(nextStatus) < statusRank(order.status)){
-      throw new Error(`Cannot move order backwards from ${order.status} to ${nextStatus}.`);
-    }
-    transaction.update(orderRef, {
-      status:nextStatus,
-      orderStatus:nextStatus,
-      lastStatusUpdatedAt:serverTimestamp(),
-      ...extra
-    });
-  });
+  await callRiderFunction("updateRiderDeliveryStatus", { orderId, status:nextStatus, extra });
   logStructured("ORDER STATUS", { orderId, status:nextStatus, riderId:rider?.riderId });
 }
 
@@ -936,11 +919,8 @@ async function publishRiderLocation(position){
   }).catch(error => console.warn("Rider location profile update skipped:", error));
   const order = activeDeliveryOrder();
   if(!order?.id) return;
-  await updateDoc(doc(db, "orders", order.id), {
-    riderLocation:location,
-    riderLocationUpdatedAt:serverTimestamp(),
-    riderStatus:normalizeStatus(order.status) === "Reached Nearby" ? "Rider is nearby" : "Rider is moving toward you"
-  }).catch(error => console.warn("Rider live order location update skipped:", error));
+  await callRiderFunction("updateRiderLocation", { orderId:order.id, location }, 12000)
+    .catch(error => console.warn("Rider live order location update skipped:", error));
 }
 
 function startRiderLocationSharing(){
@@ -1047,48 +1027,10 @@ window.acceptRequest = async function(orderId){
     alert("Complete current delivery first");
     return;
   }
-  const orderRef = doc(db,"orders",orderId);
-  const riderDocRef = riderRef;
-  const location = await getRiderLocation();
   try{
-    await runTransaction(db, async (transaction) => {
-      const riderSnap = await transaction.get(riderDocRef);
-      if(!riderSnap.exists()) throw new Error("Rider profile unavailable.");
-      if(riderSnap.data().currentActiveOrderId) throw new Error("Complete current delivery first");
-      const orderSnap = await transaction.get(orderRef);
-      if(!orderSnap.exists()) throw new Error("Order no longer exists.");
-      const order = orderSnap.data();
-      if(order.assignedRiderId || order.riderId) throw new Error("Another rider already accepted this order.");
-      const request = order.riderRequest || {};
-      if(!(request.candidateRiderIds || []).includes(rider.riderId)) throw new Error("This request is no longer available.");
-      transaction.update(orderRef, {
-        status:"Rider Accepted",
-        orderStatus:"Rider Accepted",
-        sentToRider:true,
-        riderId:rider.riderId,
-        assignedRiderId:rider.riderId,
-        riderName:rider.name || rider.riderName || "Magneetoz Rider",
-        riderPhone:rider.phone || rider.phoneDigits || "",
-        assignedRider:{
-          id:rider.riderId,
-          name:rider.name || rider.riderName || "Magneetoz Rider",
-          phone:rider.phone || rider.phoneDigits || ""
-        },
-        riderStatus:"Accepted by rider",
-        ...(location ? { riderLocation:location, riderLocationUpdatedAt:serverTimestamp() } : {}),
-        riderRequest:{
-          ...request,
-          status:"assigned",
-          acceptedRiderId:rider.riderId,
-          acceptedAt:serverTimestamp()
-        },
-        assignedAt:serverTimestamp()
-      });
-      transaction.update(riderDocRef, {
-        currentActiveOrderId:orderId,
-        activeOrderStartedAt:serverTimestamp()
-      });
-    });
+    await callRiderFunction("acceptRiderRequest", { orderId });
+    const location = await getRiderLocation();
+    if(location) await callRiderFunction("updateRiderLocation", { orderId, location }).catch(() => {});
     logStructured("RIDER ASSIGNMENT", { orderId, riderId:rider.riderId, riderName:rider.name });
     currentFilter = "Assigned";
     document.querySelectorAll(".filter").forEach(el => el.classList.toggle("active", el.dataset.filter === "Assigned"));
@@ -1101,11 +1043,7 @@ window.acceptRequest = async function(orderId){
 
 window.rejectRequest = async function(orderId){
   if(!rider) return;
-  await updateDoc(doc(db,"orders",orderId), {
-    "riderRequest.declinedRiderIds":arrayUnion(rider.riderId),
-    "riderRequest.lastRejectedAt":serverTimestamp(),
-    riderStatus:"Rider skipped, searching next nearby rider"
-  });
+  await callRiderFunction("rejectRiderRequest", { orderId });
 };
 
 window.reachNearby = async function(orderId){

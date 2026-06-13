@@ -4,6 +4,7 @@ const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { onRequest } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { defineSecret } = require("firebase-functions/params");
 const { logger } = require("firebase-functions");
 const crypto = require("crypto");
@@ -72,6 +73,14 @@ async function requireAuth(req) {
   const match = header.match(/^Bearer (.+)$/i);
   if (!match) throw Object.assign(new Error("Login required"), { status: 401 });
   return admin.auth().verifyIdToken(match[1]);
+}
+
+async function requireAdmin(req) {
+  const user = await requireAuth(req);
+  const email = String(user.email || "").toLowerCase();
+  const admins = ["magneeto73@gmail.com", "sourabhpal982@gmail.com"];
+  if (!admins.includes(email)) throw Object.assign(new Error("Admin access required"), { status: 403 });
+  return user;
 }
 
 function sendJson(res, status, body) {
@@ -367,16 +376,23 @@ async function createOrderFromPaidSession({ sessionRef, session, payment, source
       transaction.get(counterRef)
     ]);
     const locked = { id: sessionRef.id, ...(sessionSnap.data() || session) };
-    if (existingOrderSnap.exists) {
-      transaction.set(sessionRef, {
-        status: "order_created",
-        orderCreatedAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp()
-      }, { merge: true });
-      return { orderId: orderRef.id, orderNumber: existingOrderSnap.data().orderNumber, duplicate: true };
-    }
     if (locked.status === "order_created" && locked.createdOrderId) {
       return { orderId: locked.createdOrderId, orderNumber: locked.orderNumber || "", duplicate: true };
+    }
+    const existingOrder = existingOrderSnap.exists ? existingOrderSnap.data() || {} : {};
+    if (
+      existingOrderSnap.exists &&
+      (String(existingOrder.paymentStatus || "").toLowerCase() === "paid" || existingOrder.paymentCaptured === true) &&
+      existingOrder.orderNumber
+    ) {
+      transaction.set(sessionRef, {
+        status: "order_created",
+        createdOrderId: orderRef.id,
+        orderNumber: existingOrder.orderNumber,
+        orderCreatedAt: existingOrder.placedAt || FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      return { orderId: orderRef.id, orderNumber: existingOrder.orderNumber, duplicate: true };
     }
 
     const nextOrderNumber = Number(counterSnap.exists ? counterSnap.data().lastOrderNumber || 0 : 0) + 1;
@@ -392,7 +408,7 @@ async function createOrderFromPaidSession({ sessionRef, session, payment, source
       invoiceNumber: draft.invoiceNumber || `MZ-${Date.now()}-${orderRef.id.slice(-6).toUpperCase()}`,
       invoiceGeneratedAt: FieldValue.serverTimestamp(),
       paymentMethod: "online",
-      paymentStatus: "Paid",
+      paymentStatus: "paid",
       amountToCollect: 0,
       paymentCaptured: true,
       paymentId,
@@ -404,8 +420,17 @@ async function createOrderFromPaidSession({ sessionRef, session, payment, source
       checkoutSource: source || "razorpay_verified_backend",
       status: "Pending",
       orderStatus: "Pending",
-      createdAt: FieldValue.serverTimestamp(),
+      lifecycleStatus: "placed",
+      paymentVerifiedAt: FieldValue.serverTimestamp(),
+      paidAt: FieldValue.serverTimestamp(),
+      timeline: [
+        ...(Array.isArray(existingOrder.timeline) ? existingOrder.timeline : []),
+        { status: "payment_verified", source: source || "razorpay_verified_backend", at: Date.now(), paymentId },
+        { status: "placed", source: "backend", at: Date.now() }
+      ],
+      createdAt: existingOrder.createdAt || FieldValue.serverTimestamp(),
       placedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
       lastStatusUpdatedAt: FieldValue.serverTimestamp()
     };
 
@@ -413,7 +438,7 @@ async function createOrderFromPaidSession({ sessionRef, session, payment, source
       lastOrderNumber: nextOrderNumber,
       updatedAt: FieldValue.serverTimestamp()
     }, { merge: true });
-    transaction.set(orderRef, orderData);
+    transaction.set(orderRef, orderData, { merge: true });
     transaction.set(sessionRef, {
       status: "order_created",
       createdOrderId: orderRef.id,
@@ -595,6 +620,41 @@ exports.createPaymentSession = onRequest(
         status: "created",
         lockState: "open",
         attempts: 0,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: false });
+
+      await db.collection("orders").doc(orderId).set({
+        orderId,
+        userId: user.uid,
+        cartSnapshot: Array.isArray(body.cart) ? body.cart : [],
+        addressSnapshot: {
+          customerName,
+          phone: customerPhone,
+          address: draft.address || "",
+          landmark: draft.landmark || "",
+          location: draft.location || null
+        },
+        amount,
+        amountPaise,
+        currency: "INR",
+        status: "payment_pending",
+        orderStatus: "payment_pending",
+        lifecycleStatus: "payment_pending",
+        paymentStatus: "pending",
+        paymentMethod: "online",
+        amountToCollect: amount,
+        paymentCaptured: false,
+        orderSource: "online",
+        checkoutSource: "razorpay_payment_pending",
+        paymentSessionId: sessionId,
+        razorpayOrderId: razorpayOrder.id,
+        razorpayPaymentLinkId: paymentLink.id,
+        cart: Array.isArray(body.cart) ? body.cart : [],
+        orderDraft: draft,
+        timeline: [
+          { status: "payment_pending", source: "backend", at: Date.now() }
+        ],
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp()
       }, { merge: false });
@@ -816,11 +876,47 @@ exports.verifyPaymentLinkAndCreateOrder = onRequest(
   }
 );
 
+exports.checkPaymentSessionStatus = onRequest(
+  {
+    region: "asia-south1",
+    cors: allowedWebOrigins()
+  },
+  async (req, res) => {
+    if (req.method === "OPTIONS") return sendJson(res, 204, {});
+    if (req.method !== "POST") return sendJson(res, 405, { ok: false, error: "Method not allowed" });
+    try {
+      const user = await requireAuth(req);
+      const paymentSessionId = String(req.body?.paymentSessionId || "");
+      if (!paymentSessionId) throw Object.assign(new Error("Payment session id is required"), { status: 400 });
+      const sessionSnap = await db.collection("paymentSessions").doc(paymentSessionId).get();
+      if (!sessionSnap.exists) throw Object.assign(new Error("Payment session not found"), { status: 404 });
+      const session = { id: sessionSnap.id, ...sessionSnap.data() };
+      if (session.userId !== user.uid) throw Object.assign(new Error("Payment session belongs to another user"), { status: 403 });
+      const orderSnap = session.orderId ? await db.collection("orders").doc(session.orderId).get() : null;
+      const order = orderSnap?.exists ? orderSnap.data() || {} : {};
+      return sendJson(res, 200, {
+        ok: true,
+        paymentSessionId,
+        sessionStatus: session.status || "created",
+        orderId: session.createdOrderId || session.orderId || "",
+        orderNumber: session.orderNumber || order.orderNumber || "",
+        orderStatus: order.status || "",
+        paymentStatus: order.paymentStatus || session.paymentStatus || "pending",
+        paid: String(order.paymentStatus || "").toLowerCase() === "paid" || order.paymentCaptured === true || session.status === "order_created",
+        recoverable: ["created", "verifying", "verification_failed", "payment_link_verify_failed"].includes(session.status || "created"),
+        lastError: session.lastError || ""
+      });
+    } catch (error) {
+      return sendJson(res, error.status || 500, { ok: false, error: error.message || "Payment status check failed" });
+    }
+  }
+);
+
 function verifyRazorpayWebhook(req) {
   const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
-  if (!secret) {
-    logger.warn("RAZORPAY_WEBHOOK_SECRET is not configured; accepting webhook without signature verification.");
-    return true;
+  if (!secret || secret === "your_webhook_secret") {
+    logger.error("RAZORPAY_WEBHOOK_SECRET is not configured; rejecting webhook.");
+    return false;
   }
   const signature = req.get("x-razorpay-signature") || "";
   const expected = crypto
@@ -984,6 +1080,44 @@ exports.recoverPaidOrder = onDocumentCreated(
   }
 );
 
+exports.expirePendingPaymentOrders = onSchedule(
+  {
+    region: "asia-south1",
+    schedule: "every 15 minutes"
+  },
+  async () => {
+    const cutoff = admin.firestore.Timestamp.fromMillis(Date.now() - 15 * 60 * 1000);
+    const pendingSnap = await db.collection("orders")
+      .where("status", "==", "payment_pending")
+      .where("createdAt", "<", cutoff)
+      .limit(100)
+      .get();
+    const batch = db.batch();
+    pendingSnap.docs.forEach(item => {
+      const order = item.data() || {};
+      if (String(order.paymentStatus || "").toLowerCase() === "paid" || order.paymentCaptured === true) return;
+      batch.set(item.ref, {
+        status: "failed",
+        orderStatus: "failed",
+        lifecycleStatus: "failed",
+        paymentStatus: "failed",
+        failureReason: "Payment not completed within 15 minutes",
+        updatedAt: FieldValue.serverTimestamp(),
+        lastStatusUpdatedAt: FieldValue.serverTimestamp(),
+        timeline: FieldValue.arrayUnion({ status: "payment_expired", source: "scheduler", at: Date.now() })
+      }, { merge: true });
+      if (order.paymentSessionId) {
+        batch.set(db.collection("paymentSessions").doc(String(order.paymentSessionId)), {
+          status: "expired",
+          failureReason: "Payment not completed within 15 minutes",
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+    });
+    if (!pendingSnap.empty) await batch.commit();
+  }
+);
+
 function cleanPhone(value = "") {
   const digits = String(value).replace(/\D/g, "");
   if (digits.length < 10) return "";
@@ -1051,6 +1185,100 @@ async function addOrderAudit(transaction, orderId, event, data = {}) {
     ...data,
     createdAt: FieldValue.serverTimestamp()
   });
+}
+
+function pointFrom(value = {}) {
+  if (!value || typeof value !== "object") return null;
+  const lat = Number(value.lat ?? value.latitude);
+  const lng = Number(value.lng ?? value.longitude);
+  return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+}
+
+function distanceKmBetween(a, b) {
+  const p1 = pointFrom(a);
+  const p2 = pointFrom(b);
+  if (!p1 || !p2) return Number.MAX_SAFE_INTEGER;
+  const toRad = deg => deg * Math.PI / 180;
+  const earthKm = 6371;
+  const dLat = toRad(p2.lat - p1.lat);
+  const dLng = toRad(p2.lng - p1.lng);
+  const lat1 = toRad(p1.lat);
+  const lat2 = toRad(p2.lat);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return Math.round((2 * earthKm * Math.asin(Math.sqrt(h))) * 100) / 100;
+}
+
+async function restaurantPointForOrder(order = {}) {
+  const direct = pointFrom(order.restaurantLocation || order.pickupLocation);
+  if (direct) return direct;
+  const snap = await db.collection("settings").doc("restaurant").get();
+  const settingPoint = pointFrom(snap.data()?.location);
+  return settingPoint || { lat: 28.465283, lng: 77.502608 };
+}
+
+function customerPointForOrder(order = {}) {
+  return pointFrom(order.customerLocation || order.location || order.dropLocation);
+}
+
+function isDeliveryPaymentEligible(order = {}) {
+  const method = String(order.paymentMethod || order.paymentMode || "").toLowerCase();
+  const status = String(order.paymentStatus || "").toLowerCase();
+  if (method === "cod" || method === "cash") return true;
+  return (method === "online" || method === "upi") && (
+    status === "paid" ||
+    status === "success" ||
+    order.paymentCaptured === true ||
+    !!order.razorpayPaymentId ||
+    !!order.transactionId ||
+    Number(order.amountToCollect || 0) === 0
+  );
+}
+
+function deliveryStatusFor(status = "") {
+  const map = {
+    Pending: "placed",
+    Accepted: "restaurant_accepted",
+    Preparing: "preparing",
+    "Searching For Rider": "rider_searching",
+    "Rider Accepted": "rider_assigned",
+    "Picked Up": "picked_up",
+    "Out For Delivery": "out_for_delivery",
+    "Reached Nearby": "arrived_customer",
+    Delivered: "delivered",
+    Rejected: "cancelled",
+    Cancelled: "cancelled"
+  };
+  return map[status] || String(status || "placed").toLowerCase().replace(/\s+/g, "_");
+}
+
+function addDeliveryEvent(transaction, orderId, type, data = {}) {
+  transaction.set(db.collection("deliveryEvents").doc(), {
+    orderId,
+    type,
+    ...data,
+    createdAt: FieldValue.serverTimestamp()
+  });
+}
+
+async function findNearestAvailableRider(order = {}, excludeIds = []) {
+  const restaurantLocation = await restaurantPointForOrder(order);
+  const ridersSnap = await db.collection("riders").get();
+  const excluded = new Set(excludeIds.filter(Boolean));
+  const candidates = ridersSnap.docs
+    .map(item => ({ id: item.id, ...item.data() }))
+    .filter(rider => rider.approved === true && rider.active !== false && rider.blocked !== true)
+    .filter(rider => rider.online || rider.isOnline)
+    .filter(rider => !rider.currentActiveOrderId && rider.isAvailable !== false)
+    .filter(rider => !excluded.has(rider.id))
+    .map(rider => ({
+      ...rider,
+      distanceKm: distanceKmBetween(restaurantLocation, rider.location || rider.currentLocation)
+    }))
+    .filter(rider => Number.isFinite(rider.distanceKm) && rider.distanceKm < Number.MAX_SAFE_INTEGER)
+    .sort((a, b) => a.distanceKm - b.distanceKm);
+  const radius = [2, 5, 10].find(limit => candidates.some(rider => rider.distanceKm <= limit)) || null;
+  const rider = radius ? candidates.find(item => item.distanceKm <= radius) : null;
+  return { rider, radius, candidates, restaurantLocation };
 }
 
 function hashDeliveryCode(code) {
@@ -1311,8 +1539,9 @@ function tokensFromProfile(profile = {}) {
 
 async function findCandidateRiders(order = {}) {
   const ridersSnap = await db.collection("riders").get();
-  const orderLat = Number(order.location?.lat);
-  const orderLng = Number(order.location?.lng);
+  const restaurantLocation = await restaurantPointForOrder(order);
+  const orderLat = Number(restaurantLocation?.lat);
+  const orderLng = Number(restaurantLocation?.lng);
   const hasOrderLocation = Number.isFinite(orderLat) && Number.isFinite(orderLng);
 
   const onlineRiders = ridersSnap.docs
@@ -1342,7 +1571,7 @@ async function findCandidateRiders(order = {}) {
     try {
       const route = await calculateGoogleRouteDistance({
         origin: rider.location,
-        destination: { lat: orderLat, lng: orderLng }
+        destination: restaurantLocation
       });
       return {
         id: rider.id,
@@ -1367,6 +1596,345 @@ async function findCandidateRiders(order = {}) {
     .sort((a, b) => a.distance - b.distance)
     .slice(0, 8);
 }
+
+exports.assignRiderToOrder = onRequest(
+  { region: "asia-south1", cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") return sendJson(res, 204, {});
+    try {
+      const adminUser = await requireAdmin(req);
+      const orderId = String(req.body?.orderId || "");
+      const manualRiderId = String(req.body?.riderId || "");
+      if (!orderId) throw Object.assign(new Error("Order id is required"), { status: 400 });
+      const orderRef = db.collection("orders").doc(orderId);
+      const orderSnap = await orderRef.get();
+      if (!orderSnap.exists) throw Object.assign(new Error("Order not found"), { status: 404 });
+      const order = { id: orderId, ...orderSnap.data() };
+      if (!isDeliveryPaymentEligible(order)) throw Object.assign(new Error("Payment is not verified for delivery assignment"), { status: 409 });
+      if (order.assignedRiderId || order.riderId) {
+        return sendJson(res, 200, { ok: true, skipped: true, reason: "already_assigned", riderId: order.assignedRiderId || order.riderId });
+      }
+
+      let match = {};
+      let riderSnap = null;
+      if (manualRiderId) {
+        riderSnap = await db.collection("riders").doc(manualRiderId).get();
+        if (!riderSnap.exists) throw Object.assign(new Error("Selected rider not found"), { status: 404 });
+        const rider = { id: manualRiderId, ...riderSnap.data() };
+        if (rider.approved !== true || rider.active === false || rider.blocked === true || !(rider.online || rider.isOnline) || rider.currentActiveOrderId || rider.isAvailable === false) {
+          throw Object.assign(new Error("Selected rider is not online and available"), { status: 409 });
+        }
+        match = { rider, radius: null, restaurantLocation: await restaurantPointForOrder(order) };
+      } else {
+        match = await findNearestAvailableRider(order, order.riderRequest?.declinedRiderIds || []);
+        if (!match.rider) {
+          await orderRef.set({
+            status: "Searching For Rider",
+            orderStatus: "Searching For Rider",
+            deliveryStatus: "rider_searching",
+            riderStatus: "No rider available within 10 km. Try reassign.",
+            failedAssignmentReason: "no_available_rider_within_10km",
+            riderRequest: {
+              ...(order.riderRequest || {}),
+              status: "no_rider_available",
+              candidateRiderIds: [],
+              candidates: [],
+              requestedAt: FieldValue.serverTimestamp()
+            },
+            lastStatusUpdatedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+          await db.collection("deliveryEvents").add({
+            orderId,
+            type: "NO_RIDER_AVAILABLE",
+            createdBy: adminUser.uid,
+            createdAt: FieldValue.serverTimestamp()
+          });
+          return sendJson(res, 409, { ok: false, error: "No online available rider found within 10 km" });
+        }
+        riderSnap = await db.collection("riders").doc(match.rider.id).get();
+      }
+
+      const rider = { id: match.rider.id, ...match.rider };
+      const requestRef = db.collection("riderRequests").doc(`${orderId}_${rider.id}`);
+      const riderRef = db.collection("riders").doc(rider.id);
+      const customerLocation = customerPointForOrder(order);
+      const pickupAddress = order.restaurantAddress || order.pickupAddress || "MAGNEETOZ Restaurant";
+      const dropAddress = order.address || order.dropAddress || "";
+      const estimatedDistance = Number(order.actualRoadDistance || order.deliveryDistance || order.distance || 0);
+      const earning = riderBaseEarning(order, (await db.collection("settings").doc("pricing").get()).data() || {});
+      await db.runTransaction(async transaction => {
+        const [lockedOrderSnap, lockedRiderSnap] = await Promise.all([
+          transaction.get(orderRef),
+          transaction.get(riderRef)
+        ]);
+        if (!lockedOrderSnap.exists) throw Object.assign(new Error("Order not found"), { status: 404 });
+        const lockedOrder = lockedOrderSnap.data() || {};
+        const lockedRider = lockedRiderSnap.data() || {};
+        if (lockedOrder.assignedRiderId || lockedOrder.riderId) throw Object.assign(new Error("A rider is already assigned"), { status: 409 });
+        if (lockedRider.currentActiveOrderId || lockedRider.isAvailable === false || !(lockedRider.online || lockedRider.isOnline)) {
+          throw Object.assign(new Error("Rider became unavailable. Please retry."), { status: 409 });
+        }
+        transaction.set(requestRef, {
+          orderId,
+          riderId: rider.id,
+          restaurantLocation: match.restaurantLocation,
+          customerLocation,
+          pickupAddress,
+          dropAddress,
+          estimatedDistance,
+          estimatedEarning: earning,
+          expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 30 * 1000),
+          status: "accepted",
+          autoAccepted: true,
+          acceptedAt: FieldValue.serverTimestamp(),
+          createdAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        transaction.update(orderRef, {
+          status: "Rider Accepted",
+          orderStatus: "Rider Accepted",
+          deliveryStatus: "rider_assigned",
+          sentToRider: true,
+          riderId: rider.id,
+          assignedRiderId: rider.id,
+          assignedRiderName: rider.name || rider.riderName || "Magneetoz Rider",
+          riderName: rider.name || rider.riderName || "Magneetoz Rider",
+          riderPhone: rider.phone || rider.phoneDigits || "",
+          assignedRider: {
+            id: rider.id,
+            name: rider.name || rider.riderName || "Magneetoz Rider",
+            phone: rider.phone || rider.phoneDigits || ""
+          },
+          riderStatus: "Rider assigned",
+          riderRequest: {
+            status: "assigned",
+            requestId: requestRef.id,
+            candidateRiderIds: [rider.id],
+            candidates: [{
+              id: rider.id,
+              name: rider.name || rider.riderName || "Magneetoz Rider",
+              phone: rider.phone || rider.phoneDigits || "",
+              distance: rider.distanceKm || null
+            }],
+            declinedRiderIds: lockedOrder.riderRequest?.declinedRiderIds || [],
+            acceptedRiderId: rider.id,
+            acceptedAt: FieldValue.serverTimestamp(),
+            requestedAt: FieldValue.serverTimestamp(),
+            searchRadiusKm: match.radius || null
+          },
+          restaurantLocation: match.restaurantLocation,
+          customerLocation: customerLocation || lockedOrder.customerLocation || lockedOrder.location || null,
+          assignedAt: FieldValue.serverTimestamp(),
+          acceptedAt: FieldValue.serverTimestamp(),
+          assignedBy: adminUser.uid,
+          lastStatusUpdatedAt: FieldValue.serverTimestamp()
+        });
+        transaction.update(riderRef, {
+          currentActiveOrderId: orderId,
+          activeOrderId: orderId,
+          isAvailable: false,
+          activeOrderStartedAt: FieldValue.serverTimestamp()
+        });
+        addDeliveryEvent(transaction, orderId, "RIDER_ASSIGNED", { riderId: rider.id, autoAccepted: true });
+        addOrderAudit(transaction, orderId, "RIDER_ASSIGNED", { riderId: rider.id, autoAccepted: true });
+      });
+      return sendJson(res, 200, { ok: true, orderId, riderId: rider.id, riderName: rider.name || rider.riderName || "Magneetoz Rider" });
+    } catch (error) {
+      logger.error("assignRiderToOrder failed", { error: error.message });
+      return sendJson(res, error.status || 500, { ok: false, error: error.message || "Rider assignment failed" });
+    }
+  }
+);
+
+exports.acceptRiderRequest = onRequest(
+  { region: "asia-south1", cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") return sendJson(res, 204, {});
+    try {
+      const user = await requireAuth(req);
+      const rider = await riderProfileForUser(user.uid);
+      const orderId = String(req.body?.orderId || "");
+      const orderRef = db.collection("orders").doc(orderId);
+      const riderRef = db.collection("riders").doc(rider.riderId);
+      await db.runTransaction(async transaction => {
+        const [orderSnap, riderSnap] = await Promise.all([transaction.get(orderRef), transaction.get(riderRef)]);
+        if (!orderSnap.exists) throw Object.assign(new Error("Order not found"), { status: 404 });
+        const order = orderSnap.data() || {};
+        const riderData = riderSnap.data() || {};
+        if (order.assignedRiderId && order.assignedRiderId !== rider.riderId) throw Object.assign(new Error("Another rider already accepted this order"), { status: 409 });
+        if (riderData.currentActiveOrderId && riderData.currentActiveOrderId !== orderId) throw Object.assign(new Error("Complete current delivery first"), { status: 409 });
+        const request = order.riderRequest || {};
+        if (!(request.candidateRiderIds || []).includes(rider.riderId) && order.assignedRiderId !== rider.riderId) {
+          throw Object.assign(new Error("This delivery request is no longer available"), { status: 403 });
+        }
+        transaction.update(orderRef, {
+          status: "Rider Accepted",
+          orderStatus: "Rider Accepted",
+          deliveryStatus: "rider_accepted",
+          sentToRider: true,
+          riderId: rider.riderId,
+          assignedRiderId: rider.riderId,
+          riderName: rider.name || rider.riderName || "Magneetoz Rider",
+          riderPhone: rider.phone || rider.phoneDigits || "",
+          assignedRider: { id: rider.riderId, name: rider.name || rider.riderName || "Magneetoz Rider", phone: rider.phone || rider.phoneDigits || "" },
+          riderStatus: "Accepted by rider",
+          riderRequest: { ...request, status: "assigned", acceptedRiderId: rider.riderId, acceptedAt: FieldValue.serverTimestamp() },
+          assignedAt: order.assignedAt || FieldValue.serverTimestamp(),
+          lastStatusUpdatedAt: FieldValue.serverTimestamp()
+        });
+        transaction.update(riderRef, {
+          currentActiveOrderId: orderId,
+          activeOrderId: orderId,
+          isAvailable: false,
+          activeOrderStartedAt: FieldValue.serverTimestamp()
+        });
+        transaction.set(db.collection("riderRequests").doc(`${orderId}_${rider.riderId}`), {
+          orderId,
+          riderId: rider.riderId,
+          status: "accepted",
+          acceptedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        addDeliveryEvent(transaction, orderId, "RIDER_ACCEPTED", { riderId: rider.riderId });
+      });
+      return sendJson(res, 200, { ok: true });
+    } catch (error) {
+      return sendJson(res, error.status || 500, { ok: false, error: error.message || "Accept failed" });
+    }
+  }
+);
+
+exports.rejectRiderRequest = onRequest(
+  { region: "asia-south1", cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") return sendJson(res, 204, {});
+    try {
+      const user = await requireAuth(req);
+      const rider = await riderProfileForUser(user.uid);
+      const orderId = String(req.body?.orderId || "");
+      const orderRef = db.collection("orders").doc(orderId);
+      await db.runTransaction(async transaction => {
+        const snap = await transaction.get(orderRef);
+        if (!snap.exists) throw Object.assign(new Error("Order not found"), { status: 404 });
+        const order = snap.data() || {};
+        if (order.assignedRiderId && order.assignedRiderId !== rider.riderId) return;
+        transaction.update(orderRef, {
+          "riderRequest.declinedRiderIds": FieldValue.arrayUnion(rider.riderId),
+          "riderRequest.lastRejectedAt": FieldValue.serverTimestamp(),
+          riderStatus: "Rider rejected. Reassign from admin.",
+          lastStatusUpdatedAt: FieldValue.serverTimestamp()
+        });
+        transaction.set(db.collection("riderRequests").doc(`${orderId}_${rider.riderId}`), {
+          orderId,
+          riderId: rider.riderId,
+          status: "rejected",
+          rejectedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        addDeliveryEvent(transaction, orderId, "RIDER_REJECTED", { riderId: rider.riderId });
+      });
+      return sendJson(res, 200, { ok: true });
+    } catch (error) {
+      return sendJson(res, error.status || 500, { ok: false, error: error.message || "Reject failed" });
+    }
+  }
+);
+
+exports.updateRiderDeliveryStatus = onRequest(
+  { region: "asia-south1", cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") return sendJson(res, 204, {});
+    try {
+      const user = await requireAuth(req);
+      const rider = await riderProfileForUser(user.uid);
+      const orderId = String(req.body?.orderId || "");
+      const nextStatus = String(req.body?.status || "");
+      const allowed = {
+        "Rider Accepted": ["Picked Up"],
+        "Picked Up": ["Out For Delivery"],
+        "Out For Delivery": ["Reached Nearby"],
+        "Reached Nearby": ["Collect Payment", "Payment Completed"]
+      };
+      if (!["Picked Up", "Out For Delivery", "Reached Nearby", "Collect Payment", "Payment Completed"].includes(nextStatus)) {
+        throw Object.assign(new Error("Invalid delivery status"), { status: 400 });
+      }
+      const orderRef = db.collection("orders").doc(orderId);
+      await db.runTransaction(async transaction => {
+        const snap = await transaction.get(orderRef);
+        if (!snap.exists) throw Object.assign(new Error("Order not found"), { status: 404 });
+        const order = snap.data() || {};
+        assertAssignedRider(order, rider.riderId);
+        if (order.status === "Delivered") throw Object.assign(new Error("Order already delivered"), { status: 409 });
+        const current = order.status || "Rider Accepted";
+        if (!(allowed[current] || []).includes(nextStatus) && current !== nextStatus) {
+          throw Object.assign(new Error(`Cannot move delivery from ${current} to ${nextStatus}`), { status: 409 });
+        }
+        const timestampFields = {};
+        if (nextStatus === "Picked Up") timestampFields.pickedUpAt = FieldValue.serverTimestamp();
+        if (nextStatus === "Out For Delivery") timestampFields.outForDeliveryAt = FieldValue.serverTimestamp();
+        if (nextStatus === "Reached Nearby") timestampFields.reachedNearbyAt = FieldValue.serverTimestamp();
+        transaction.update(orderRef, {
+          status: nextStatus,
+          orderStatus: nextStatus,
+          deliveryStatus: deliveryStatusFor(nextStatus),
+          riderStatus: nextStatus === "Out For Delivery" ? "Rider is moving toward you" : nextStatus === "Reached Nearby" ? "Rider is nearby" : "Delivery updated",
+          ...timestampFields,
+          lastStatusUpdatedAt: FieldValue.serverTimestamp()
+        });
+        addDeliveryEvent(transaction, orderId, deliveryStatusFor(nextStatus).toUpperCase(), { riderId: rider.riderId });
+      });
+      return sendJson(res, 200, { ok: true });
+    } catch (error) {
+      return sendJson(res, error.status || 500, { ok: false, error: error.message || "Status update failed" });
+    }
+  }
+);
+
+exports.updateRiderLocation = onRequest(
+  { region: "asia-south1", cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") return sendJson(res, 204, {});
+    try {
+      const user = await requireAuth(req);
+      const rider = await riderProfileForUser(user.uid);
+      const orderId = String(req.body?.orderId || rider.currentActiveOrderId || "");
+      const location = pointFrom(req.body?.location || {});
+      if (!location) throw Object.assign(new Error("Valid rider location is required"), { status: 400 });
+      const payload = {
+        ...location,
+        accuracy: Number(req.body?.location?.accuracy || 0),
+        updatedAt: new Date().toISOString()
+      };
+      await db.runTransaction(async transaction => {
+        const riderRef = db.collection("riders").doc(rider.riderId);
+        const orderRef = orderId ? db.collection("orders").doc(orderId) : null;
+        const orderSnap = orderRef ? await transaction.get(orderRef) : null;
+        transaction.update(riderRef, {
+          location: payload,
+          currentLocation: payload,
+          lastLocationUpdateAt: FieldValue.serverTimestamp(),
+          lastSeenAt: FieldValue.serverTimestamp()
+        });
+        transaction.set(db.collection("riderLocations").doc(rider.riderId), {
+          riderId: rider.riderId,
+          location: payload,
+          activeOrderId: orderId || null,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        if (orderSnap?.exists) {
+          const order = orderSnap.data() || {};
+          if (order.assignedRiderId === rider.riderId || order.riderId === rider.riderId) {
+            transaction.update(orderRef, {
+              riderLocation: payload,
+              riderLocationUpdatedAt: FieldValue.serverTimestamp(),
+              riderStatus: deliveryStatusFor(order.status) === "arrived_customer" ? "Rider is nearby" : "Rider location updated"
+            });
+          }
+        }
+      });
+      return sendJson(res, 200, { ok: true });
+    } catch (error) {
+      return sendJson(res, error.status || 500, { ok: false, error: error.message || "Location update failed" });
+    }
+  }
+);
 
 exports.riderMarkCashReceived = onRequest(
   { region: "asia-south1", cors: true },
@@ -1829,13 +2397,31 @@ exports.sendRiderDeliveryRequest = onDocumentCreated(
       const orderSnap = await orderRef.get();
       const order = orderSnap.exists ? orderSnap.data() : {};
       const candidates = await findCandidateRiders(order);
-      riderIds = candidates.map(rider => rider.id);
+      const selectedCandidates = candidates.slice(0, 1);
+      riderIds = selectedCandidates.map(rider => rider.id);
+      const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + 30 * 1000);
 
       await queueRef.set({
         candidateRiderIds: riderIds,
-        candidates,
+        candidates: selectedCandidates,
         selectedAt: admin.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
+
+      if (riderIds[0]) {
+        await db.collection("riderRequests").doc(`${queue.orderId}_${riderIds[0]}`).set({
+          orderId: queue.orderId,
+          riderId: riderIds[0],
+          restaurantLocation: await restaurantPointForOrder(order),
+          customerLocation: customerPointForOrder(order),
+          pickupAddress: order.restaurantAddress || order.pickupAddress || "MAGNEETOZ Restaurant",
+          dropAddress: order.address || order.dropAddress || "",
+          estimatedDistance: Number(order.actualRoadDistance || order.deliveryDistance || order.distance || 0),
+          estimatedEarning: riderBaseEarning(order, (await db.collection("settings").doc("pricing").get()).data() || {}),
+          expiresAt,
+          status: "pending",
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
 
       if (orderSnap.exists) {
         await orderRef.set({
@@ -1843,7 +2429,8 @@ exports.sendRiderDeliveryRequest = onDocumentCreated(
             ...(order.riderRequest || {}),
             status: riderIds.length ? "searching" : "waiting_for_online_rider",
             candidateRiderIds: riderIds,
-            candidates,
+            candidates: selectedCandidates,
+            expiresAt,
             requestedAt: order.riderRequest?.requestedAt || admin.firestore.FieldValue.serverTimestamp()
           },
           riderStatus: riderIds.length ? "Searching for nearby rider" : "Waiting for an online rider"
@@ -1964,6 +2551,7 @@ exports.collectCustomerFromOrder = onDocumentCreated(
   },
   async event => {
     const order = event.data?.data() || {};
+    if (order.status === "payment_pending" || String(order.paymentStatus || "").toLowerCase() !== "paid" && String(order.paymentMethod || "").toLowerCase() === "online") return;
     const phone = cleanPhone(order.phone);
     if (!phone) return;
 
