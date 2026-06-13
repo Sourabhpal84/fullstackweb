@@ -421,7 +421,7 @@ const ACTIVE_STATUSES = new Set([
   "Payment Completed",
   "Assigned To Delivery Boy"
 ]);
-const STATUS_FLOW = ["Pending","Accepted","Preparing","Searching For Rider","Rider Accepted","Picked Up","Out For Delivery","Reached Nearby","Cash Collected","Payment Settled","Delivery Code Pending","Payment Completed","Delivered"];
+const STATUS_FLOW = ["Pending","Accepted","Preparing","Ready For Pickup","Searching For Rider","Rider Accepted","Picked Up","Out For Delivery","Reached Nearby","Cash Collected","Payment Settled","Delivery Code Pending","Payment Completed","Delivered"];
 
 const guard = document.getElementById("guard");
 const app = document.getElementById("app");
@@ -547,7 +547,7 @@ function normalizeStatus(status){
     placed:"Pending",
     restaurant_accepted:"Accepted",
     preparing:"Preparing",
-    ready_for_pickup:"Preparing",
+    ready_for_pickup:"Ready For Pickup",
     rider_searching:"Searching For Rider",
     rider_assigned:"Rider Accepted",
     rider_accepted:"Rider Accepted",
@@ -910,7 +910,27 @@ function listenOrders(){
         .map(item => ({ id:item.id, ...item.data() }))
         .filter(item => activeRequestStatuses.has(String(item.status || "").toLowerCase()));
       const orderSnaps = await Promise.all(requestDocs.map(item => getDoc(doc(db,"orders",item.orderId))));
-      directRequestOrderDocs = orderSnaps.filter(item => item.exists());
+      directRequestOrderDocs = orderSnaps
+        .map((orderSnap, index) => {
+          if(!orderSnap.exists()) return null;
+          const request = requestDocs[index];
+          return {
+            id:orderSnap.id,
+            data:() => ({
+              ...orderSnap.data(),
+              riderRequest:{
+                ...(orderSnap.data().riderRequest || {}),
+                status:String(request.status || "").toLowerCase() === "pending" ? "searching" : request.status,
+                requestId:request.id,
+                candidateRiderIds:[
+                  ...new Set([...(orderSnap.data().riderRequest?.candidateRiderIds || []), rider.riderId])
+                ],
+                directRequestStatus:request.status
+              }
+            })
+          };
+        })
+        .filter(Boolean);
       rebuildOrders();
       logStructured("FIRESTORE LISTENER", { name:"riderRequests-direct", count:requestDocs.length });
     }, error => console.warn("[FIRESTORE LISTENER] Direct rider requests failed", error));

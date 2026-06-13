@@ -258,7 +258,7 @@ const FUNCTIONS_BASE_URL = "https://asia-south1-magneetoz.cloudfunctions.net";
 protectAdminPage();
 mountAdminLogout(document.body);
 const riderControlledStatuses = new Set(["Picked Up","Out For Delivery","Reached Nearby","Collect Payment","Payment Completed","Delivered"]);
-const STATUS_FLOW = ["Payment Pending","Pending","Accepted","Preparing","Searching For Rider","Rider Accepted","Picked Up","Out For Delivery","Reached Nearby","Payment Completed","Delivered"];
+const STATUS_FLOW = ["Payment Pending","Pending","Accepted","Preparing","Ready","Searching For Rider","Rider Accepted","Picked Up","Out For Delivery","Reached Nearby","Payment Completed","Delivered"];
 
 function logStructured(scope, detail = {}){
   console.info(`[${scope}]`, detail);
@@ -271,7 +271,7 @@ function normalizeStatus(status){
     placed:"Pending",
     restaurant_accepted:"Accepted",
     preparing:"Preparing",
-    ready_for_pickup:"Preparing",
+    ready_for_pickup:"Ready",
     rider_searching:"Searching For Rider",
     rider_assigned:"Rider Accepted",
     rider_accepted:"Rider Accepted",
@@ -284,7 +284,7 @@ function normalizeStatus(status){
     failed:"Failed"
   };
   if(map[key]) return map[key];
-  if(status === "Ready") return "Searching For Rider";
+  if(status === "Ready") return "Ready";
   if(status === "Assigned To Delivery Boy") return "Rider Accepted";
   if(status === "Collect Payment") return "Reached Nearby";
   return status || "Pending";
@@ -525,7 +525,7 @@ window.loadOrders = function(filter) {
 
   <button
     class="btn-status ${paymentLocked ? "locked" : ""}"
-    ${paymentLocked ? `title="Online payment is not confirmed yet" onclick="paymentPendingLocked()"` : `onclick="requestNearbyRiders('${docSnap.id}')"`}>
+    ${paymentLocked ? `title="Online payment is not confirmed yet" onclick="paymentPendingLocked()"` : `onclick="markReadyForPickup('${docSnap.id}')"`}>
 
     ✅ Ready
 
@@ -612,6 +612,32 @@ window.paymentPendingLocked = function(){
   toast("Online payment is not confirmed yet.");
 };
 
+window.markReadyForPickup = async function(orderId){
+  const orderRef = doc(db, "orders", orderId);
+  await runTransaction(db, async transaction => {
+    const orderSnap = await transaction.get(orderRef);
+    if(!orderSnap.exists()) throw new Error("Order not found.");
+    const current = orderSnap.data();
+    if(isUnpaidOnline(current)){
+      throw new Error("Online payment is not confirmed yet. Do not mark ready.");
+    }
+    logStructured("ORDER READY", {
+      orderId,
+      oldStatus:current.status || "",
+      newStatus:"ready_for_pickup",
+      assignedRiderId:current.assignedRiderId || current.riderId || ""
+    });
+    transaction.update(orderRef, {
+      status:"ready_for_pickup",
+      orderStatus:"ready_for_pickup",
+      deliveryStatus:"ready_for_pickup",
+      readyAt:serverTimestamp(),
+      lastStatusUpdatedAt:serverTimestamp()
+    });
+  });
+  toast("Order marked ready for pickup");
+};
+
 window.fixCapturedPaymentOrders = async function(){
   const snapshot = await getDocs(query(collection(db, "orders"), where("orderSource", "==", "online")));
   const fixes = [];
@@ -692,7 +718,7 @@ window.requestNearbyRiders = async function(orderId){
     alert("Online payment is not confirmed yet. Do not assign rider.");
     return;
   }
-  if(!["Accepted","Preparing","Ready","Searching For Rider"].includes(order.status)){
+  if(!["Accepted","Preparing","Ready","ready_for_pickup","Searching For Rider","rider_searching"].includes(order.status)){
     alert("Accept or mark order Preparing before searching rider.");
     return;
   }
