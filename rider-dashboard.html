@@ -984,6 +984,14 @@ function hasActiveDelivery(){
   return !!activeDeliveryOrder() || !!(rider?.currentActiveOrderId || rider?.activeOrderId);
 }
 
+async function reconcileMyRiderState(online = null){
+  if(!auth.currentUser) return null;
+  const payload = typeof online === "boolean" ? { online } : {};
+  const result = await callRiderFunction("reconcileRiderState", payload, 20000);
+  logStructured("RIDER RECONCILE", result);
+  return result;
+}
+
 async function publishRiderLocation(position){
   if(!riderRef || !rider?.riderId || !position?.coords) return;
   const now = Date.now();
@@ -1047,12 +1055,21 @@ function stopRiderLocationSharing(){
 
 async function setOnline(online){
   if(!riderRef) return;
+  const reconciled = await reconcileMyRiderState(online);
+  if(reconciled && !reconciled.activeOrderId && rider){
+    delete rider.currentActiveOrderId;
+    delete rider.activeOrderId;
+  }
+  if(!online && reconciled?.activeOrderId){
+    alert("Active delivery chal rahi hai. Delivery complete hone ke baad offline ja sakte ho.");
+    return;
+  }
   if(!online && hasActiveDelivery()){
     alert("Active delivery chal rahi hai. Delivery complete hone ke baad offline ja sakte ho.");
     return;
   }
   const location = online ? await getRiderLocation() : null;
-  const activeOrderId = rider?.currentActiveOrderId || rider?.activeOrderId || "";
+  const activeOrderId = reconciled?.activeOrderId || rider?.currentActiveOrderId || rider?.activeOrderId || "";
   await updateDoc(riderRef, {
     online,
     isOnline:online,
@@ -1510,6 +1527,7 @@ window.addEventListener("pagehide", () => {
   ordersUnsub?.();
   legacyOrdersUnsub?.();
   requestOrdersUnsub?.();
+  directRequestsUnsub?.();
   payoutUnsub?.();
 });
 
@@ -1525,6 +1543,7 @@ onAuthStateChanged(auth, (user) => {
       ordersUnsub?.();
       legacyOrdersUnsub?.();
       requestOrdersUnsub?.();
+      directRequestsUnsub?.();
       payoutUnsub?.();
       redirectLogin();
     }, 2500);
@@ -1538,8 +1557,10 @@ onAuthStateChanged(auth, (user) => {
   ordersUnsub?.();
   legacyOrdersUnsub?.();
   requestOrdersUnsub?.();
+  directRequestsUnsub?.();
   payoutUnsub?.();
   riderRef = doc(db, "riders", user.uid);
+  reconcileMyRiderState().catch(error => console.warn("Rider login reconcile skipped:", error));
   riderUnsub = onSnapshot(riderRef, (snap) => {
     if(!snap.exists()){
       redirectLogin();

@@ -1462,6 +1462,78 @@ function riderPresence(rider = {}) {
   };
 }
 
+const RIDER_ACTIVE_ORDER_STATUSES = [
+  "Rider Accepted",
+  "Picked Up",
+  "Out For Delivery",
+  "Reached Nearby",
+  "Collect Payment",
+  "Cash Collected",
+  "Payment Settled",
+  "Delivery Code Pending",
+  "Payment Completed"
+];
+
+const CLOSED_ORDER_STATUSES = ["Delivered", "Cancelled", "Rejected", "Failed", "failed", "cancelled", "delivered"];
+
+function isOpenRiderOrder(order = {}) {
+  const status = String(order.status || order.orderStatus || "");
+  return !CLOSED_ORDER_STATUSES.includes(status)
+    && !CLOSED_ORDER_STATUSES.includes(status.toLowerCase())
+    && !!(order.assignedRiderId || order.riderId);
+}
+
+async function findAuthoritativeActiveOrderForRider(riderId) {
+  const [assignedSnap, legacySnap] = await Promise.all([
+    db.collection("orders").where("assignedRiderId", "==", riderId).get(),
+    db.collection("orders").where("riderId", "==", riderId).get()
+  ]);
+  const byId = new Map();
+  assignedSnap.docs.forEach(docSnap => byId.set(docSnap.id, { id: docSnap.id, ...docSnap.data() }));
+  legacySnap.docs.forEach(docSnap => byId.set(docSnap.id, { id: docSnap.id, ...docSnap.data() }));
+  return Array.from(byId.values())
+    .filter(isOpenRiderOrder)
+    .sort((a, b) => tsMillis(b.assignedAt || b.createdAt || b.placedAt) - tsMillis(a.assignedAt || a.createdAt || a.placedAt))[0] || null;
+}
+
+async function reconcileRiderState(riderId, { desiredOnline = null, actor = "system" } = {}) {
+  const riderRef = db.collection("riders").doc(riderId);
+  const [riderSnap, activeOrder] = await Promise.all([
+    riderRef.get(),
+    findAuthoritativeActiveOrderForRider(riderId)
+  ]);
+  if (!riderSnap.exists) throw Object.assign(new Error("Rider not found"), { status: 404 });
+  const rider = riderSnap.data() || {};
+  let keepOnline = desiredOnline === null
+    ? (rider.online === true || rider.isOnline === true || rider.status === "online" || rider.availabilityStatus === "online")
+    : desiredOnline === true;
+  if (activeOrder && desiredOnline === false) keepOnline = true;
+  const update = {
+    online: keepOnline,
+    isOnline: keepOnline,
+    status: keepOnline ? "online" : "offline",
+    availabilityStatus: keepOnline ? "online" : "offline",
+    isAvailable: keepOnline && !activeOrder,
+    lastReconciledAt: FieldValue.serverTimestamp(),
+    lastReconciledBy: actor
+  };
+  if (activeOrder) {
+    update.currentActiveOrderId = activeOrder.id;
+    update.activeOrderId = activeOrder.id;
+  } else {
+    update.currentActiveOrderId = FieldValue.delete();
+    update.activeOrderId = FieldValue.delete();
+  }
+  await riderRef.set(update, { merge: true });
+  return {
+    riderId,
+    activeOrderId: activeOrder?.id || "",
+    online: keepOnline,
+    available: keepOnline && !activeOrder,
+    repairedStaleLock: !activeOrder && !!(rider.currentActiveOrderId || rider.activeOrderId)
+  };
+}
+
 function isDeliveryPaymentEligible(order = {}) {
   const method = String(order.paymentMethod || order.paymentMode || "").toLowerCase();
   const status = String(order.paymentStatus || "").toLowerCase();
@@ -2059,6 +2131,95 @@ exports.assignRiderToOrder = onRequest(
   }
 );
 
+exports.reconcileRiderState = onRequest(
+  { region: "asia-south1", cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") return sendJson(res, 204, {});
+    try {
+      const user = await requireAuth(req);
+      const requestedRiderId = String(req.body?.riderId || user.uid);
+      const isSelf = requestedRiderId === user.uid;
+      if (!isSelf) await requireAdmin(req);
+      const desiredOnline = typeof req.body?.online === "boolean" ? req.body.online : null;
+      const result = await reconcileRiderState(requestedRiderId, {
+        desiredOnline,
+        actor: isSelf ? "rider_self" : "admin"
+      });
+      return sendJson(res, 200, { ok: true, ...result });
+    } catch (error) {
+      logger.error("reconcileRiderState failed", { error: error.message });
+      return sendJson(res, error.status || 500, { ok: false, error: error.message || "Rider reconciliation failed" });
+    }
+  }
+);
+
+exports.systemIntegrityCheck = onRequest(
+  { region: "asia-south1", cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") return sendJson(res, 204, {});
+    try {
+      const adminUser = await requireAdmin(req);
+      const repair = req.body?.repair === true;
+      const [ridersSnap, ordersSnap] = await Promise.all([
+        db.collection("riders").get(),
+        db.collection("orders").get()
+      ]);
+      const riders = new Map(ridersSnap.docs.map(docSnap => [docSnap.id, { id: docSnap.id, ...docSnap.data() }]));
+      const orders = ordersSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+      const issues = {
+        staleRiderLocks: [],
+        assignedToMissingRider: [],
+        missingPaymentStatus: [],
+        invalidOrderStatus: []
+      };
+      const validStatuses = new Set([
+        "Pending", "Payment Pending", "payment_pending", "Accepted", "Preparing", "Ready", "ready_for_pickup",
+        "Searching For Rider", "Rider Accepted", "Picked Up", "Out For Delivery", "Reached Nearby",
+        "Collect Payment", "Cash Collected", "Payment Settled", "Delivery Code Pending", "Payment Completed",
+        "Delivered", "Cancelled", "Rejected", "Failed", "failed", "cancelled", "delivered"
+      ]);
+      const openOrdersByRider = new Map();
+      orders.forEach(order => {
+        const riderId = order.assignedRiderId || order.riderId || "";
+        if (riderId && !riders.has(riderId)) issues.assignedToMissingRider.push({ orderId: order.id, riderId });
+        if (!String(order.paymentStatus || "")) issues.missingPaymentStatus.push({ orderId: order.id, paymentMethod: order.paymentMethod || "" });
+        const status = String(order.status || order.orderStatus || "");
+        if (status && !validStatuses.has(status)) issues.invalidOrderStatus.push({ orderId: order.id, status });
+        if (riderId && isOpenRiderOrder(order)) {
+          if (!openOrdersByRider.has(riderId)) openOrdersByRider.set(riderId, []);
+          openOrdersByRider.get(riderId).push(order.id);
+        }
+      });
+      riders.forEach(rider => {
+        const lockedOrderId = rider.currentActiveOrderId || rider.activeOrderId || "";
+        const actualOpenOrders = openOrdersByRider.get(rider.id) || [];
+        if (lockedOrderId && !actualOpenOrders.includes(lockedOrderId)) {
+          issues.staleRiderLocks.push({ riderId: rider.id, lockedOrderId, actualOpenOrders });
+        }
+      });
+      const repairs = [];
+      if (repair) {
+        for (const issue of issues.staleRiderLocks) {
+          const result = await reconcileRiderState(issue.riderId, { actor: `integrity:${adminUser.uid}` });
+          repairs.push({ type: "stale_rider_lock", ...result });
+        }
+        for (const issue of issues.missingPaymentStatus) {
+          const orderRef = db.collection("orders").doc(issue.orderId);
+          await orderRef.set({
+            paymentStatus: issue.paymentMethod === "online" || issue.paymentMethod === "upi" ? "pending" : "pending",
+            paymentStatusRepairedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+          repairs.push({ type: "missing_payment_status", orderId: issue.orderId });
+        }
+      }
+      return sendJson(res, 200, { ok: true, repair, issues, repairs });
+    } catch (error) {
+      logger.error("systemIntegrityCheck failed", { error: error.message });
+      return sendJson(res, error.status || 500, { ok: false, error: error.message || "Integrity check failed" });
+    }
+  }
+);
+
 exports.acceptRiderRequest = onRequest(
   { region: "asia-south1", cors: true },
   async (req, res) => {
@@ -2069,6 +2230,7 @@ exports.acceptRiderRequest = onRequest(
       const orderId = String(req.body?.orderId || "");
       const orderRef = db.collection("orders").doc(orderId);
       const riderRef = db.collection("riders").doc(rider.riderId);
+      await reconcileRiderState(rider.riderId, { actor: "before_accept" });
       await db.runTransaction(async transaction => {
         const [orderSnap, riderSnap] = await Promise.all([transaction.get(orderRef), transaction.get(riderRef)]);
         if (!orderSnap.exists) throw Object.assign(new Error("Order not found"), { status: 404 });

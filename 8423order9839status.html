@@ -240,6 +240,10 @@
     Rejected
   </button>
 
+  <button onclick="runSystemIntegrityCheck()">
+    System Integrity Check
+  </button>
+
 </div>
   <div class="orders-grid" id="orders"></div>
   <div class="toast" id="opsToast"></div>
@@ -677,6 +681,22 @@ window.fixCapturedPaymentOrders = async function(){
 function riderOnline(rider){
   return riderPresence(rider).assignable;
 }
+
+window.runSystemIntegrityCheck = async function(){
+  try{
+    toast("Checking system integrity...");
+    const result = await callAdminFunction("systemIntegrityCheck", { repair:true }, 60000);
+    const stale = result.issues?.staleRiderLocks?.length || 0;
+    const missingRiders = result.issues?.assignedToMissingRider?.length || 0;
+    const missingPayment = result.issues?.missingPaymentStatus?.length || 0;
+    const invalidStatus = result.issues?.invalidOrderStatus?.length || 0;
+    const repaired = result.repairs?.length || 0;
+    alert(`System Integrity Check complete\n\nStale rider locks: ${stale}\nAssigned to missing rider: ${missingRiders}\nMissing payment status: ${missingPayment}\nInvalid order status: ${invalidStatus}\nAuto repairs: ${repaired}`);
+    toast(`Integrity check repaired ${repaired} issue(s).`);
+  }catch(error){
+    alert(error.message || "System integrity check failed.");
+  }
+};
 
 onSnapshot(collection(db,"riders"), snap => {
   onlineRiders = snap.docs

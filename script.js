@@ -5372,10 +5372,15 @@ function buildCancelWindowHTML(order){
 function canPayForOrder(order = {}){
   const statusText = normalizeTimelineStatus(order.status || order.orderStatus || order.lifecycleStatus || "");
   const paymentStatus = String(order.paymentStatus || "").toLowerCase();
-  const paid = paymentStatus === "paid" || paymentStatus === "collected" || order.paymentCaptured === true || !!order.razorpayPaymentId;
+  const paid = paymentStatus === "paid"
+    || paymentStatus === "success"
+    || paymentStatus === "collected"
+    || order.paymentCaptured === true
+    || !!order.razorpayPaymentId
+    || !!order.transactionId;
   const amount = Number(order.totalAmount || order.amount || order.amountToCollect || order.grandTotal || order.finalAmount || 0);
   return !paid
-    && !["Delivered","Cancelled","Rejected"].includes(statusText)
+    && !["Delivered","Cancelled","Rejected","Failed"].includes(statusText)
     && amount >= 10;
 }
 
