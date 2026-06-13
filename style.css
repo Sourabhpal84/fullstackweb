@@ -3966,6 +3966,30 @@ body.auth-success #authPopup{
 }
 .payment-tracking-card span.paid{background:rgba(34,197,94,.16);color:#86efac}
 .payment-tracking-card span.pending{background:rgba(250,204,21,.16);color:#fde68a}
+.order-pay-now-card{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-top:12px;
+  padding:12px;
+  border-radius:18px;
+  background:rgba(250,204,21,.1);
+  border:1px solid rgba(250,204,21,.22);
+  color:white;
+}
+.order-pay-now-card strong{
+  display:block;
+  font-size:13px;
+  font-weight:900;
+}
+.order-pay-now-card span{
+  display:block;
+  margin-top:2px;
+  color:#cbd5e1;
+  font-size:11px;
+  font-weight:700;
+}
 .pay-now-order-btn{
   display:inline-flex;
   align-items:center;
@@ -7130,6 +7154,16 @@ body .tracking-status-strip{
 }
 
 body .tracking-status-strip small{
+  color:var(--muted-foreground,#94a3b8) !important;
+}
+
+body .order-pay-now-card{
+  background:color-mix(in srgb,#facc15 12%,var(--surface,#0b0f14)) !important;
+  border-color:rgba(250,204,21,.28) !important;
+  color:var(--foreground,#ffffff) !important;
+}
+
+body .order-pay-now-card span{
   color:var(--muted-foreground,#94a3b8) !important;
 }
 

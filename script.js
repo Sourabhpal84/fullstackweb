@@ -5003,6 +5003,7 @@ Math.max(0, timelineSteps.findIndex(
 ));
 
 const cancelHTML = buildCancelWindowHTML(order);
+const payNowHTML = buildPayNowActionHTML(order);
 const paymentHTML = buildPaymentTrackingHTML(order);
 const riderLiveMapHTML = buildRiderLiveMapHTML(order);
 
@@ -5154,6 +5155,8 @@ order.status === "Delivered"
 
       </div>
       <button type="button" class="invoice-download-btn" onclick="downloadInvoicePDF('${order.id}')">⬇ Download Invoice PDF</button>
+
+      ${payNowHTML}
 
       ${timelineHTML}
 
@@ -5328,14 +5331,39 @@ function buildCancelWindowHTML(order){
   `;
 }
 
+function canPayForOrder(order = {}){
+  const statusText = normalizeTimelineStatus(order.status || order.orderStatus || order.lifecycleStatus || "");
+  const paymentStatus = String(order.paymentStatus || "").toLowerCase();
+  const paid = paymentStatus === "paid" || paymentStatus === "collected" || order.paymentCaptured === true || !!order.razorpayPaymentId;
+  const amount = Number(order.totalAmount || order.amount || order.amountToCollect || order.grandTotal || order.finalAmount || 0);
+  return !paid
+    && !["Delivered","Cancelled","Rejected"].includes(statusText)
+    && amount >= 10;
+}
+
+function buildPayNowActionHTML(order = {}){
+  if(!canPayForOrder(order)) return "";
+  const method = String(order.paymentMethod || order.paymentMode || "").toLowerCase();
+  const label = method === "cod" || method === "cash"
+    ? "Want to pay online now?"
+    : "Payment pending";
+  return `
+    <div class="order-pay-now-card">
+      <div>
+        <strong>${escapeHTML(label)}</strong>
+        <span>Complete payment safely anytime from this order.</span>
+      </div>
+      <button type="button" class="pay-now-order-btn" onclick="payPendingOrder('${escapeHTML(order.id)}')">Pay now</button>
+    </div>
+  `;
+}
+
 function buildPaymentTrackingHTML(order){
   const statusText = normalizeTimelineStatus(order.status);
   const paymentStatus = String(order.paymentStatus || "").toLowerCase();
   const paymentMethod = String(order.paymentMethod || order.paymentMode || "").toLowerCase();
   const paid = paymentStatus === "paid" || paymentStatus === "collected" || order.paymentCaptured === true || !!order.razorpayPaymentId;
-  const canPayNow = !paid
-    && !["Delivered","Cancelled","Rejected"].includes(statusText)
-    && Number(order.totalAmount || order.amount || order.amountToCollect || 0) >= 10;
+  const canPayNow = canPayForOrder(order);
   if(!canPayNow && !["Out For Delivery","Reached Nearby","Collect Payment","Cash Collected","Payment Settled","Payment Completed","Delivery Code Pending","Delivered"].includes(order.status)) return "";
   const methodLabel = paymentMethod === "online" || paymentMethod === "upi" ? "Online" : paymentMethod === "cod" || paymentMethod === "cash" ? "COD" : (order.paymentMethod || "CASH/UPI");
   const codeExpiresAt = timestampToMillis(order.deliveryAuthorizationCodeExpiresAt);
@@ -5353,7 +5381,6 @@ function buildPaymentTrackingHTML(order){
       <span class="${paid ? "paid" : "pending"}">${paid ? "Payment Received" : "Payment Pending"}</span>
       <strong>${methodLabel}</strong>
       <p>Status: ${paid ? "paid" : (order.paymentStatus || "pending")}</p>
-      ${canPayNow ? `<button type="button" class="pay-now-order-btn" onclick="payPendingOrder('${escapeHTML(order.id)}')">Pay now</button>` : ""}
       ${showDeliveryCode ? `<p><strong>Delivery OTP: <span data-delivery-code-order="${escapeHTML(order.id)}">Loading</span></strong></p><p>${codeHelp}</p>` : ""}
       ${prepaidOtpPending ? `<p><strong>Delivery OTP: generating...</strong></p><p>${codeHelp}</p>` : ""}
     </div>
