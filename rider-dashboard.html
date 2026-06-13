@@ -376,11 +376,14 @@ let rider = null;
 let riderRef = null;
 let riderUnsub = null;
 let ordersUnsub = null;
+let legacyOrdersUnsub = null;
 let requestOrdersUnsub = null;
 let payoutUnsub = null;
 let riderAuthNullTimer = null;
+let riderHeartbeatTimer = null;
 let allOrders = [];
 let assignedOrderDocs = [];
+let legacyAssignedOrderDocs = [];
 let requestOrderDocs = [];
 let currentFilter = "Requests";
 let riderLocationWatchId = null;
@@ -537,6 +540,25 @@ async function callRiderFunction(name, payload = {}, timeoutMs = 25000){
 }
 
 function normalizeStatus(status){
+  const key = String(status || "").toLowerCase();
+  const map = {
+    payment_pending:"Payment Pending",
+    placed:"Pending",
+    restaurant_accepted:"Accepted",
+    preparing:"Preparing",
+    ready_for_pickup:"Preparing",
+    rider_searching:"Searching For Rider",
+    rider_assigned:"Rider Accepted",
+    rider_accepted:"Rider Accepted",
+    rider_arrived_restaurant:"Rider Accepted",
+    picked_up:"Picked Up",
+    out_for_delivery:"Out For Delivery",
+    arrived_customer:"Reached Nearby",
+    delivered:"Delivered",
+    cancelled:"Cancelled",
+    failed:"Failed"
+  };
+  if(map[key]) return map[key];
   if(status === "Assigned To Delivery Boy") return "Rider Accepted";
   if(status === "Collect Payment") return "Reached Nearby";
   return status || "Pending";
@@ -673,8 +695,9 @@ function calcFinancials(order, distance){
 }
 
 function statusGroup(status){
-  if(status === "Delivered") return "Delivered";
-  if(status === "Out For Delivery" || status === "Reached Nearby" || status === "Collect Payment" || status === "Cash Collected" || status === "Payment Settled" || status === "Delivery Code Pending" || status === "Payment Completed") return "Out For Delivery";
+  const normalized = normalizeStatus(status);
+  if(["Delivered","Cancelled","Rejected","Failed"].includes(normalized)) return normalized === "Delivered" ? "Delivered" : "Closed";
+  if(normalized === "Out For Delivery" || normalized === "Reached Nearby" || normalized === "Collect Payment" || normalized === "Cash Collected" || normalized === "Payment Settled" || normalized === "Delivery Code Pending" || normalized === "Payment Completed") return "Out For Delivery";
   return "Assigned";
 }
 
@@ -748,8 +771,8 @@ function listenPayoutHistory(){
 
 function renderOrders(){
   if(!rider) return;
-  const mine = allOrders.filter(assignedToMe);
-  const activeCount = mine.filter(o => ACTIVE_STATUSES.has(o.status)).length;
+  const mine = allOrders.filter(assignedToMe).filter(o => !["Cancelled","Rejected","Failed"].includes(normalizeStatus(o.status)));
+  const activeCount = mine.filter(o => normalizeStatus(o.status) !== "Delivered").length;
   els.active.textContent = activeCount;
 
   const filtered = currentFilter === "Requests"
@@ -830,11 +853,16 @@ function findOrderById(orderId){
 function listenOrders(){
 
   ordersUnsub?.();
+  legacyOrdersUnsub?.();
   requestOrdersUnsub?.();
 
   const assignedQuery = query(
     collection(db,"orders"),
     where("assignedRiderId","==",rider.riderId)
+  );
+  const legacyAssignedQuery = query(
+    collection(db,"orders"),
+    where("riderId","==",rider.riderId)
   );
   const requestQuery = query(
     collection(db,"orders"),
@@ -843,7 +871,7 @@ function listenOrders(){
 
   const rebuildOrders = () => {
     const byId = new Map();
-    [...assignedOrderDocs, ...requestOrderDocs].forEach(d => byId.set(d.id, {
+    [...assignedOrderDocs, ...legacyAssignedOrderDocs, ...requestOrderDocs].forEach(d => byId.set(d.id, {
       id:d.id,
       ...d.data()
     }));
@@ -856,6 +884,12 @@ function listenOrders(){
     rebuildOrders();
     logStructured("FIRESTORE LISTENER", { name:"rider-assigned-orders", count:snap.size });
   }, error => console.warn("[FIRESTORE LISTENER] Rider assigned orders failed", error));
+
+  legacyOrdersUnsub = onSnapshot(legacyAssignedQuery,(snap)=>{
+    legacyAssignedOrderDocs = snap.docs;
+    rebuildOrders();
+    logStructured("FIRESTORE LISTENER", { name:"rider-legacy-assigned-orders", count:snap.size });
+  }, error => console.warn("[FIRESTORE LISTENER] Rider legacy assigned orders failed", error));
 
   requestOrdersUnsub = onSnapshot(requestQuery,(snap)=>{
     requestOrderDocs = snap.docs;
@@ -870,6 +904,10 @@ function enterDashboard(){
   renderRider();
   listenOrders();
   listenPayoutHistory();
+  if(rider.online || rider.isOnline){
+    startRiderHeartbeat();
+    startRiderLocationSharing();
+  }
   if(Notification.permission === "granted" && !rider.fcmToken){
     enableDeliveryAlerts();
   }
@@ -902,6 +940,10 @@ function activeDeliveryOrder(){
   );
 }
 
+function hasActiveDelivery(){
+  return !!activeDeliveryOrder() || !!(rider?.currentActiveOrderId || rider?.activeOrderId);
+}
+
 async function publishRiderLocation(position){
   if(!riderRef || !rider?.riderId || !position?.coords) return;
   const now = Date.now();
@@ -932,6 +974,23 @@ function startRiderLocationSharing(){
   );
 }
 
+function startRiderHeartbeat(){
+  if(riderHeartbeatTimer || !riderRef) return;
+  riderHeartbeatTimer = setInterval(() => {
+    if(!riderRef || !(rider?.online || rider?.isOnline)) return;
+    updateDoc(riderRef, {
+      lastSeenAt:serverTimestamp(),
+      isAvailable:!hasActiveDelivery(),
+      activeOrderId:rider?.currentActiveOrderId || rider?.activeOrderId || null
+    }).catch(error => console.warn("Rider heartbeat skipped:", error));
+  }, 25000);
+}
+
+function stopRiderHeartbeat(){
+  if(riderHeartbeatTimer) clearInterval(riderHeartbeatTimer);
+  riderHeartbeatTimer = null;
+}
+
 function stopRiderLocationSharing(){
   if(riderLocationWatchId && navigator.geolocation){
     navigator.geolocation.clearWatch(riderLocationWatchId);
@@ -942,15 +1001,27 @@ function stopRiderLocationSharing(){
 
 async function setOnline(online){
   if(!riderRef) return;
+  if(!online && hasActiveDelivery()){
+    alert("Active delivery chal rahi hai. Delivery complete hone ke baad offline ja sakte ho.");
+    return;
+  }
   const location = online ? await getRiderLocation() : null;
+  const activeOrderId = rider?.currentActiveOrderId || rider?.activeOrderId || "";
   await updateDoc(riderRef, {
     online,
     isOnline:online,
+    isAvailable:online ? !activeOrderId : false,
+    activeOrderId:activeOrderId || null,
     ...(location ? { location } : {}),
     lastSeenAt:serverTimestamp()
   });
-  if(online) startRiderLocationSharing();
-  else stopRiderLocationSharing();
+  if(online){
+    startRiderLocationSharing();
+    startRiderHeartbeat();
+  }else{
+    stopRiderLocationSharing();
+    stopRiderHeartbeat();
+  }
 }
 
 async function saveProfilePassword(){
@@ -1376,6 +1447,7 @@ document.getElementById("resetPasswordBtn")?.addEventListener("click", resetProf
 document.getElementById("logoutBtn").addEventListener("click", async () => {
   try{ await setOnline(false); }catch(_){}
   stopRiderLocationSharing();
+  stopRiderHeartbeat();
   localStorage.removeItem("riderId");
   localStorage.removeItem("riderPhone");
   localStorage.removeItem("riderName");
@@ -1385,8 +1457,10 @@ document.getElementById("logoutBtn").addEventListener("click", async () => {
 
 window.addEventListener("pagehide", () => {
   stopRiderLocationSharing();
+  stopRiderHeartbeat();
   riderUnsub?.();
   ordersUnsub?.();
+  legacyOrdersUnsub?.();
   requestOrdersUnsub?.();
   payoutUnsub?.();
 });
@@ -1401,6 +1475,7 @@ onAuthStateChanged(auth, (user) => {
       if(auth.currentUser) return;
       riderUnsub?.();
       ordersUnsub?.();
+      legacyOrdersUnsub?.();
       requestOrdersUnsub?.();
       payoutUnsub?.();
       redirectLogin();
@@ -1413,6 +1488,7 @@ onAuthStateChanged(auth, (user) => {
   }
   riderUnsub?.();
   ordersUnsub?.();
+  legacyOrdersUnsub?.();
   requestOrdersUnsub?.();
   payoutUnsub?.();
   riderRef = doc(db, "riders", user.uid);

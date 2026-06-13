@@ -247,7 +247,7 @@ service cloud.firestore {
         && (request.resource.data.paymentStatus == "pending" || request.resource.data.paymentStatus == "Pending");
       allow list: if isAdmin() || hasRole("restaurantOwner") || isApprovedRider();
       allow read: if isAdmin() || hasRole("restaurantOwner") || (signedIn() && resource.data.restaurantOwnerId == request.auth.uid) || (signedIn() && resource.data.restaurantOwnerEmail == request.auth.token.email) || (signedIn() && resource.data.userId == request.auth.uid) || assignedRiderRead() || candidateRiderOrder();
-      allow update: if paymentNotReverted() && (isAdmin() || hasRole("restaurantOwner") || (signedIn() && resource.data.restaurantOwnerId == request.auth.uid) || (signedIn() && resource.data.restaurantOwnerEmail == request.auth.token.email) || validCustomerOrderUpdate() || validAssignedRiderUpdate() || validCandidateRiderUpdate());
+      allow update: if paymentNotReverted() && (isAdmin() || hasRole("restaurantOwner") || (signedIn() && resource.data.restaurantOwnerId == request.auth.uid) || (signedIn() && resource.data.restaurantOwnerEmail == request.auth.token.email) || validCustomerOrderUpdate() || validAssignedRiderUpdate());
       allow delete: if isAdmin();
     }
 

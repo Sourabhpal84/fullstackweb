@@ -265,6 +265,25 @@ function logStructured(scope, detail = {}){
 }
 
 function normalizeStatus(status){
+  const key = String(status || "").toLowerCase();
+  const map = {
+    payment_pending:"Payment Pending",
+    placed:"Pending",
+    restaurant_accepted:"Accepted",
+    preparing:"Preparing",
+    ready_for_pickup:"Preparing",
+    rider_searching:"Searching For Rider",
+    rider_assigned:"Rider Accepted",
+    rider_accepted:"Rider Accepted",
+    rider_arrived_restaurant:"Rider Accepted",
+    picked_up:"Picked Up",
+    out_for_delivery:"Out For Delivery",
+    arrived_customer:"Reached Nearby",
+    delivered:"Delivered",
+    cancelled:"Cancelled",
+    failed:"Failed"
+  };
+  if(map[key]) return map[key];
   if(status === "Ready") return "Searching For Rider";
   if(status === "Assigned To Delivery Boy") return "Rider Accepted";
   if(status === "Collect Payment") return "Reached Nearby";
@@ -338,6 +357,28 @@ function isUnpaidOnline(order = {}){
   const method = String(order.paymentMethod || order.paymentMode || "").toLowerCase();
   const status = String(order.paymentStatus || "").toLowerCase();
   return (method === "online" || method === "upi") && status !== "paid" && order.paymentCaptured !== true && !order.razorpayPaymentId;
+}
+
+function tsMillis(value){
+  if(!value) return 0;
+  if(typeof value.toMillis === "function") return value.toMillis();
+  if(value.seconds) return Number(value.seconds) * 1000;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function riderPresence(rider = {}){
+  const onlineFlag = rider.online === true || rider.isOnline === true;
+  const lastSeen = Math.max(tsMillis(rider.lastSeenAt), tsMillis(rider.lastLocationUpdateAt), tsMillis(rider.location?.updatedAt));
+  const stale = onlineFlag && lastSeen && Date.now() - lastSeen > 90 * 1000;
+  const busy = !!(rider.currentActiveOrderId || rider.activeOrderId) || rider.isAvailable === false;
+  return {
+    onlineFlag,
+    stale,
+    busy,
+    assignable:onlineFlag && !busy,
+    label:!onlineFlag ? "Offline" : stale ? "Location stale" : busy ? "Busy" : "Online"
+  };
 }
 
 window.sendToRider = async function(id){
@@ -556,7 +597,9 @@ window.updateStatus = async (id, s) => {
   logStructured("ORDER STATUS", { orderId:id, status:nextStatus });
   if((s === "Rejected" || s === "Cancelled" || s === "Delivered") && (existing.assignedRiderId || existing.riderId)){
     await updateDoc(doc(db, "riders", existing.assignedRiderId || existing.riderId), {
-      currentActiveOrderId: deleteField()
+      currentActiveOrderId: deleteField(),
+      activeOrderId: deleteField(),
+      isAvailable:true
     });
   }
 };
@@ -593,7 +636,7 @@ window.fixCapturedPaymentOrders = async function(){
 };
 
 function riderOnline(rider){
-  return !!(rider.online || rider.isOnline);
+  return riderPresence(rider).onlineFlag;
 }
 
 onSnapshot(collection(db,"riders"), snap => {
@@ -609,7 +652,10 @@ window.openManualAssign = async function(orderId){
     return;
   }
   const list = candidates
-    .map((rider, index) => `${index + 1}. ${rider.name || rider.riderName || "Magneetoz Rider"} (${rider.phone || rider.phoneDigits || "no phone"})`)
+    .map((rider, index) => {
+      const presence = riderPresence(rider);
+      return `${index + 1}. ${rider.name || rider.riderName || "Magneetoz Rider"} (${rider.phone || rider.phoneDigits || "no phone"}) - ${presence.label}`;
+    })
     .join("\n");
   const choice = prompt(`Assign order to rider:\n\n${list}\n\nEnter rider number`);
   if(!choice) return;

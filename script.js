@@ -429,10 +429,15 @@ async function checkPaymentSessionStatus(paymentSessionId){
 async function pollPaymentSessionUntilPlaced(paymentSessionId, { timeoutMs = 60000, intervalMs = 3000 } = {}){
   const started = Date.now();
   let lastStatus = null;
+  let warnedSlow = false;
   while(Date.now() - started < timeoutMs){
     lastStatus = await checkPaymentSessionStatus(paymentSessionId);
     if(lastStatus?.paid && lastStatus.orderNumber){
       return lastStatus;
+    }
+    if(!warnedSlow && Date.now() - started > 15000){
+      warnedSlow = true;
+      setCheckoutLoading(true, "Payment received. Still confirming with Razorpay...");
     }
     await sleep(intervalMs);
   }
@@ -447,7 +452,7 @@ async function recoverPendingPaymentSession(paymentSessionId){
     finishSuccessfulCheckout(status.orderNumber);
     return status;
   }
-  setCheckoutRetry("Payment is still confirming. Please tap Check payment status.", async () => {
+  setCheckoutRetry("Payment received but confirmation is taking longer. Do not pay again. We are checking your order.", async () => {
     await recoverPendingPaymentSession(paymentSessionId);
   });
   return status;
@@ -467,6 +472,7 @@ async function retryCapturedPaymentRecovery(){
       }, 35000);
       clearRazorpayPaymentRecovery();
       logStructured("PAYMENT RECOVERY", { event:"session_recovered", orderId:verifiedOrder.orderId, paymentId:recovery.paymentId });
+      finishSuccessfulCheckout(verifiedOrder.orderNumber);
       return;
     }
     if(recovery?.mode === "payment_session" && recovery.paymentSessionId){
@@ -4724,8 +4730,8 @@ const emptyOrders =
 document.getElementById("emptyOrders");
 const trackingStatusStrip =
 document.getElementById("trackingStatusStrip");
-const headerOrderStatusChip =
-document.getElementById("headerOrderStatusChip");
+const globalOrderStatusStrip =
+document.getElementById("globalOrderStatusStrip");
 
 /* STORE */
 
@@ -4901,7 +4907,7 @@ function startOrderTrackingListener(user){
 
 }
 
-headerOrderStatusChip?.addEventListener("click", async ()=>{
+globalOrderStatusStrip?.addEventListener("click", async ()=>{
   if(!auth.currentUser){
     await window.requireMagneetozAuth?.("order_tracking");
     if(!auth.currentUser) return;
@@ -5224,20 +5230,21 @@ function updateTrackingStatusStrip(orders = []){
 }
 
 function updateHeaderOrderStatusChip(orders = liveOrders){
-  if(!headerOrderStatusChip) return;
+  if(!globalOrderStatusStrip) return;
   const order = latestActiveOrder(orders);
   if(!order){
-    headerOrderStatusChip.hidden = true;
-    headerOrderStatusChip.classList.remove("show");
-    headerOrderStatusChip.innerHTML = `<span class="status-dot"></span><strong>Order updating</strong>`;
+    globalOrderStatusStrip.hidden = true;
+    globalOrderStatusStrip.classList.remove("show");
+    globalOrderStatusStrip.innerHTML = `<span class="status-dot"></span><strong>Order updating</strong><small>Tap to track</small>`;
     return;
   }
   const display = orderStatusDisplay(order);
-  headerOrderStatusChip.hidden = false;
-  headerOrderStatusChip.classList.add("show");
-  headerOrderStatusChip.innerHTML = `
+  globalOrderStatusStrip.hidden = false;
+  globalOrderStatusStrip.classList.add("show");
+  globalOrderStatusStrip.innerHTML = `
     <span class="status-dot"></span>
     <strong>${escapeHTML(display.icon)} ${escapeHTML(display.label)}</strong>
+    <small>${escapeHTML(order.orderNumber ? `#${order.orderNumber}` : "Tap to track")}</small>
   `;
 }
 

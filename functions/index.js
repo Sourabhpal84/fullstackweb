@@ -1079,7 +1079,32 @@ exports.checkPaymentSessionStatus = onRequest(
       const session = { id: sessionSnap.id, ...sessionSnap.data() };
       if (session.userId !== user.uid) throw Object.assign(new Error("Payment session belongs to another user"), { status: 403 });
       const orderSnap = session.orderId ? await db.collection("orders").doc(session.orderId).get() : null;
-      const order = orderSnap?.exists ? orderSnap.data() || {} : {};
+      let order = orderSnap?.exists ? orderSnap.data() || {} : {};
+      const alreadyPaid = String(order.paymentStatus || "").toLowerCase() === "paid" || order.paymentCaptured === true || session.status === "order_created";
+      if (!alreadyPaid && session.razorpayOrderId) {
+        const paymentsResponse = await getRazorpay().orders.fetchPayments(session.razorpayOrderId).catch(error => {
+          logger.warn("Razorpay order payment status fetch failed", { paymentSessionId, error: error.message });
+          return null;
+        });
+        const payments = Array.isArray(paymentsResponse?.items) ? paymentsResponse.items : [];
+        const capturedPayment = payments.find(payment =>
+          ["captured", "authorized"].includes(payment.status) &&
+          Number(payment.amount) === Number(session.amountPaise)
+        );
+        if (capturedPayment) {
+          if (capturedPayment.status === "authorized") {
+            await getRazorpay().payments.capture(capturedPayment.id, Number(session.amountPaise), session.currency || "INR");
+          }
+          await createOrderFromPaidSession({
+            sessionRef: db.collection("paymentSessions").doc(paymentSessionId),
+            session,
+            payment: { ...capturedPayment, id: capturedPayment.id },
+            source: "manual_payment_status_recovery"
+          });
+          const freshOrderSnap = session.orderId ? await db.collection("orders").doc(session.orderId).get() : null;
+          order = freshOrderSnap?.exists ? freshOrderSnap.data() || order : order;
+        }
+      }
       return sendJson(res, 200, {
         ok: true,
         paymentSessionId,
@@ -1454,7 +1479,7 @@ async function findNearestAvailableRider(order = {}, excludeIds = []) {
     .map(item => ({ id: item.id, ...item.data() }))
     .filter(rider => rider.approved === true && rider.active !== false && rider.blocked !== true)
     .filter(rider => rider.online || rider.isOnline)
-    .filter(rider => !rider.currentActiveOrderId && rider.isAvailable !== false)
+    .filter(rider => !rider.currentActiveOrderId && !rider.activeOrderId && rider.isAvailable !== false)
     .filter(rider => !excluded.has(rider.id))
     .map(rider => ({
       ...rider,
@@ -1676,6 +1701,8 @@ async function completeDeliveryTransaction({ orderId, rider, mode, codeRef, code
       exceptionSettlementDeliveries: FieldValue.increment(exceptionDelivery ? 1 : 0),
       payoutPenalties: FieldValue.increment(exceptionDelivery ? penalty : 0),
       currentActiveOrderId: FieldValue.delete(),
+      activeOrderId: FieldValue.delete(),
+      isAvailable: true,
       lastDeliveryAt: FieldValue.serverTimestamp()
     });
     transaction.set(db.collection("riderWalletTransactions").doc(), {
@@ -1734,7 +1761,7 @@ async function findCandidateRiders(order = {}) {
     .map(item => ({ id: item.id, ...item.data() }))
     .filter(rider => rider.approved === true && rider.active !== false)
     .filter(rider => rider.online || rider.isOnline)
-    .filter(rider => !rider.currentActiveOrderId);
+    .filter(rider => !rider.currentActiveOrderId && !rider.activeOrderId && rider.isAvailable !== false);
 
   if (!hasOrderLocation) return onlineRiders.map(rider => ({
     id: rider.id,
@@ -1807,7 +1834,7 @@ exports.assignRiderToOrder = onRequest(
         riderSnap = await db.collection("riders").doc(manualRiderId).get();
         if (!riderSnap.exists) throw Object.assign(new Error("Selected rider not found"), { status: 404 });
         const rider = { id: manualRiderId, ...riderSnap.data() };
-        if (rider.approved !== true || rider.active === false || rider.blocked === true || !(rider.online || rider.isOnline) || rider.currentActiveOrderId || rider.isAvailable === false) {
+        if (rider.approved !== true || rider.active === false || rider.blocked === true || !(rider.online || rider.isOnline) || rider.currentActiveOrderId || rider.activeOrderId || rider.isAvailable === false) {
           throw Object.assign(new Error("Selected rider is not online and available"), { status: 409 });
         }
         match = { rider, radius: null, restaurantLocation: await restaurantPointForOrder(order) };
@@ -1857,7 +1884,7 @@ exports.assignRiderToOrder = onRequest(
         const lockedOrder = lockedOrderSnap.data() || {};
         const lockedRider = lockedRiderSnap.data() || {};
         if (lockedOrder.assignedRiderId || lockedOrder.riderId) throw Object.assign(new Error("A rider is already assigned"), { status: 409 });
-        if (lockedRider.currentActiveOrderId || lockedRider.isAvailable === false || !(lockedRider.online || lockedRider.isOnline)) {
+        if (lockedRider.currentActiveOrderId || lockedRider.activeOrderId || lockedRider.isAvailable === false || !(lockedRider.online || lockedRider.isOnline)) {
           throw Object.assign(new Error("Rider became unavailable. Please retry."), { status: 409 });
         }
         transaction.set(requestRef, {
@@ -1947,7 +1974,8 @@ exports.acceptRiderRequest = onRequest(
         const order = orderSnap.data() || {};
         const riderData = riderSnap.data() || {};
         if (order.assignedRiderId && order.assignedRiderId !== rider.riderId) throw Object.assign(new Error("Another rider already accepted this order"), { status: 409 });
-        if (riderData.currentActiveOrderId && riderData.currentActiveOrderId !== orderId) throw Object.assign(new Error("Complete current delivery first"), { status: 409 });
+        const activeOrderId = riderData.currentActiveOrderId || riderData.activeOrderId || "";
+        if (activeOrderId && activeOrderId !== orderId) throw Object.assign(new Error("Complete current delivery first"), { status: 409 });
         const request = order.riderRequest || {};
         if (!(request.candidateRiderIds || []).includes(rider.riderId) && order.assignedRiderId !== rider.riderId) {
           throw Object.assign(new Error("This delivery request is no longer available"), { status: 403 });
