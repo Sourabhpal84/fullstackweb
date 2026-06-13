@@ -4724,6 +4724,8 @@ const emptyOrders =
 document.getElementById("emptyOrders");
 const trackingStatusStrip =
 document.getElementById("trackingStatusStrip");
+const headerOrderStatusChip =
+document.getElementById("headerOrderStatusChip");
 
 /* STORE */
 
@@ -4745,6 +4747,45 @@ function readCachedLiveOrdersForUser(userId){
   if(!userId) return [];
   const cached = readJSON(`${CUSTOMER_LIVE_ORDERS_CACHE_KEY}:${userId}`, null);
   return Array.isArray(cached?.orders) ? cached.orders : [];
+}
+
+function isActiveCustomerOrder(order = {}){
+  const status = normalizeTimelineStatus(order.status || order.orderStatus || order.lifecycleStatus || "");
+  const paymentStatus = String(order.paymentStatus || "").toLowerCase();
+  if(["Delivered","Cancelled","Rejected"].includes(status)) return false;
+  if(["delivered","cancelled","rejected","failed"].includes(String(order.status || "").toLowerCase())) return false;
+  if(status === "payment_pending" || status === "Payment Pending") return true;
+  if(String(order.paymentMethod || "").toLowerCase() === "online" && paymentStatus !== "paid" && order.paymentCaptured !== true) return true;
+  return true;
+}
+
+function orderStatusDisplay(order = {}){
+  const status = normalizeTimelineStatus(order.status || order.orderStatus || order.lifecycleStatus || "Pending");
+  const paymentStatus = String(order.paymentStatus || "").toLowerCase();
+  if((status === "payment_pending" || status === "Payment Pending") || (String(order.paymentMethod || "").toLowerCase() === "online" && paymentStatus !== "paid" && order.paymentCaptured !== true)){
+    return { label:"Payment Pending", icon:"🟡" };
+  }
+  const labels = {
+    Pending:{ label:"Order Received", icon:"🟢" },
+    Accepted:{ label:"Order Accepted", icon:"🟢" },
+    Preparing:{ label:"Preparing Your Order", icon:"👨‍🍳" },
+    Ready:{ label:"Ready For Pickup", icon:"✅" },
+    "Searching For Rider":{ label:"Finding Rider", icon:"🔎" },
+    "Rider Assigned":{ label:"Rider Assigned", icon:"🚴" },
+    "Picked Up":{ label:"Rider Picked Up Order", icon:"🛵" },
+    "Out For Delivery":{ label:"Out For Delivery", icon:"🛵" },
+    Nearby:{ label:"Arriving Soon", icon:"📍" },
+    "Delivery Code Pending":{ label:"Delivery OTP Ready", icon:"🔐" },
+    "Payment Completed":{ label:"Payment Completed", icon:"✅" },
+    Delivered:{ label:"Delivered", icon:"✅" }
+  };
+  return labels[status] || { label:status || "Order Updating", icon:"🟢" };
+}
+
+function latestActiveOrder(orders = liveOrders){
+  return [...(orders || [])]
+    .filter(isActiveCustomerOrder)
+    .sort((a,b) => timestampToMillis(b.createdAt) - timestampToMillis(a.createdAt))[0] || null;
 }
 
 /* FILTER BUTTONS */
@@ -4776,6 +4817,7 @@ function stopOrderTrackingListener({ clearState = false } = {}){
   orderTrackingUserId = "";
   if(clearState){
     liveOrders = [];
+    updateHeaderOrderStatusChip();
     renderOrders();
   }
 }
@@ -4825,6 +4867,7 @@ function startOrderTrackingListener(user){
     nextOrders.sort((a,b) => timestampToMillis(b.createdAt) - timestampToMillis(a.createdAt));
     liveOrders = nextOrders;
     cacheLiveOrdersForUser(user.uid, nextOrders);
+    updateHeaderOrderStatusChip(nextOrders);
     renderOrders();
     hydrateDeliveryAuthorizationCodes(nextOrders).catch(error => console.warn("Delivery OTP hydrate failed:", error));
     logStructured("FIRESTORE LISTENER", { name:"customer-live-orders", count:nextOrders.length });
@@ -4858,6 +4901,15 @@ function startOrderTrackingListener(user){
 
 }
 
+headerOrderStatusChip?.addEventListener("click", async ()=>{
+  if(!auth.currentUser){
+    await window.requireMagneetozAuth?.("order_tracking");
+    if(!auth.currentUser) return;
+  }
+  trackingOverlay?.classList.add("active");
+  document.body.style.overflow = "hidden";
+});
+
 onAuthStateChanged(auth,(user)=>{
   if(!user){
     if(orderTrackingUnsub){
@@ -4886,6 +4938,7 @@ onAuthStateChanged(auth,(user)=>{
 
 function renderOrders(){
   if(countdownInterval) clearInterval(countdownInterval);
+  updateHeaderOrderStatusChip(liveOrders);
   if(!ordersContainer || !emptyOrders) return;
 
   ordersContainer.innerHTML = "";
@@ -4894,9 +4947,7 @@ function renderOrders(){
 
     if(currentFilter === "active"){
 
-      return (
-        order.status !== "Delivered" && order.status !== "Cancelled" && order.status !== "Rejected"
-      );
+      return isActiveCustomerOrder(order);
 
     }
 
@@ -5152,34 +5203,38 @@ order.status === "Delivered"
 
 function updateTrackingStatusStrip(orders = []){
   if(!trackingStatusStrip) return;
-  const active = orders.filter(order => !["Delivered","Cancelled","Rejected"].includes(normalizeTimelineStatus(order.status)));
+  const active = orders.filter(isActiveCustomerOrder);
   if(!active.length){
     trackingStatusStrip.classList.remove("show");
     trackingStatusStrip.innerHTML = "";
     return;
   }
   const latest = active[0];
-  const status = normalizeTimelineStatus(latest.status);
-  const labelMap = {
-    Pending:"Order received",
-    payment_pending:"Payment pending",
-    "Payment Pending":"Payment pending",
-    Accepted:"Accepted",
-    Preparing:"Preparing",
-    "Searching For Rider":"Finding rider",
-    "Rider Assigned":"Rider assigned",
-    "Picked Up":"Picked up",
-    "Out For Delivery":"Out for delivery",
-    Nearby:"Nearby",
-    "Delivery Code Pending":"Delivery OTP ready",
-    "Payment Completed":"Payment completed"
-  };
+  const display = orderStatusDisplay(latest);
   const totalActive = active.length;
   trackingStatusStrip.classList.add("show");
   trackingStatusStrip.innerHTML = `
     <span class="tracking-status-dot"></span>
-    <strong>${escapeHTML(labelMap[status] || status || "Order updating")}</strong>
+    <strong>${escapeHTML(display.label || "Order updating")}</strong>
     <small>${totalActive > 1 ? `${totalActive} active orders` : `Order #${escapeHTML(latest.orderNumber || latest.id || "")}`}</small>
+  `;
+}
+
+function updateHeaderOrderStatusChip(orders = liveOrders){
+  if(!headerOrderStatusChip) return;
+  const order = latestActiveOrder(orders);
+  if(!order){
+    headerOrderStatusChip.hidden = true;
+    headerOrderStatusChip.classList.remove("show");
+    headerOrderStatusChip.innerHTML = `<span class="status-dot"></span><strong>Order updating</strong>`;
+    return;
+  }
+  const display = orderStatusDisplay(order);
+  headerOrderStatusChip.hidden = false;
+  headerOrderStatusChip.classList.add("show");
+  headerOrderStatusChip.innerHTML = `
+    <span class="status-dot"></span>
+    <strong>${escapeHTML(display.icon)} ${escapeHTML(display.label)}</strong>
   `;
 }
 
