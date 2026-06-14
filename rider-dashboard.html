@@ -306,7 +306,12 @@ body{
     <div class="glass wallet-card"><span>Weekly earnings</span><b id="weeklyEarnings">₹0</b></div>
     <div class="glass wallet-card"><span>Monthly earnings</span><b id="monthlyEarnings">₹0</b></div>
     <div class="glass wallet-card"><span>Pending payout</span><b id="pendingSettlement">₹0</b></div>
+    <div class="glass wallet-card"><span>Total Earnings</span><b id="walletTotalEarnings">₹0</b></div>
+    <div class="glass wallet-card"><span>COD Collected</span><b id="walletCodCollected">₹0</b></div>
     <div class="glass wallet-card"><span>COD due to company</span><b id="companyDue">₹0</b></div>
+    <div class="glass wallet-card"><span>Wallet Balance</span><b id="walletBalance">₹0</b></div>
+    <div class="glass wallet-card"><span>Net Settlement</span><b id="netSettlement">₹0</b></div>
+    <div class="glass wallet-card"><span>Outstanding Due</span><b id="outstandingDue">₹0</b></div>
     <div class="glass wallet-card"><span>Completed payouts</span><b id="completedSettlements">₹0</b></div>
   </section>
 
@@ -380,6 +385,7 @@ let legacyOrdersUnsub = null;
 let requestOrdersUnsub = null;
 let directRequestsUnsub = null;
 let payoutUnsub = null;
+let walletUnsub = null;
 let riderAuthNullTimer = null;
 let riderHeartbeatTimer = null;
 let allOrders = [];
@@ -444,7 +450,12 @@ const els = {
   weeklyEarnings:document.getElementById("weeklyEarnings"),
   monthlyEarnings:document.getElementById("monthlyEarnings"),
   pendingSettlement:document.getElementById("pendingSettlement"),
+  walletTotalEarnings:document.getElementById("walletTotalEarnings"),
+  walletCodCollected:document.getElementById("walletCodCollected"),
   companyDue:document.getElementById("companyDue"),
+  walletBalance:document.getElementById("walletBalance"),
+  netSettlement:document.getElementById("netSettlement"),
+  outstandingDue:document.getElementById("outstandingDue"),
   completedSettlements:document.getElementById("completedSettlements"),
   payoutHistory:document.getElementById("payoutHistory"),
   count:document.getElementById("orderCount"),
@@ -747,6 +758,13 @@ function renderRider(){
   els.pendingSettlement.textContent = formatCurrency(rider.pendingSettlement || 0);
   els.companyDue.textContent = formatCurrency(rider.companyDue || rider.pendingCashSubmission || 0);
   els.completedSettlements.textContent = formatCurrency(rider.completedSettlements || 0);
+  renderWallet({
+    totalEarnings:rider.totalEarnings || 0,
+    companySettlementDue:rider.companyDue || rider.pendingCashSubmission || 0,
+    walletBalance:Math.max(0, Number(rider.pendingSettlement || 0) - Number(rider.companyDue || rider.pendingCashSubmission || 0)),
+    netBalance:Number(rider.pendingSettlement || 0) - Number(rider.companyDue || rider.pendingCashSubmission || 0),
+    outstandingDue:Math.max(0, Number(rider.companyDue || rider.pendingCashSubmission || 0) - Number(rider.pendingSettlement || 0))
+  });
   ["upiId","accountHolderName","bankAccount","ifscCode","panNumber","aadhaarNumber"].forEach(id => {
     const el = document.getElementById(id);
     if(el && !el.value) el.value = rider[id] || "";
@@ -848,6 +866,26 @@ function renderOrders(){
   }).join("");
 }
 
+function renderWallet(wallet = {}){
+  const totalEarnings = Number(wallet.totalEarnings || 0);
+  const companyDue = Number(wallet.companySettlementDue || 0);
+  const netBalance = Number(wallet.netBalance ?? (totalEarnings - companyDue));
+  els.walletTotalEarnings.textContent = formatCurrency(totalEarnings);
+  els.walletCodCollected.textContent = formatCurrency(rider?.totalCashCollected || 0);
+  els.companyDue.textContent = formatCurrency(companyDue);
+  els.walletBalance.textContent = formatCurrency(Math.max(0, Number(wallet.walletBalance ?? netBalance)));
+  els.netSettlement.textContent = formatCurrency(netBalance);
+  els.outstandingDue.textContent = formatCurrency(Math.max(0, Number(wallet.outstandingDue ?? -netBalance)));
+}
+
+function listenWallet(){
+  if(!rider?.riderId) return;
+  walletUnsub?.();
+  walletUnsub = onSnapshot(doc(db, "riderWallet", rider.riderId), snap => {
+    if(snap.exists()) renderWallet(snap.data());
+  }, error => console.warn("[FIRESTORE LISTENER] Rider wallet failed", error));
+}
+
 function findOrderById(orderId){
   return Array.isArray(allOrders)
     ? (allOrders.find(item => item.id === orderId) || null)
@@ -944,6 +982,7 @@ function enterDashboard(){
   renderRider();
   listenOrders();
   listenPayoutHistory();
+  listenWallet();
   if(rider.online || rider.isOnline){
     startRiderHeartbeat();
     startRiderLocationSharing();
@@ -1529,6 +1568,7 @@ window.addEventListener("pagehide", () => {
   requestOrdersUnsub?.();
   directRequestsUnsub?.();
   payoutUnsub?.();
+  walletUnsub?.();
 });
 
 await loadPricing();
@@ -1545,6 +1585,7 @@ onAuthStateChanged(auth, (user) => {
       requestOrdersUnsub?.();
       directRequestsUnsub?.();
       payoutUnsub?.();
+      walletUnsub?.();
       redirectLogin();
     }, 2500);
     return;
@@ -1559,6 +1600,7 @@ onAuthStateChanged(auth, (user) => {
   requestOrdersUnsub?.();
   directRequestsUnsub?.();
   payoutUnsub?.();
+  walletUnsub?.();
   riderRef = doc(db, "riders", user.uid);
   reconcileMyRiderState().catch(error => console.warn("Rider login reconcile skipped:", error));
   riderUnsub = onSnapshot(riderRef, (snap) => {

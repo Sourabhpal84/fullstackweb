@@ -15,49 +15,77 @@
 <body>
 <main class="wrap">
   <header class="header">
-    <div><h1>Rider Settlements</h1><p>Approve payouts, monitor COD dues, adjust incentives, and prepare RazorpayX settlement records.</p></div>
+    <div><h1>Rider Settlements</h1><p>Net wallet, COD settlement, UPI records, and settlement history.</p></div>
   </header>
   <section class="summary">
     <div class="box"><b id="pendingTotal">â‚¹0</b><span>Pending payouts</span></div>
     <div class="box"><b id="codDue">â‚¹0</b><span>COD company due</span></div>
     <div class="box"><b id="paidTotal">â‚¹0</b><span>Completed payouts</span></div>
     <div class="box"><b id="liabilityTotal">â‚¹0</b><span>Company liability</span></div>
+    <div class="box"><b id="outstandingTotal">â‚¹0</b><span>Outstanding due</span></div>
   </section>
   <section class="grid" id="settlements"></section>
 </main>
 <script type="module">
 import { protectAdminPage, mountAdminLogout } from "./admin-guard.js";
 import { db } from "./firebase-config.js";
-import { addDoc, collection, doc, increment, onSnapshot, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { addDoc, collection, doc, increment, onSnapshot, orderBy, query, runTransaction, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 protectAdminPage();
 mountAdminLogout(document.querySelector(".header"));
 const host = document.getElementById("settlements");
 let riders = [];
+let wallets = new Map();
+let history = [];
+let payments = [];
 function money(n){return new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0}).format(Number(n)||0)}
 onSnapshot(collection(db,"riders"), snap => {
   riders = snap.docs.map(d => ({ id:d.id, ...d.data() }));
   render();
 });
+onSnapshot(collection(db,"riderWallet"), snap => {
+  wallets = new Map(snap.docs.map(d => [d.id, { id:d.id, ...d.data() }]));
+  render();
+});
+onSnapshot(query(collection(db,"riderSettlements"), orderBy("createdAt","desc")), snap => {
+  history = snap.docs.map(d => ({ id:d.id, ...d.data() })).slice(0, 80);
+  render();
+});
+onSnapshot(query(collection(db,"riderSettlementPayments"), orderBy("createdAt","desc")), snap => {
+  payments = snap.docs.map(d => ({ id:d.id, ...d.data() })).slice(0, 80);
+  render();
+});
 function render(){
-  let pending = 0, cod = 0, paid = 0;
+  let pending = 0, cod = 0, paid = 0, outstanding = 0;
   const html = riders.map(r => {
+    const wallet = wallets.get(r.id) || {};
     const pendingSettlement = Number(r.pendingSettlement || 0);
-    const companyDue = Number(r.companyDue || r.pendingCashSubmission || 0);
+    const companyDue = Number(wallet.companySettlementDue ?? r.companyDue ?? r.pendingCashSubmission ?? 0);
+    const walletBalance = Number(wallet.walletBalance ?? Math.max(0, pendingSettlement - companyDue));
+    const netBalance = Number(wallet.netBalance ?? (Number(wallet.totalEarnings ?? r.totalEarnings ?? 0) - companyDue));
+    const outstandingDue = Number(wallet.outstandingDue ?? Math.max(0, -netBalance));
     const completed = Number(r.completedSettlements || 0);
-    pending += pendingSettlement; cod += companyDue; paid += completed;
+    pending += pendingSettlement; cod += companyDue; paid += completed; outstanding += outstandingDue;
     const status = r.payoutEnabled ? "approved" : "pending";
+    const riderHistory = history.filter(item => item.riderId === r.id).slice(0, 3);
+    const riderPayments = payments.filter(item => item.riderId === r.id).slice(0, 3);
     return `<article class="card">
       <div class="top"><div><strong>${r.name || "Magneetoz Rider"}</strong><div style="color:var(--muted);font-size:12px">${r.phone || ""}</div></div><span class="badge ${status}">${r.payoutEnabled ? "Payout verified" : "Needs verification"}</span></div>
       <div class="stats">
-        <div class="stat"><span>Pending payout</span><b>${money(pendingSettlement)}</b></div>
-        <div class="stat"><span>COD due</span><b>${money(companyDue)}</b></div>
+        <div class="stat"><span>Rider net balance</span><b>${money(netBalance)}</b></div>
+        <div class="stat"><span>Wallet balance</span><b>${money(walletBalance)}</b></div>
+        <div class="stat"><span>Company due</span><b>${money(companyDue)}</b></div>
+        <div class="stat"><span>Outstanding due</span><b>${money(outstandingDue)}</b></div>
         <div class="stat"><span>UPI</span><b>${r.upiId || "Not added"}</b></div>
         <div class="stat"><span>Bank</span><b>${r.bankAccount ? `${r.accountHolderName || ""} â€¢ ${r.ifscCode || ""}` : "Not added"}</b></div>
+      </div>
+      <div class="stats">
+        <div class="stat"><span>Settlement history</span><b>${riderHistory.map(item => `${item.status || item.type}: ${money(item.outstandingDue || item.upiPaid || item.walletBalance || 0)}`).join("<br>") || "No records"}</b></div>
+        <div class="stat"><span>UPI payment records</span><b>${riderPayments.map(item => `${money(item.amount)} ${item.status || ""}`).join("<br>") || "No UPI records"}</b></div>
       </div>
       <div class="actions">
         <button class="btn-green" onclick="verifyMethod('${r.id}')">Verify Method</button>
         <button class="btn-green" onclick="approvePayout('${r.id}', ${pendingSettlement})">Approve Payout</button>
-        <button class="btn-soft" onclick="settleCod('${r.id}', ${companyDue})">Mark COD Settled</button>
+        <button class="btn-soft" onclick="settleCod('${r.id}', ${outstandingDue})">Mark Outstanding Settled</button>
         <button class="btn-red" onclick="rejectPayout('${r.id}')">Reject</button>
       </div>
     </article>`;
@@ -67,6 +95,7 @@ function render(){
   document.getElementById("codDue").textContent = money(cod);
   document.getElementById("paidTotal").textContent = money(paid);
   document.getElementById("liabilityTotal").textContent = money(Math.max(0, pending - cod));
+  document.getElementById("outstandingTotal").textContent = money(outstanding);
 }
 window.verifyMethod = id => updateDoc(doc(db,"riders",id), { payoutEnabled:true, payoutVerifiedAt:serverTimestamp() });
 window.approvePayout = async (id, amount) => {
@@ -79,8 +108,27 @@ window.approvePayout = async (id, amount) => {
 };
 window.settleCod = async (id, amount) => {
   if(amount <= 0) return alert("No COD due.");
-  await addDoc(collection(db,"riderWalletTransactions"), { riderId:id, type:"cod_reconciliation", amount, createdAt:serverTimestamp() });
-  await updateDoc(doc(db,"riders",id), { companyDue:increment(-amount), pendingCashSubmission:increment(-amount), companySettlementPending:false, lastCodSettlementAt:serverTimestamp() });
+  await runTransaction(db, async transaction => {
+    const walletRef = doc(db, "riderWallet", id);
+    const riderRef = doc(db, "riders", id);
+    const walletSnap = await transaction.get(walletRef);
+    const current = walletSnap.exists() ? walletSnap.data() : {};
+    const totalEarnings = Number(current.totalEarnings || 0);
+    const companySettlementDue = Math.max(0, Number(current.companySettlementDue || amount) - amount);
+    const netBalance = totalEarnings - companySettlementDue;
+    const after = {
+      totalEarnings,
+      companySettlementDue,
+      walletBalance:Math.max(0, netBalance),
+      netBalance,
+      outstandingDue:Math.max(0, -netBalance)
+    };
+    transaction.set(walletRef, { riderId:id, ...after, lastSettlementAt:serverTimestamp(), updatedAt:serverTimestamp() }, { merge:true });
+    transaction.update(riderRef, { companyDue:increment(-amount), pendingCashSubmission:increment(-amount), companySettlementPending:false, lastCodSettlementAt:serverTimestamp() });
+    transaction.set(doc(collection(db,"riderWalletTransactions")), { riderId:id, type:"admin_outstanding_reconciliation", amount:-amount, createdAt:serverTimestamp() });
+    transaction.set(doc(collection(db,"riderSettlements")), { riderId:id, type:"admin_outstanding_reconciliation", status:"complete", upiPaid:amount, outstandingDue:0, walletAfter:after, createdAt:serverTimestamp() });
+    transaction.set(doc(collection(db,"riderSettlementAuditLogs")), { riderId:id, type:"admin_outstanding_reconciliation", amount, after, createdAt:serverTimestamp() });
+  });
 };
 window.rejectPayout = id => addDoc(collection(db,"riderPayouts"), { riderId:id, amount:0, payoutMethod:"review", payoutStatus:"rejected", createdAt:serverTimestamp() });
 </script>

@@ -340,6 +340,21 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    match /riderWallet/{riderId} {
+      allow read: if isOwner(riderId) || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /riderSettlementPayments/{paymentId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.riderId == request.auth.uid);
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /riderSettlementAuditLogs/{auditId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.riderId == request.auth.uid);
+      allow create, update, delete: if isAdmin();
+    }
+
     match /riderPayouts/{payoutId} {
       allow read: if isAdmin() || (signedIn() && resource.data.riderId == request.auth.uid);
       allow create, update, delete: if isAdmin();
