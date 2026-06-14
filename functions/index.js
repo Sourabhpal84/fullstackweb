@@ -177,6 +177,61 @@ function writeWalletAudit(transaction, { riderId, orderId = "", type, before, af
   });
 }
 
+const PAYMENT_ONLY_FORBIDDEN_FIELDS = new Set([
+  "status",
+  "orderStatus",
+  "lifecycleStatus",
+  "deliveryStatus",
+  "riderStatus",
+  "assignedRider",
+  "assignedRiderId",
+  "riderId",
+  "deliveryTimeline",
+  "deliveryOtpStatus",
+  "activeDeliveryCodeId"
+]);
+
+function assertPaymentOnlyUpdate(update = {}) {
+  const forbidden = Object.keys(update).filter(key => PAYMENT_ONLY_FORBIDDEN_FIELDS.has(key));
+  if (forbidden.length) {
+    logger.error("Blocked payment update containing delivery fields", { forbidden });
+    throw Object.assign(new Error(`Payment update cannot modify delivery fields: ${forbidden.join(", ")}`), { status: 500 });
+  }
+}
+
+function paymentOnlyUpdate({ paymentSessionId, razorpayOrderId, paymentId, amount, source }) {
+  const update = {
+    paymentSessionId,
+    razorpayOrderId,
+    paymentMethod: "online",
+    paymentStatus: "paid",
+    paymentRequired: true,
+    paymentCompleted: true,
+    amountDue: 0,
+    amountPaid: Number(amount || 0),
+    amountToCollect: 0,
+    paymentCaptured: true,
+    paymentId,
+    razorpayPaymentId: paymentId,
+    transactionId: paymentId,
+    companyReceivedAmount: Number(amount || 0),
+    paymentCollectedAt: FieldValue.serverTimestamp(),
+    paymentVerifiedAt: FieldValue.serverTimestamp(),
+    paidAt: FieldValue.serverTimestamp(),
+    paymentStage: "Payment Completed",
+    paymentUpdateSource: source || "payment_only_update",
+    updatedAt: FieldValue.serverTimestamp()
+  };
+  assertPaymentOnlyUpdate(update);
+  return update;
+}
+
+function updatePaymentStatus(transaction, orderRef, paymentData = {}) {
+  const update = paymentOnlyUpdate(paymentData);
+  transaction.update(orderRef, update);
+  return update;
+}
+
 function isUsablePoint(point = {}) {
   const lat = Number(point.lat);
   const lng = Number(point.lng);
@@ -536,6 +591,14 @@ async function createOrderFromPaidSession({ sessionRef, session, payment, source
       return { orderId: locked.createdOrderId, orderNumber: locked.orderNumber || "", duplicate: true };
     }
     const existingOrder = existingOrderSnap.exists ? existingOrderSnap.data() || {} : {};
+    const beforeStatus = {
+      status: existingOrder.status || "",
+      orderStatus: existingOrder.orderStatus || "",
+      lifecycleStatus: existingOrder.lifecycleStatus || "",
+      deliveryStatus: existingOrder.deliveryStatus || "",
+      riderStatus: existingOrder.riderStatus || ""
+    };
+    const beforePaymentStatus = existingOrder.paymentStatus || "";
     if (
       existingOrderSnap.exists &&
       (String(existingOrder.paymentStatus || "").toLowerCase() === "paid" || existingOrder.paymentCaptured === true) &&
@@ -549,6 +612,54 @@ async function createOrderFromPaidSession({ sessionRef, session, payment, source
         updatedAt: FieldValue.serverTimestamp()
       }, { merge: true });
       return { orderId: orderRef.id, orderNumber: existingOrder.orderNumber, duplicate: true };
+    }
+
+    const existingLiveOrder = existingOrderSnap.exists
+      && !!existingOrder.orderNumber
+      && String(existingOrder.status || existingOrder.orderStatus || "").toLowerCase() !== "payment_pending";
+    if (existingLiveOrder) {
+      const amount = Number(locked.amount || 0);
+      const paymentId = payment.id;
+      const update = updatePaymentStatus(transaction, orderRef, {
+        paymentSessionId: locked.id,
+        razorpayOrderId: locked.razorpayOrderId,
+        paymentId,
+        amount,
+        source: source || "customer_pay_now"
+      });
+      transaction.set(sessionRef, {
+        status: "order_created",
+        createdOrderId: orderRef.id,
+        orderNumber: existingOrder.orderNumber,
+        orderCreatedAt: existingOrder.placedAt || existingOrder.createdAt || FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      transaction.set(recoveryRef, {
+        status: "payment_verified_existing_order_updated",
+        paymentSessionId: locked.id,
+        orderId: orderRef.id,
+        orderNumber: existingOrder.orderNumber,
+        razorpayOrderId: locked.razorpayOrderId,
+        razorpayPaymentId: paymentId,
+        amount,
+        userId: locked.userId,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      transaction.set(db.collection("paymentTransactionLogs").doc(), {
+        paymentSessionId: locked.id,
+        userId: locked.userId,
+        orderId: orderRef.id,
+        event: "payment_only_existing_order_update",
+        source: source || "customer_pay_now",
+        statusBefore: beforeStatus,
+        statusAfter: beforeStatus,
+        paymentStatusBefore: beforePaymentStatus || "pending",
+        paymentStatusAfter: "paid",
+        razorpayOrderId: locked.razorpayOrderId,
+        razorpayPaymentId: paymentId,
+        createdAt: FieldValue.serverTimestamp()
+      });
+      return { orderId: orderRef.id, orderNumber: existingOrder.orderNumber, duplicate: false, paymentOnly: true };
     }
 
     const nextOrderNumber = Number(counterSnap.exists ? counterSnap.data().lastOrderNumber || 0 : 0) + 1;
@@ -1027,6 +1138,7 @@ exports.resumeOrderPayment = onRequest(
         cart: cartSnapshot,
         orderDraft: draft,
         razorpayOrderId: razorpayOrder.id,
+        paymentPurpose: "existing_order_payment_update",
         status: "created",
         lockState: "open",
         attempts: 0,
