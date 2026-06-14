@@ -191,6 +191,87 @@ const PAYMENT_ONLY_FORBIDDEN_FIELDS = new Set([
   "activeDeliveryCodeId"
 ]);
 
+const ORDER_STATUS_RANK = new Map([
+  ["", 0],
+  ["payment_pending", 0],
+  ["Payment Pending", 0],
+  ["Pending", 1],
+  ["Accepted", 2],
+  ["Assigned", 3],
+  ["Searching For Rider", 3],
+  ["Rider Accepted", 3],
+  ["rider_assigned", 3],
+  ["Picked Up", 4],
+  ["picked_up", 4],
+  ["Out For Delivery", 5],
+  ["out_for_delivery", 5],
+  ["Reached Nearby", 6],
+  ["Collect Payment", 6],
+  ["Nearby", 6],
+  ["Delivery Code Pending", 7],
+  ["Payment Completed", 7],
+  ["OTP_VERIFIED", 7],
+  ["Delivered", 8],
+  ["delivered", 8],
+  ["Cancelled", 99],
+  ["Rejected", 99],
+  ["Failed", 99],
+  ["failed", 99]
+]);
+
+function orderStatusRank(status = "") {
+  const text = String(status || "");
+  if (ORDER_STATUS_RANK.has(text)) return ORDER_STATUS_RANK.get(text);
+  const normalized = text.toLowerCase().replace(/\s+/g, "_");
+  if (ORDER_STATUS_RANK.has(normalized)) return ORDER_STATUS_RANK.get(normalized);
+  return 1;
+}
+
+function assertNoBackwardOrderStatus({ orderId, current = {}, update = {}, actor = "system", source = "" }) {
+  const currentStatus = current.status || current.orderStatus || "";
+  const nextStatus = Object.prototype.hasOwnProperty.call(update, "status") ? update.status : current.status;
+  const nextOrderStatus = Object.prototype.hasOwnProperty.call(update, "orderStatus") ? update.orderStatus : current.orderStatus;
+  const next = nextStatus || nextOrderStatus || "";
+  if (!next) return;
+  const currentRank = orderStatusRank(currentStatus);
+  const nextRank = orderStatusRank(next);
+  if (nextRank < currentRank) {
+    logger.error("Blocked backward order status update", {
+      orderId,
+      actor,
+      source,
+      currentStatus,
+      nextStatus: next,
+      currentRank,
+      nextRank,
+      changedFields: Object.keys(update)
+    });
+    throw Object.assign(new Error(`Backward order status update blocked: ${currentStatus} -> ${next}`), { status: 409 });
+  }
+}
+
+function guardedOrderUpdate(transaction, orderRef, currentOrder, update, { actor = "system", source = "" } = {}) {
+  assertNoBackwardOrderStatus({
+    orderId: orderRef.id,
+    current: currentOrder || {},
+    update,
+    actor,
+    source
+  });
+  transaction.set(db.collection("orderWriteAuditLogs").doc(), {
+    orderId: orderRef.id,
+    actor,
+    source,
+    previousStatus: currentOrder?.status || currentOrder?.orderStatus || "",
+    newStatus: Object.prototype.hasOwnProperty.call(update, "status") ? update.status : (currentOrder?.status || ""),
+    previousOrderStatus: currentOrder?.orderStatus || "",
+    newOrderStatus: Object.prototype.hasOwnProperty.call(update, "orderStatus") ? update.orderStatus : (currentOrder?.orderStatus || ""),
+    changedFields: Object.keys(update),
+    createdAt: FieldValue.serverTimestamp()
+  });
+  transaction.update(orderRef, update);
+}
+
 function assertPaymentOnlyUpdate(update = {}) {
   const forbidden = Object.keys(update).filter(key => PAYMENT_ONLY_FORBIDDEN_FIELDS.has(key));
   if (forbidden.length) {
@@ -229,6 +310,19 @@ function paymentOnlyUpdate({ paymentSessionId, razorpayOrderId, paymentId, amoun
 function updatePaymentStatus(transaction, orderRef, paymentData = {}) {
   const update = paymentOnlyUpdate(paymentData);
   transaction.update(orderRef, update);
+  transaction.set(db.collection("orderWriteAuditLogs").doc(), {
+    orderId: orderRef.id,
+    actor: paymentData.actor || "customer",
+    source: paymentData.source || "payment_only_update",
+    previousStatus: paymentData.statusBefore?.status || "",
+    newStatus: paymentData.statusBefore?.status || "",
+    previousOrderStatus: paymentData.statusBefore?.orderStatus || "",
+    newOrderStatus: paymentData.statusBefore?.orderStatus || "",
+    paymentStatusBefore: paymentData.paymentStatusBefore || "",
+    paymentStatusAfter: "paid",
+    changedFields: Object.keys(update),
+    createdAt: FieldValue.serverTimestamp()
+  });
   return update;
 }
 
@@ -614,9 +708,10 @@ async function createOrderFromPaidSession({ sessionRef, session, payment, source
       return { orderId: orderRef.id, orderNumber: existingOrder.orderNumber, duplicate: true };
     }
 
+    const existingStatusText = String(existingOrder.status || existingOrder.orderStatus || "").toLowerCase();
     const existingLiveOrder = existingOrderSnap.exists
-      && !!existingOrder.orderNumber
-      && String(existingOrder.status || existingOrder.orderStatus || "").toLowerCase() !== "payment_pending";
+      && existingStatusText
+      && existingStatusText !== "payment_pending";
     if (existingLiveOrder) {
       const amount = Number(locked.amount || 0);
       const paymentId = payment.id;
@@ -625,12 +720,15 @@ async function createOrderFromPaidSession({ sessionRef, session, payment, source
         razorpayOrderId: locked.razorpayOrderId,
         paymentId,
         amount,
-        source: source || "customer_pay_now"
+        source: source || "customer_pay_now",
+        actor: "customer",
+        statusBefore: beforeStatus,
+        paymentStatusBefore: beforePaymentStatus || "pending"
       });
       transaction.set(sessionRef, {
         status: "order_created",
         createdOrderId: orderRef.id,
-        orderNumber: existingOrder.orderNumber,
+        orderNumber: existingOrder.orderNumber || locked.orderNumber || "",
         orderCreatedAt: existingOrder.placedAt || existingOrder.createdAt || FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp()
       }, { merge: true });
@@ -638,7 +736,7 @@ async function createOrderFromPaidSession({ sessionRef, session, payment, source
         status: "payment_verified_existing_order_updated",
         paymentSessionId: locked.id,
         orderId: orderRef.id,
-        orderNumber: existingOrder.orderNumber,
+        orderNumber: existingOrder.orderNumber || locked.orderNumber || "",
         razorpayOrderId: locked.razorpayOrderId,
         razorpayPaymentId: paymentId,
         amount,
@@ -659,7 +757,7 @@ async function createOrderFromPaidSession({ sessionRef, session, payment, source
         razorpayPaymentId: paymentId,
         createdAt: FieldValue.serverTimestamp()
       });
-      return { orderId: orderRef.id, orderNumber: existingOrder.orderNumber, duplicate: false, paymentOnly: true };
+      return { orderId: orderRef.id, orderNumber: existingOrder.orderNumber || locked.orderNumber || "", duplicate: false, paymentOnly: true };
     }
 
     const nextOrderNumber = Number(counterSnap.exists ? counterSnap.data().lastOrderNumber || 0 : 0) + 1;
@@ -1363,21 +1461,21 @@ async function markOrderPaidFromPayment({ orderId, paymentId, amount, source }) 
     ) {
       return;
     }
-    transaction.update(orderRef, {
-      status: order.status === "Payment Pending" ? "Pending" : (order.status || "Pending"),
-      orderStatus: order.orderStatus === "Payment Pending" ? "Pending" : (order.orderStatus || "Pending"),
-      paymentStatus: "paid",
-      paymentMethod: "online",
-      amountToCollect: 0,
-      paymentCaptured: true,
+    updatePaymentStatus(transaction, orderRef, {
+      paymentSessionId: order.paymentSessionId || "",
+      razorpayOrderId: order.razorpayOrderId || "",
       paymentId,
-      razorpayPaymentId: paymentId,
-      transactionId: paymentId,
-      companyReceivedAmount: Number(amount || order.totalAmount || order.finalAmount || 0),
-      paymentCollectedAt: admin.firestore.FieldValue.serverTimestamp(),
-      checkoutSource: source || order.checkoutSource || "razorpay_webhook",
-      paymentStage: "Payment Completed",
-      lastStatusUpdatedAt: admin.firestore.FieldValue.serverTimestamp()
+      amount: Number(amount || order.totalAmount || order.finalAmount || 0),
+      source: source || order.checkoutSource || "razorpay_webhook",
+      actor: "razorpay_webhook",
+      statusBefore: {
+        status: order.status || "",
+        orderStatus: order.orderStatus || "",
+        lifecycleStatus: order.lifecycleStatus || "",
+        deliveryStatus: order.deliveryStatus || "",
+        riderStatus: order.riderStatus || ""
+      },
+      paymentStatusBefore: order.paymentStatus || "pending"
     });
   });
   logger.info("Order marked paid from Razorpay", { orderId, paymentId, source });
@@ -1885,7 +1983,7 @@ function createCustomerDeliveryCode({ transaction, orderRef, order, orderId, rid
     used: false,
     createdAt: FieldValue.serverTimestamp()
   });
-  transaction.update(orderRef, {
+  guardedOrderUpdate(transaction, orderRef, order, {
     deliveryAuthorizationCodeExpiresAt: expiresAt,
     activeDeliveryCodeId: codeRef.id,
     deliveryOtpPurpose: purpose,
@@ -1898,7 +1996,7 @@ function createCustomerDeliveryCode({ transaction, orderRef, order, orderId, rid
       deliveryOtpRequestedAt: FieldValue.serverTimestamp()
     }),
     lastStatusUpdatedAt: FieldValue.serverTimestamp()
-  });
+  }, { actor: rider.riderId, source: "createCustomerDeliveryCode" });
   addOrderAudit(transaction, orderId, purpose === "cod_exception" ? "DELIVERY_CODE_GENERATED" : "PREPAID_DELIVERY_OTP_GENERATED", {
     riderId: rider.riderId,
     codeId: codeRef.id
@@ -2063,7 +2161,7 @@ async function completeDeliveryTransaction({ orderId, rider, mode, codeRef, code
       update.deliveryCodeVerifiedAt = FieldValue.serverTimestamp();
       update.deliveryCodeVerifiedBy = rider.riderId;
     }
-    transaction.update(orderRef, update);
+    guardedOrderUpdate(transaction, orderRef, order, update, { actor: rider.riderId, source: "completeDeliveryTransaction" });
     transaction.update(riderRef, {
       totalOrders: FieldValue.increment(1),
       totalEarnings: FieldValue.increment(riderEarning),
@@ -2297,7 +2395,7 @@ exports.assignRiderToOrder = onRequest(
             status: "pending",
             createdAt: FieldValue.serverTimestamp()
           }, { merge: true });
-          transaction.update(orderRef, {
+          guardedOrderUpdate(transaction, orderRef, lockedOrder, {
             status: "Searching For Rider",
             orderStatus: "Searching For Rider",
             deliveryStatus: "rider_searching",
@@ -2322,7 +2420,7 @@ exports.assignRiderToOrder = onRequest(
             restaurantLocation: match.restaurantLocation,
             customerLocation: customerLocation || lockedOrder.customerLocation || lockedOrder.location || null,
             lastStatusUpdatedAt: FieldValue.serverTimestamp()
-          });
+          }, { actor: adminUser.uid, source: "assignRiderToOrder:auto_request" });
           addDeliveryEvent(transaction, orderId, "RIDER_REQUEST_SENT", { riderId: rider.id, autoAccepted: false });
           addOrderAudit(transaction, orderId, "RIDER_REQUEST_SENT", { riderId: rider.id, autoAccepted: false });
           return;
@@ -2342,7 +2440,7 @@ exports.assignRiderToOrder = onRequest(
           acceptedAt: FieldValue.serverTimestamp(),
           createdAt: FieldValue.serverTimestamp()
         }, { merge: true });
-        transaction.update(orderRef, {
+        guardedOrderUpdate(transaction, orderRef, lockedOrder, {
           status: "Rider Accepted",
           orderStatus: "Rider Accepted",
           deliveryStatus: "rider_assigned",
@@ -2380,7 +2478,7 @@ exports.assignRiderToOrder = onRequest(
           acceptedAt: FieldValue.serverTimestamp(),
           assignedBy: adminUser.uid,
           lastStatusUpdatedAt: FieldValue.serverTimestamp()
-        });
+        }, { actor: adminUser.uid, source: "assignRiderToOrder:manual_assign" });
         transaction.update(riderRef, {
           currentActiveOrderId: orderId,
           activeOrderId: orderId,
@@ -2564,7 +2662,7 @@ exports.acceptRiderRequest = onRequest(
         if (!(request.candidateRiderIds || []).includes(rider.riderId) && order.assignedRiderId !== rider.riderId) {
           throw Object.assign(new Error("This delivery request is no longer available"), { status: 403 });
         }
-        transaction.update(orderRef, {
+        guardedOrderUpdate(transaction, orderRef, order, {
           status: "Rider Accepted",
           orderStatus: "Rider Accepted",
           deliveryStatus: "rider_accepted",
@@ -2578,7 +2676,7 @@ exports.acceptRiderRequest = onRequest(
           riderRequest: { ...request, status: "assigned", acceptedRiderId: rider.riderId, acceptedAt: FieldValue.serverTimestamp() },
           assignedAt: order.assignedAt || FieldValue.serverTimestamp(),
           lastStatusUpdatedAt: FieldValue.serverTimestamp()
-        });
+        }, { actor: rider.riderId, source: "acceptRiderRequest" });
         transaction.update(riderRef, {
           currentActiveOrderId: orderId,
           activeOrderId: orderId,
@@ -2668,14 +2766,14 @@ exports.updateRiderDeliveryStatus = onRequest(
         if (nextStatus === "Picked Up") timestampFields.pickedUpAt = FieldValue.serverTimestamp();
         if (nextStatus === "Out For Delivery") timestampFields.outForDeliveryAt = FieldValue.serverTimestamp();
         if (nextStatus === "Reached Nearby") timestampFields.reachedNearbyAt = FieldValue.serverTimestamp();
-        transaction.update(orderRef, {
+        guardedOrderUpdate(transaction, orderRef, order, {
           status: nextStatus,
           orderStatus: nextStatus,
           deliveryStatus: deliveryStatusFor(nextStatus),
           riderStatus: nextStatus === "Out For Delivery" ? "Rider is moving toward you" : nextStatus === "Reached Nearby" ? "Rider is nearby" : "Delivery updated",
           ...timestampFields,
           lastStatusUpdatedAt: FieldValue.serverTimestamp()
-        });
+        }, { actor: rider.riderId, source: "updateRiderDeliveryStatus" });
         addDeliveryEvent(transaction, orderId, deliveryStatusFor(nextStatus).toUpperCase(), { riderId: rider.riderId });
       });
       return sendJson(res, 200, { ok: true });
@@ -2749,7 +2847,7 @@ exports.riderMarkCashReceived = onRequest(
         const order = snap.data();
         assertAssignedRider(order, rider.riderId);
         if (!isCashMethod(order.paymentMethod || order.paymentMode)) throw Object.assign(new Error("Order is not COD"), { status: 400 });
-        transaction.update(orderRef, {
+        guardedOrderUpdate(transaction, orderRef, order, {
           status: "Cash Collected",
           orderStatus: "Cash Collected",
           paymentStatus: "collected",
@@ -2764,7 +2862,7 @@ exports.riderMarkCashReceived = onRequest(
           settlementState: "CASH_COLLECTED",
           paymentStage: "Cash Collected",
           lastStatusUpdatedAt: FieldValue.serverTimestamp()
-        });
+        }, { actor: rider.riderId, source: "riderMarkCashReceived" });
         addOrderAudit(transaction, orderId, "CASH_COLLECTED", { riderId: rider.riderId, amount: Number(order.totalAmount || order.finalAmount || 0) });
       });
       return sendJson(res, 200, { ok: true });
@@ -2828,7 +2926,8 @@ exports.createRiderPaymentSession = onRequest(
       const amount = type === "cod_company_settlement" ? projectedWallet.outstandingDue : total;
       if (type === "cod_company_settlement" && amount <= 0) {
         await db.runTransaction(async transaction => {
-          const lockedOrderSnap = await transaction.get(db.collection("orders").doc(orderId));
+          const lockedOrderRef = db.collection("orders").doc(orderId);
+          const lockedOrderSnap = await transaction.get(lockedOrderRef);
           const riderRef = db.collection("riders").doc(rider.riderId);
           const walletRef = db.collection("riderWallet").doc(rider.riderId);
           const lockedWalletSnap = await transaction.get(walletRef);
@@ -2842,7 +2941,7 @@ exports.createRiderPaymentSession = onRequest(
           });
           const walletAfter = mergeWalletState(walletBefore, { companySettlementDue: grossCompanyDue });
           const adjusted = Math.min(grossCompanyDue, walletBefore.walletBalance);
-          transaction.update(db.collection("orders").doc(orderId), {
+          guardedOrderUpdate(transaction, lockedOrderRef, lockedOrder, {
             status: "Payment Settled",
             orderStatus: "Payment Settled",
             codSettlementStatus: "paid_to_company_by_payout_adjustment",
@@ -2855,7 +2954,7 @@ exports.createRiderPaymentSession = onRequest(
             companyRazorpayPaidBy: rider.riderId,
             companyRazorpayPaidAt: FieldValue.serverTimestamp(),
             lastStatusUpdatedAt: FieldValue.serverTimestamp()
-          });
+          }, { actor: rider.riderId, source: "createRiderPaymentSession:payout_adjustment" });
           transaction.update(riderRef, {
             pendingSettlement: FieldValue.increment(-adjusted),
             settlementAdjustedPayout: FieldValue.increment(adjusted),
@@ -3066,7 +3165,10 @@ exports.verifyRiderPayment = onRequest(
           companyReceivedAmount: session.amount,
           paymentStage: "Payment Completed"
         };
-        transaction.update(orderRef, { ...update, lastStatusUpdatedAt: FieldValue.serverTimestamp() });
+        guardedOrderUpdate(transaction, orderRef, lockedOrder, { ...update, lastStatusUpdatedAt: FieldValue.serverTimestamp() }, {
+          actor: rider.riderId,
+          source: session.type === "cod_company_settlement" ? "verifyRiderPayment:company_settlement" : "verifyRiderPayment:customer_online"
+        });
         transaction.update(sessionRef, { status: "verified", recoveryState: "settlement_complete", razorpayPaymentId: razorpay_payment_id, verifiedAt: FieldValue.serverTimestamp() });
         if (session.type === "cod_company_settlement" && Number(session.payoutAdjusted || 0) > 0) {
           transaction.update(riderRef, {

@@ -121,6 +121,25 @@ service cloud.firestore {
         );
     }
 
+    function orderRank(status) {
+      return status in ["payment_pending", "Payment Pending"] ? 0
+        : status == "Pending" ? 1
+        : status == "Accepted" ? 2
+        : status in ["Assigned", "Searching For Rider", "Rider Accepted", "rider_assigned"] ? 3
+        : status in ["Picked Up", "picked_up"] ? 4
+        : status in ["Out For Delivery", "out_for_delivery"] ? 5
+        : status in ["Reached Nearby", "Collect Payment", "Nearby"] ? 6
+        : status in ["Delivery Code Pending", "Payment Completed", "OTP_VERIFIED"] ? 7
+        : status in ["Delivered", "delivered"] ? 8
+        : status in ["Cancelled", "Rejected", "Failed", "failed"] ? 99
+        : 1;
+    }
+
+    function statusNotMovedBackward() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(["status", "orderStatus"])
+        || orderRank(request.resource.data.status) >= orderRank(resource.data.status);
+    }
+
     function candidateRiderOrder() {
       return signedIn()
         && resource.data.riderRequest is map
@@ -247,7 +266,7 @@ service cloud.firestore {
         && (request.resource.data.paymentStatus == "pending" || request.resource.data.paymentStatus == "Pending");
       allow list: if isAdmin() || hasRole("restaurantOwner") || isApprovedRider();
       allow read: if isAdmin() || hasRole("restaurantOwner") || (signedIn() && resource.data.restaurantOwnerId == request.auth.uid) || (signedIn() && resource.data.restaurantOwnerEmail == request.auth.token.email) || (signedIn() && resource.data.userId == request.auth.uid) || assignedRiderRead() || candidateRiderOrder();
-      allow update: if paymentNotReverted() && (isAdmin() || hasRole("restaurantOwner") || (signedIn() && resource.data.restaurantOwnerId == request.auth.uid) || (signedIn() && resource.data.restaurantOwnerEmail == request.auth.token.email) || validCustomerOrderUpdate() || validAssignedRiderUpdate());
+      allow update: if paymentNotReverted() && statusNotMovedBackward() && (isAdmin() || hasRole("restaurantOwner") || (signedIn() && resource.data.restaurantOwnerId == request.auth.uid) || (signedIn() && resource.data.restaurantOwnerEmail == request.auth.token.email) || validCustomerOrderUpdate() || validAssignedRiderUpdate());
       allow delete: if isAdmin();
     }
 
