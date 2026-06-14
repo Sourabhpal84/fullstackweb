@@ -3344,6 +3344,10 @@ async function createOrderSafely({ paymentMethod, paymentStatus, paymentId = "",
         finalAmount:pricing.grandTotal,
         paymentMethod:normalizedPaymentMethod === "upi" ? "online" : normalizedPaymentMethod,
         paymentStatus:normalizedPaymentStatus,
+        paymentRequired:pricing.grandTotal > 0,
+        paymentCompleted:normalizedPaymentStatus === "paid",
+        amountDue:normalizedPaymentStatus === "paid" ? 0 : pricing.grandTotal,
+        amountPaid:normalizedPaymentStatus === "paid" ? pricing.grandTotal : 0,
         amountToCollect:normalizedPaymentStatus === "paid" ? 0 : pricing.grandTotal,
         paymentCaptured:normalizedPaymentStatus === "paid",
         orderSource:"online",
@@ -4899,6 +4903,7 @@ function startOrderTrackingListener(user){
     nextOrders.sort((a,b) => timestampToMillis(b.createdAt) - timestampToMillis(a.createdAt));
     liveOrders = nextOrders;
     cacheLiveOrdersForUser(user.uid, nextOrders);
+    nextOrders.forEach(order => migrateLegacyPaymentFields(order));
     updateHeaderOrderStatusChip(nextOrders);
     renderOrders();
     hydrateDeliveryAuthorizationCodes(nextOrders).catch(error => console.warn("Delivery OTP hydrate failed:", error));
@@ -5369,19 +5374,101 @@ function buildCancelWindowHTML(order){
   `;
 }
 
-function canPayForOrder(order = {}){
+function hasField(object, key){
+  return Object.prototype.hasOwnProperty.call(object || {}, key);
+}
+
+function paymentRequiredForOrder(order = {}, amountDue = 0){
+  if(hasField(order, "paymentRequired")) return order.paymentRequired !== false;
+  const method = String(order.paymentMethod || order.paymentMode || "").toLowerCase();
+  const source = String(order.checkoutSource || order.orderSource || "").toLowerCase();
+  if(method === "online" || method === "upi") return true;
+  if(source.includes("razorpay") || source.includes("payment")) return true;
+  return Number(amountDue) > 0;
+}
+
+function paymentDecisionForOrder(order = {}){
   const statusText = normalizeTimelineStatus(order.status || order.orderStatus || order.lifecycleStatus || "");
-  const paymentStatus = String(order.paymentStatus || "").toLowerCase();
+  const paymentStatus = String(order.paymentStatus || "pending").toLowerCase();
+  const paymentMethod = String(order.paymentMethod || order.paymentMode || "").toLowerCase();
+  const totalAmount = Number(order.totalAmount || order.amount || order.grandTotal || order.finalAmount || 0);
+  const amountPaid = Number(order.amountPaid || 0);
+  const amountDue = Math.max(0, Number(
+    hasField(order, "amountDue")
+      ? order.amountDue
+      : hasField(order, "amountToCollect")
+        ? order.amountToCollect
+        : totalAmount - amountPaid
+  ) || 0);
+  const paymentRequired = paymentRequiredForOrder(order, amountDue);
   const paid = paymentStatus === "paid"
     || paymentStatus === "success"
     || paymentStatus === "collected"
+    || order.paymentCompleted === true
     || order.paymentCaptured === true
     || !!order.razorpayPaymentId
     || !!order.transactionId;
-  const amount = Number(order.totalAmount || order.amount || order.amountToCollect || order.grandTotal || order.finalAmount || 0);
-  return !paid
-    && !["Delivered","Cancelled","Rejected","Failed"].includes(statusText)
-    && amount >= 10;
+  const blockedStatus = ["Delivered","Cancelled","Rejected","Failed"].includes(statusText);
+  const refunded = paymentStatus === "refunded" || order.refunded === true || order.refundStatus === "refunded";
+  const validMethod = ["cod", "cash", "online", "upi", ""].includes(paymentMethod);
+  const visible = !!order.id
+    && paymentRequired
+    && !paid
+    && !blockedStatus
+    && !refunded
+    && validMethod
+    && (amountDue >= 1 || totalAmount >= 1);
+  const decision = {
+    orderId:order.id || order.orderId || "",
+    paymentStatus,
+    paymentMethod:paymentMethod || "(missing)",
+    paymentRequired,
+    paymentCompleted:paid,
+    amountDue,
+    amountPaid,
+    orderStatus:statusText,
+    visible,
+    reason:visible ? "payment_pending_required" : blockedStatus ? "order_not_payable" : refunded ? "refunded" : paid ? "already_paid" : !paymentRequired ? "payment_not_required" : !validMethod ? "invalid_payment_method" : "no_payable_amount"
+  };
+  console.info("[PAYMENT DIAGNOSTIC]", decision);
+  return decision;
+}
+
+function canPayForOrder(order = {}){
+  return paymentDecisionForOrder(order).visible;
+}
+
+async function migrateLegacyPaymentFields(order = {}){
+  if(!order.id || order._paymentMigrationChecked) return;
+  const decision = paymentDecisionForOrder(order);
+  const missingCanonicalFields = !hasField(order, "paymentRequired")
+    || !hasField(order, "paymentCompleted")
+    || !hasField(order, "amountDue")
+    || !hasField(order, "amountPaid")
+    || !String(order.paymentStatus || "")
+    || !String(order.paymentMethod || order.paymentMode || "");
+  if(!missingCanonicalFields) return;
+  order._paymentMigrationChecked = true;
+  try{
+    await updateDoc(doc(db, "orders", order.id), {
+      paymentStatus:decision.paymentStatus || "pending",
+      paymentMethod:String(order.paymentMethod || order.paymentMode || "cod").toLowerCase(),
+      paymentRequired:decision.paymentRequired,
+      paymentCompleted:decision.paymentCompleted,
+      amountDue:decision.amountDue,
+      amountPaid:decision.amountPaid,
+      paymentSchemaMigratedAt:serverTimestamp()
+    });
+    console.info("[PAYMENT MIGRATION]", {
+      orderId:order.id,
+      paymentStatus:decision.paymentStatus,
+      paymentMethod:order.paymentMethod || order.paymentMode || "cod",
+      paymentRequired:decision.paymentRequired,
+      amountDue:decision.amountDue
+    });
+  }catch(error){
+    console.warn("[PAYMENT MIGRATION] skipped", { orderId:order.id, error:error?.message || error });
+  }
 }
 
 function buildPayNowActionHTML(order = {}){
@@ -5424,6 +5511,7 @@ function buildPaymentTrackingHTML(order){
       <span class="${paid ? "paid" : "pending"}">${paid ? "Payment Received" : "Payment Pending"}</span>
       <strong>${methodLabel}</strong>
       <p>Status: ${paid ? "paid" : (order.paymentStatus || "pending")}</p>
+      ${canPayNow ? `<button type="button" class="pay-now-order-btn" onclick="payPendingOrder('${escapeHTML(order.id)}')">Pay now</button>` : ""}
       ${showDeliveryCode ? `<p><strong>Delivery OTP: <span data-delivery-code-order="${escapeHTML(order.id)}">Loading</span></strong></p><p>${codeHelp}</p>` : ""}
       ${prepaidOtpPending ? `<p><strong>Delivery OTP: generating...</strong></p><p>${codeHelp}</p>` : ""}
     </div>

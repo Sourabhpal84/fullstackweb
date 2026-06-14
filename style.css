@@ -4005,6 +4005,9 @@ body.auth-success #authPopup{
   box-shadow:0 12px 30px rgba(34,197,94,.22);
 }
 .pay-now-order-btn:active{transform:translateY(1px)}
+.payment-tracking-card .pay-now-order-btn{
+  margin-top:8px;
+}
 .restaurant-availability-banner{
   position:sticky;
   top:0;

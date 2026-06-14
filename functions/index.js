@@ -96,6 +96,43 @@ function normalizeAmount(value) {
   return Math.round(amount * 100) / 100;
 }
 
+function hasOwn(object, key) {
+  return Object.prototype.hasOwnProperty.call(object || {}, key);
+}
+
+function amountDueForOrder(order = {}) {
+  const total = Number(order.totalAmount || order.amount || order.grandTotal || order.finalAmount || 0);
+  const paid = Number(order.amountPaid || 0);
+  const due = hasOwn(order, "amountDue") ? Number(order.amountDue) : hasOwn(order, "amountToCollect") ? Number(order.amountToCollect) : total - paid;
+  return Math.max(0, Number.isFinite(due) ? due : 0);
+}
+
+function paymentRequiredForOrder(order = {}) {
+  if (hasOwn(order, "paymentRequired")) return order.paymentRequired !== false;
+  const method = String(order.paymentMethod || order.paymentMode || "").toLowerCase();
+  const source = String(order.checkoutSource || order.orderSource || "").toLowerCase();
+  return method === "online" || method === "upi" || source.includes("razorpay") || source.includes("payment") || amountDueForOrder(order) > 0;
+}
+
+function isPaymentComplete(order = {}) {
+  const status = String(order.paymentStatus || "").toLowerCase();
+  return status === "paid" || status === "success" || status === "collected" || order.paymentCompleted === true || order.paymentCaptured === true || !!order.razorpayPaymentId || !!order.transactionId;
+}
+
+function canonicalPaymentFields(order = {}) {
+  const status = String(order.paymentStatus || "pending").toLowerCase();
+  const complete = isPaymentComplete({ ...order, paymentStatus: status });
+  const amountDue = complete ? 0 : amountDueForOrder(order);
+  const total = Number(order.totalAmount || order.amount || order.grandTotal || order.finalAmount || amountDue || 0);
+  return {
+    paymentStatus: complete ? (status === "collected" ? "collected" : "paid") : status,
+    paymentRequired: paymentRequiredForOrder({ ...order, amountDue }),
+    paymentCompleted: complete,
+    amountDue,
+    amountPaid: complete ? Number(order.amountPaid || total || 0) : Number(order.amountPaid || 0)
+  };
+}
+
 function isUsablePoint(point = {}) {
   const lat = Number(point.lat);
   const lng = Number(point.lng);
@@ -484,6 +521,10 @@ async function createOrderFromPaidSession({ sessionRef, session, payment, source
       invoiceGeneratedAt: FieldValue.serverTimestamp(),
       paymentMethod: "online",
       paymentStatus: "paid",
+      paymentRequired: true,
+      paymentCompleted: true,
+      amountDue: 0,
+      amountPaid: amount,
       amountToCollect: 0,
       paymentCaptured: true,
       paymentId,
@@ -693,6 +734,10 @@ exports.createPaymentSession = onRequest(
         lifecycleStatus: "payment_pending",
         paymentStatus: "pending",
         paymentMethod: "online",
+        paymentRequired: true,
+        paymentCompleted: false,
+        amountDue: amount,
+        amountPaid: 0,
         amountToCollect: amount,
         paymentCaptured: false,
         orderSource: "online",
@@ -949,6 +994,10 @@ exports.resumeOrderPayment = onRequest(
         paymentSessionId,
         razorpayOrderId: razorpayOrder.id,
         paymentStatus: "pending",
+        paymentRequired: true,
+        paymentCompleted: false,
+        amountDue: amount,
+        amountPaid: Number(order.amountPaid || 0),
         onlinePaymentAvailable: true,
         updatedAt: FieldValue.serverTimestamp(),
         timeline: FieldValue.arrayUnion({ status: "payment_retry_created", source: "customer_pay_now", at: Date.now() })
@@ -2170,6 +2219,9 @@ exports.systemIntegrityCheck = onRequest(
         staleRiderLocks: [],
         assignedToMissingRider: [],
         missingPaymentStatus: [],
+        missingPaymentMethod: [],
+        invalidPaymentStates: [],
+        hiddenPendingPayNow: [],
         invalidOrderStatus: []
       };
       const validStatuses = new Set([
@@ -2183,6 +2235,31 @@ exports.systemIntegrityCheck = onRequest(
         const riderId = order.assignedRiderId || order.riderId || "";
         if (riderId && !riders.has(riderId)) issues.assignedToMissingRider.push({ orderId: order.id, riderId });
         if (!String(order.paymentStatus || "")) issues.missingPaymentStatus.push({ orderId: order.id, paymentMethod: order.paymentMethod || "" });
+        if (!String(order.paymentMethod || order.paymentMode || "")) issues.missingPaymentMethod.push({ orderId: order.id, paymentStatus: order.paymentStatus || "" });
+        const paymentFields = canonicalPaymentFields(order);
+        const methodText = String(order.paymentMethod || order.paymentMode || "").toLowerCase();
+        const statusText = String(order.status || order.orderStatus || "");
+        const blockedStatus = ["Delivered", "Cancelled", "Rejected", "Failed", "failed", "cancelled", "delivered"].includes(statusText);
+        const refunded = String(order.paymentStatus || "").toLowerCase() === "refunded" || order.refunded === true || order.refundStatus === "refunded";
+        const canShowPayNow = paymentFields.paymentRequired
+          && !paymentFields.paymentCompleted
+          && !blockedStatus
+          && !refunded
+          && ["cod", "cash", "online", "upi", ""].includes(methodText)
+          && (paymentFields.amountDue >= 1 || Number(order.totalAmount || order.amount || order.grandTotal || order.finalAmount || 0) >= 1);
+        const rawAmountDue = amountDueForOrder(order);
+        if (String(order.paymentStatus || "").toLowerCase() === "paid" && rawAmountDue > 0) {
+          issues.invalidPaymentStates.push({ orderId: order.id, reason: "paid_with_amount_due", amountDue: rawAmountDue });
+        }
+        if (paymentFields.paymentRequired && !paymentFields.paymentCompleted && !blockedStatus && !refunded && !canShowPayNow) {
+          issues.hiddenPendingPayNow.push({
+            orderId: order.id,
+            paymentStatus: order.paymentStatus || "",
+            paymentMethod: order.paymentMethod || order.paymentMode || "",
+            amountDue: paymentFields.amountDue,
+            orderStatus: statusText
+          });
+        }
         const status = String(order.status || order.orderStatus || "");
         if (status && !validStatuses.has(status)) issues.invalidOrderStatus.push({ orderId: order.id, status });
         if (riderId && isOpenRiderOrder(order)) {
@@ -2210,6 +2287,24 @@ exports.systemIntegrityCheck = onRequest(
             paymentStatusRepairedAt: FieldValue.serverTimestamp()
           }, { merge: true });
           repairs.push({ type: "missing_payment_status", orderId: issue.orderId });
+        }
+        for (const order of orders) {
+          const fields = canonicalPaymentFields(order);
+          const patch = {
+            ...fields,
+            paymentMethod: order.paymentMethod || order.paymentMode || "cod",
+            paymentIntegrityRepairedAt: FieldValue.serverTimestamp()
+          };
+          const needsPatch = !hasOwn(order, "paymentRequired")
+            || !hasOwn(order, "paymentCompleted")
+            || !hasOwn(order, "amountDue")
+            || !hasOwn(order, "amountPaid")
+            || !String(order.paymentStatus || "")
+            || !String(order.paymentMethod || order.paymentMode || "");
+          if (needsPatch) {
+            await db.collection("orders").doc(order.id).set(patch, { merge: true });
+            repairs.push({ type: "canonical_payment_fields", orderId: order.id });
+          }
         }
       }
       return sendJson(res, 200, { ok: true, repair, issues, repairs });

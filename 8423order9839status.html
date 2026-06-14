@@ -170,6 +170,7 @@
       <button class="close-btn" onclick="setRestaurantOpen(false)">Close Restaurant</button>
       <button class="save-btn" onclick="saveRestaurantSettings()">Save Settings</button>
       <button class="save-btn" onclick="fixCapturedPaymentOrders()">Fix Paid Online Orders</button>
+      <button class="save-btn" onclick="runPaymentIntegrityChecker()">Payment Integrity Checker</button>
     </div>
   </section>
   <section class="ops-panel">
@@ -689,12 +690,29 @@ window.runSystemIntegrityCheck = async function(){
     const stale = result.issues?.staleRiderLocks?.length || 0;
     const missingRiders = result.issues?.assignedToMissingRider?.length || 0;
     const missingPayment = result.issues?.missingPaymentStatus?.length || 0;
+    const missingMethod = result.issues?.missingPaymentMethod?.length || 0;
+    const invalidPayment = result.issues?.invalidPaymentStates?.length || 0;
+    const hiddenPayNow = result.issues?.hiddenPendingPayNow?.length || 0;
     const invalidStatus = result.issues?.invalidOrderStatus?.length || 0;
     const repaired = result.repairs?.length || 0;
-    alert(`System Integrity Check complete\n\nStale rider locks: ${stale}\nAssigned to missing rider: ${missingRiders}\nMissing payment status: ${missingPayment}\nInvalid order status: ${invalidStatus}\nAuto repairs: ${repaired}`);
+    alert(`System Integrity Check complete\n\nStale rider locks: ${stale}\nAssigned to missing rider: ${missingRiders}\nMissing payment status: ${missingPayment}\nMissing payment method: ${missingMethod}\nInvalid payment states: ${invalidPayment}\nPending payment but Pay Now hidden: ${hiddenPayNow}\nInvalid order status: ${invalidStatus}\nAuto repairs: ${repaired}`);
     toast(`Integrity check repaired ${repaired} issue(s).`);
   }catch(error){
     alert(error.message || "System integrity check failed.");
+  }
+};
+
+window.runPaymentIntegrityChecker = async function(){
+  try{
+    toast("Checking payment integrity...");
+    const result = await callAdminFunction("systemIntegrityCheck", { repair:true }, 60000);
+    const issues = result.issues || {};
+    const repaired = result.repairs?.filter(item => String(item.type || "").includes("payment")).length || 0;
+    alert(`Payment Integrity Checker complete\n\nMissing payment status: ${issues.missingPaymentStatus?.length || 0}\nMissing payment method: ${issues.missingPaymentMethod?.length || 0}\nInvalid payment states: ${issues.invalidPaymentStates?.length || 0}\nPending payment but Pay Now hidden: ${issues.hiddenPendingPayNow?.length || 0}\nPayment repairs: ${repaired}`);
+    logStructured("PAYMENT INTEGRITY CHECKER", { issues, repairs:result.repairs || [] });
+    toast(`Payment checker repaired ${repaired} issue(s).`);
+  }catch(error){
+    alert(error.message || "Payment integrity check failed.");
   }
 };
 
