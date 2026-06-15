@@ -486,18 +486,21 @@ function isPaidOnlineOrder(order = {}){
   const stage = String(order.paymentStage || "").toLowerCase();
   const orderStatus = String(order.status || order.orderStatus || "").toLowerCase();
   const amountToCollect = Number(order.amountToCollect || 0);
-  return (method === "online" || method === "upi")
-    && (
-      status === "paid"
-      || status === "success"
-      || status === "collected"
-      || stage === "payment completed"
-      || orderStatus === "payment completed"
-      || order.paymentCaptured === true
-      || !!order.razorpayPaymentId
-      || !!order.transactionId
-      || amountToCollect === 0
-    );
+  const hasOnlineProof = status === "paid"
+    || status === "success"
+    || stage === "payment completed"
+    || orderStatus === "payment completed"
+    || order.paymentCaptured === true
+    || !!order.razorpayPaymentId
+    || !!order.transactionId;
+  const onlineMethodSettled = (method === "online" || method === "upi") && (hasOnlineProof || amountToCollect === 0);
+  const codConvertedToOnlinePaid = (method === "cod" || method === "cash") && hasOnlineProof;
+  return onlineMethodSettled || codConvertedToOnlinePaid;
+}
+
+function isCodConvertedToOnlinePaid(order = {}){
+  const method = String(order.paymentMethod || order.paymentMode || "").toLowerCase();
+  return (method === "cod" || method === "cash") && isPaidOnlineOrder(order);
 }
 
 function isPaymentReady(order = {}){
@@ -814,8 +817,9 @@ function renderOrders(){
     const group = currentFilter === "Requests" ? "Requests" : statusGroup(order.status);
     const prepaidOnline = isPaidOnlineOrder(order);
     const unpaidOnline = isUnpaidOnlineOrder(order);
-    const prepaidOtpActive = prepaidOnline && order.deliveryOtpStatus === "active";
-    const prepaidOtpDone = prepaidOnline && prepaidOtpVerified(order);
+    const convertedCodPaid = isCodConvertedToOnlinePaid(order);
+    const prepaidOtpActive = prepaidOnline && !convertedCodPaid && order.deliveryOtpStatus === "active";
+    const prepaidOtpDone = prepaidOnline && (convertedCodPaid || prepaidOtpVerified(order));
     const paymentReady = isPaymentReady(order);
     const isCashOrder = isCashPayment(order.paymentMethod || order.paymentMode);
     const cashSettlementDone = isCashOrder && order.cashSettlementPending === false && !!order.codSettlementStatus;
@@ -825,7 +829,7 @@ function renderOrders(){
     const activeLocked = !!rider.currentActiveOrderId && rider.currentActiveOrderId !== order.id;
     const isDelivered = order.status === "Delivered";
     const riderCollectedOnline = prepaidOnline && order.paymentCollectedBy === rider.riderId;
-    const canDeliver = !isDelivered && paymentReady && (!isCashOrder || cashSettlementDone) && (!prepaidOnline || prepaidOtpDone || riderCollectedOnline);
+    const canDeliver = !isDelivered && paymentReady && (convertedCodPaid || !isCashOrder || cashSettlementDone) && (!prepaidOnline || prepaidOtpDone || riderCollectedOnline || convertedCodPaid);
     const badgeClass = group === "Requests" ? "request" : group === "Delivered" ? "delivered" : group === "Out For Delivery" ? "out" : "assigned";
     return `
       <article class="glass order">
@@ -854,7 +858,7 @@ function renderOrders(){
           ${order.status === "Picked Up" ? `<button class="btn-blue" onclick="startDelivery('${order.id}')">Out For Delivery</button>` : ""}
           ${order.status === "Out For Delivery" ? `<button class="btn-green" onclick="reachNearby('${order.id}')">Reached Nearby</button>` : ""}
           ${(order.status === "Reached Nearby" || order.status === "Collect Payment") && !prepaidOnline && !unpaidOnline ? `<button class="btn-soft" onclick="markCashReceived('${order.id}')">Cash Received</button><button class="btn-blue" onclick="collectOnline('${order.id}')">Online Payment</button>` : ""}
-          ${(["Out For Delivery","Reached Nearby","Collect Payment"].includes(order.status)) && prepaidOnline && !prepaidOtpActive && !prepaidOtpDone ? `<button class="btn-blue" onclick="requestPrepaidDeliveryOtp('${order.id}')">Request Delivery OTP</button>` : ""}
+          ${(["Out For Delivery","Reached Nearby","Collect Payment"].includes(order.status)) && prepaidOnline && !convertedCodPaid && !prepaidOtpActive && !prepaidOtpDone ? `<button class="btn-blue" onclick="requestPrepaidDeliveryOtp('${order.id}')">Request Delivery OTP</button>` : ""}
           ${prepaidOtpActive ? `<button class="btn-green" onclick="completeWithCustomerCode('${order.id}')">Enter Delivery OTP</button>` : ""}
           ${isCashOrder && String(order.paymentStatus || "").toLowerCase() === "collected" && !cashSettlementDone ? `<button class="btn-blue" onclick="payCompanyAndDeliver('${order.id}', ${dist || 1}, this)">Settle Company</button><button class="btn-soft" onclick="requestExceptionCode('${order.id}')">Use Customer Code</button>` : ""}
           ${order.status === "Delivery Code Pending" ? `<button class="btn-green" onclick="completeWithCustomerCode('${order.id}')">Enter Customer Code</button>` : ""}
@@ -1482,7 +1486,7 @@ window.completeWithCustomerCode = async function(orderId){
 window.deliver = async function(orderId){
   try{
     const order = findOrderById(orderId) || {};
-    const paidDoorstepOnline = isPaidOnlineOrder(order) && Number(order.amountToCollect || 0) === 0;
+    const paidDoorstepOnline = isPaidOnlineOrder(order);
     await callRiderFunction("completeRiderDelivery", {
       orderId,
       mode:paidDoorstepOnline ? "doorstep_online_paid" : "verified_payment"
