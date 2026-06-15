@@ -285,6 +285,11 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /orderWriteAuditLogs/{logId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
     match /riderPaymentSessions/{sessionId} {
       allow read: if isAdmin() || (signedIn() && resource.data.riderId == request.auth.uid);
       allow create, update, delete: if false;

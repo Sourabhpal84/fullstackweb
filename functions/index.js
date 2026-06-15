@@ -9,6 +9,16 @@ const { defineSecret } = require("firebase-functions/params");
 const { logger } = require("firebase-functions");
 const crypto = require("crypto");
 const Razorpay = require("razorpay");
+const {
+  normalizeStatus: normalizeOrderMachineStatus,
+  statusRank: machineStatusRank,
+  assertForwardTransition,
+  timelineEntry
+} = require("./services/orderStateMachine");
+const {
+  assertPaymentOnlyPayload,
+  buildPaymentUpdate
+} = require("./services/paymentService");
 
 admin.initializeApp();
 
@@ -220,11 +230,7 @@ const ORDER_STATUS_RANK = new Map([
 ]);
 
 function orderStatusRank(status = "") {
-  const text = String(status || "");
-  if (ORDER_STATUS_RANK.has(text)) return ORDER_STATUS_RANK.get(text);
-  const normalized = text.toLowerCase().replace(/\s+/g, "_");
-  if (ORDER_STATUS_RANK.has(normalized)) return ORDER_STATUS_RANK.get(normalized);
-  return 1;
+  return machineStatusRank(status);
 }
 
 function assertNoBackwardOrderStatus({ orderId, current = {}, update = {}, actor = "system", source = "" }) {
@@ -233,20 +239,20 @@ function assertNoBackwardOrderStatus({ orderId, current = {}, update = {}, actor
   const nextOrderStatus = Object.prototype.hasOwnProperty.call(update, "orderStatus") ? update.orderStatus : current.orderStatus;
   const next = nextStatus || nextOrderStatus || "";
   if (!next) return;
-  const currentRank = orderStatusRank(currentStatus);
-  const nextRank = orderStatusRank(next);
-  if (nextRank < currentRank) {
+  try {
+    assertForwardTransition({ orderId, currentStatus, nextStatus: next, actor, source });
+  } catch (error) {
     logger.error("Blocked backward order status update", {
       orderId,
       actor,
       source,
       currentStatus,
       nextStatus: next,
-      currentRank,
-      nextRank,
+      currentRank: orderStatusRank(currentStatus),
+      nextRank: orderStatusRank(next),
       changedFields: Object.keys(update)
     });
-    throw Object.assign(new Error(`Backward order status update blocked: ${currentStatus} -> ${next}`), { status: 409 });
+    throw error;
   }
 }
 
@@ -258,18 +264,24 @@ function guardedOrderUpdate(transaction, orderRef, currentOrder, update, { actor
     actor,
     source
   });
+  const nextStatus = Object.prototype.hasOwnProperty.call(update, "status") ? update.status : (currentOrder?.status || "");
+  const changedFields = Object.keys(update);
+  const finalUpdate = { ...update };
+  if (Object.prototype.hasOwnProperty.call(update, "status") || Object.prototype.hasOwnProperty.call(update, "orderStatus")) {
+    finalUpdate.timeline = FieldValue.arrayUnion(timelineEntry({ status: nextStatus, actor, source }));
+  }
   transaction.set(db.collection("orderWriteAuditLogs").doc(), {
     orderId: orderRef.id,
     actor,
     source,
     previousStatus: currentOrder?.status || currentOrder?.orderStatus || "",
-    newStatus: Object.prototype.hasOwnProperty.call(update, "status") ? update.status : (currentOrder?.status || ""),
+    newStatus: nextStatus,
     previousOrderStatus: currentOrder?.orderStatus || "",
     newOrderStatus: Object.prototype.hasOwnProperty.call(update, "orderStatus") ? update.orderStatus : (currentOrder?.orderStatus || ""),
-    changedFields: Object.keys(update),
+    changedFields,
     createdAt: FieldValue.serverTimestamp()
   });
-  transaction.update(orderRef, update);
+  transaction.update(orderRef, finalUpdate);
 }
 
 function assertPaymentOnlyUpdate(update = {}) {
@@ -281,28 +293,12 @@ function assertPaymentOnlyUpdate(update = {}) {
 }
 
 function paymentOnlyUpdate({ paymentSessionId, razorpayOrderId, paymentId, amount, source }) {
-  const update = {
-    paymentSessionId,
-    razorpayOrderId,
-    paymentMethod: "online",
-    paymentStatus: "paid",
-    paymentRequired: true,
-    paymentCompleted: true,
-    amountDue: 0,
-    amountPaid: Number(amount || 0),
-    amountToCollect: 0,
-    paymentCaptured: true,
+  const update = buildPaymentUpdate({
     paymentId,
-    razorpayPaymentId: paymentId,
     transactionId: paymentId,
-    companyReceivedAmount: Number(amount || 0),
-    paymentCollectedAt: FieldValue.serverTimestamp(),
-    paymentVerifiedAt: FieldValue.serverTimestamp(),
-    paidAt: FieldValue.serverTimestamp(),
-    paymentStage: "Payment Completed",
-    paymentUpdateSource: source || "payment_only_update",
-    updatedAt: FieldValue.serverTimestamp()
-  };
+    paidAt: FieldValue.serverTimestamp()
+  });
+  assertPaymentOnlyPayload(update);
   assertPaymentOnlyUpdate(update);
   return update;
 }

@@ -5,6 +5,9 @@
     "node": "22"
   },
   "main": "index.js",
+  "scripts": {
+    "test": "node test/order-state-machine.test.js"
+  },
   "dependencies": {
     "dotenv": "^17.4.2",
     "firebase-admin": "^12.7.0",
