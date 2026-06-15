@@ -590,35 +590,13 @@ window.updateStatus = async (id, s) => {
     lockedRiderStage();
     return;
   }
-  const orderRef = doc(db, "orders", id);
   const nextStatus = normalizeStatus(s);
-  const existing = await runTransaction(db, async transaction => {
-    const orderSnap = await transaction.get(orderRef);
-    if(!orderSnap.exists()) throw new Error("Order not found.");
-    const current = orderSnap.data();
-    if(isUnpaidOnline(current)){
-      throw new Error("Online payment is not confirmed yet. Do not accept or assign this order.");
-    }
-    if(!["Rejected","Cancelled"].includes(nextStatus) && statusRank(nextStatus) < statusRank(current.status)){
-      throw new Error(`Cannot move order backwards from ${current.status} to ${nextStatus}.`);
-    }
-    const updates = { status: nextStatus, orderStatus:nextStatus, lastStatusUpdatedAt:serverTimestamp() };
-    if(nextStatus === "Accepted") updates.acceptedAt = serverTimestamp();
-    if(nextStatus === "Preparing") updates.preparingAt = serverTimestamp();
-    if(nextStatus === "Searching For Rider") updates.readyAt = serverTimestamp();
-    if(nextStatus === "Rejected" || nextStatus === "Cancelled" || nextStatus === "Delivered"){
-      updates.completedAt = serverTimestamp();
-    }
-    transaction.update(orderRef, updates);
-    return current;
-  });
-  logStructured("ORDER STATUS", { orderId:id, status:nextStatus });
-  if((s === "Rejected" || s === "Cancelled" || s === "Delivered") && (existing.assignedRiderId || existing.riderId)){
-    await updateDoc(doc(db, "riders", existing.assignedRiderId || existing.riderId), {
-      currentActiveOrderId: deleteField(),
-      activeOrderId: deleteField(),
-      isAvailable:true
-    });
+  try{
+    const result = await callAdminFunction("adminUpdateOrderStatus", { orderId:id, status:nextStatus });
+    logStructured("ORDER STATUS", { orderId:id, status:result.status || nextStatus });
+    toast(`Order moved to ${result.status || nextStatus}`);
+  }catch(error){
+    alert(error.message || "Unable to update order status.");
   }
 };
 
@@ -631,29 +609,16 @@ window.paymentPendingLocked = function(){
 };
 
 window.markReadyForPickup = async function(orderId){
-  const orderRef = doc(db, "orders", orderId);
-  await runTransaction(db, async transaction => {
-    const orderSnap = await transaction.get(orderRef);
-    if(!orderSnap.exists()) throw new Error("Order not found.");
-    const current = orderSnap.data();
-    if(isUnpaidOnline(current)){
-      throw new Error("Online payment is not confirmed yet. Do not mark ready.");
-    }
+  try{
+    const result = await callAdminFunction("adminUpdateOrderStatus", { orderId, status:"Ready" });
     logStructured("ORDER READY", {
       orderId,
-      oldStatus:current.status || "",
-      newStatus:"ready_for_pickup",
-      assignedRiderId:current.assignedRiderId || current.riderId || ""
+      newStatus:result.status || "Ready"
     });
-    transaction.update(orderRef, {
-      status:"ready_for_pickup",
-      orderStatus:"ready_for_pickup",
-      deliveryStatus:"ready_for_pickup",
-      readyAt:serverTimestamp(),
-      lastStatusUpdatedAt:serverTimestamp()
-    });
-  });
-  toast("Order marked ready for pickup");
+    toast("Order marked ready for pickup");
+  }catch(error){
+    alert(error.message || "Unable to mark order ready.");
+  }
 };
 
 window.fixCapturedPaymentOrders = async function(){
@@ -794,9 +759,6 @@ window.requestNearbyRiders = async function(orderId){
 
   try{
     const result = await callAdminFunction("assignRiderToOrder", { orderId });
-    if(Object.keys(paymentFix).length){
-      await updateDoc(orderRef, paymentFix);
-    }
     toast(result.skipped ? "Rider already assigned" : (result.message || `Rider request sent: ${result.riderName || "Magneetoz Rider"}`));
   }catch(error){
     alert(error.message || "No rider is online right now.");

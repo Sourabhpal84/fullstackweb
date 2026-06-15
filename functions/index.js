@@ -1903,6 +1903,8 @@ function deliveryStatusFor(status = "") {
     Pending: "placed",
     Accepted: "restaurant_accepted",
     Preparing: "preparing",
+    Ready: "ready_for_pickup",
+    ready_for_pickup: "ready_for_pickup",
     "Searching For Rider": "rider_searching",
     "Rider Accepted": "rider_assigned",
     "Picked Up": "picked_up",
@@ -2496,6 +2498,84 @@ exports.assignRiderToOrder = onRequest(
     } catch (error) {
       logger.error("assignRiderToOrder failed", { error: error.message });
       return sendJson(res, error.status || 500, { ok: false, error: error.message || "Rider assignment failed" });
+    }
+  }
+);
+
+exports.adminUpdateOrderStatus = onRequest(
+  { region: "asia-south1", cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") return sendJson(res, 204, {});
+    try {
+      const adminUser = await requireAdmin(req);
+      const orderId = String(req.body?.orderId || "");
+      const requestedStatus = String(req.body?.status || "");
+      if (!orderId || !requestedStatus) throw Object.assign(new Error("Order id and status are required"), { status: 400 });
+      const statusMap = {
+        payment_pending: "Payment Pending",
+        placed: "Pending",
+        restaurant_accepted: "Accepted",
+        preparing: "Preparing",
+        ready_for_pickup: "Ready",
+        rider_searching: "Searching For Rider",
+        rider_assigned: "Rider Accepted",
+        rider_accepted: "Rider Accepted",
+        picked_up: "Picked Up",
+        out_for_delivery: "Out For Delivery",
+        arrived_customer: "Reached Nearby",
+        delivered: "Delivered",
+        cancelled: "Cancelled",
+        failed: "Failed"
+      };
+      const nextStatus = statusMap[requestedStatus.toLowerCase()] || requestedStatus;
+      const allowedAdminStatuses = new Set(["Accepted", "Preparing", "Ready", "Rejected", "Cancelled"]);
+      if (!allowedAdminStatuses.has(nextStatus)) {
+        throw Object.assign(new Error("This status is controlled by rider or system"), { status: 400 });
+      }
+      const orderRef = db.collection("orders").doc(orderId);
+      let previous = null;
+      await db.runTransaction(async transaction => {
+        const orderSnap = await transaction.get(orderRef);
+        if (!orderSnap.exists) throw Object.assign(new Error("Order not found"), { status: 404 });
+        const order = orderSnap.data() || {};
+        previous = order;
+        if (!isDeliveryPaymentEligible(order)) {
+          throw Object.assign(new Error("Online payment is not confirmed yet. Do not update this order."), { status: 409 });
+        }
+        const currentStatus = statusMap[String(order.status || "").toLowerCase()] || order.status || "Pending";
+        const normalizedCurrent = normalizeOrderMachineStatus(currentStatus);
+        const normalizedNext = normalizeOrderMachineStatus(nextStatus);
+        if (!["Rejected", "Cancelled"].includes(nextStatus) && machineStatusRank(normalizedNext) < machineStatusRank(normalizedCurrent)) {
+          throw Object.assign(new Error(`Cannot move order backwards from ${currentStatus} to ${nextStatus}`), { status: 409 });
+        }
+        const updates = {
+          status: nextStatus,
+          orderStatus: nextStatus,
+          deliveryStatus: deliveryStatusFor(nextStatus),
+          lastStatusUpdatedAt: FieldValue.serverTimestamp(),
+          lastStatusUpdatedBy: adminUser.uid
+        };
+        if (nextStatus === "Accepted") updates.acceptedAt = FieldValue.serverTimestamp();
+        if (nextStatus === "Preparing") updates.preparingAt = FieldValue.serverTimestamp();
+        if (nextStatus === "Ready") updates.readyAt = FieldValue.serverTimestamp();
+        if (nextStatus === "Rejected" || nextStatus === "Cancelled") updates.completedAt = FieldValue.serverTimestamp();
+        transaction.update(orderRef, updates);
+        addOrderAudit(transaction, orderId, "ADMIN_STATUS_UPDATE", {
+          from: currentStatus,
+          to: nextStatus,
+          adminUid: adminUser.uid
+        });
+        addDeliveryEvent(transaction, orderId, deliveryStatusFor(nextStatus).toUpperCase(), {
+          adminUid: adminUser.uid
+        });
+      });
+      if (["Rejected", "Cancelled"].includes(nextStatus) && (previous?.assignedRiderId || previous?.riderId)) {
+        await reconcileRiderState(previous.assignedRiderId || previous.riderId, { actor: `admin_status:${adminUser.uid}` });
+      }
+      return sendJson(res, 200, { ok: true, orderId, status: nextStatus });
+    } catch (error) {
+      logger.error("adminUpdateOrderStatus failed", { error: error.message });
+      return sendJson(res, error.status || 500, { ok: false, error: error.message || "Order status update failed" });
     }
   }
 );
