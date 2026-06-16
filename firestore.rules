@@ -129,8 +129,10 @@ service cloud.firestore {
         : status in ["Picked Up", "picked_up"] ? 4
         : status in ["Out For Delivery", "out_for_delivery"] ? 5
         : status in ["Reached Nearby", "Collect Payment", "Nearby"] ? 6
-        : status in ["Delivery Code Pending", "Payment Completed", "OTP_VERIFIED"] ? 7
-        : status in ["Delivered", "delivered"] ? 8
+        : status in ["Cash Collected", "cash_collected"] ? 7
+        : status in ["Payment Settled", "payment_settled"] ? 8
+        : status in ["Delivery Code Pending", "Payment Completed", "OTP_VERIFIED"] ? 9
+        : status in ["Delivered", "delivered"] ? 10
         : status in ["Cancelled", "Rejected", "Failed", "failed"] ? 99
         : 1;
     }

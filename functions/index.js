@@ -1910,6 +1910,8 @@ function deliveryStatusFor(status = "") {
     "Picked Up": "picked_up",
     "Out For Delivery": "out_for_delivery",
     "Reached Nearby": "arrived_customer",
+    "Cash Collected": "cash_collected",
+    "Payment Settled": "payment_settled",
     Delivered: "delivered",
     Rejected: "cancelled",
     Cancelled: "cancelled"
