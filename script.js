@@ -1256,6 +1256,30 @@ function checkoutSignature(paymentMethod = "COD"){
   });
 }
 
+function rotateCheckoutAttempt(reason = "fresh_attempt"){
+  checkoutInFlightId = "";
+  clearRazorpayPaymentRecovery();
+  console.info("[CHECKOUT_RECOVERY]", { reason, action:"rotated_checkout_attempt" });
+}
+
+async function createPaymentSessionWithRecovery(initialPayload){
+  try{
+    return await timedStep("upiOrder:createPaymentSession", () =>
+      callPaymentFunction("createPaymentSession", initialPayload, 12000)
+    );
+  }catch(error){
+    const message = String(error?.message || "");
+    const staleCompletedSession = /already completed|reopen checkout|payment session/i.test(message);
+    if(!staleCompletedSession) throw error;
+    setCheckoutLoading(true, "Refreshing secure payment session...");
+    rotateCheckoutAttempt("stale_completed_payment_session");
+    const freshPayload = await timedStep("upiOrder:rebuildPaidOnlineOrderDraft", () => buildPaidOnlineOrderDraft());
+    return timedStep("upiOrder:createFreshPaymentSession", () =>
+      callPaymentFunction("createPaymentSession", freshPayload, 12000)
+    );
+  }
+}
+
 function readJSON(key, fallback){
   try{
     const raw = localStorage.getItem(key);
@@ -4158,8 +4182,11 @@ if(finalTotal < 10){
   return;
 }
 setCheckoutLoading(true, "Creating secure payment session...");
-const orderDraftPayload = await timedStep("upiOrder:buildPaidOnlineOrderDraft", () => buildPaidOnlineOrderDraft());
-const paymentSession = await timedStep("upiOrder:createPaymentSession", () => callPaymentFunction("createPaymentSession", orderDraftPayload, 12000));
+let orderDraftPayload = await timedStep("upiOrder:buildPaidOnlineOrderDraft", () => buildPaidOnlineOrderDraft());
+let paymentSession = await createPaymentSessionWithRecovery(orderDraftPayload);
+if(paymentSession?.idempotencyKey && paymentSession.idempotencyKey !== orderDraftPayload.idempotencyKey){
+  orderDraftPayload = await timedStep("upiOrder:syncPaidOnlineOrderDraft", () => buildPaidOnlineOrderDraft());
+}
 const sessionAmount = Number(paymentSession.amount);
 const sessionAmountPaise = Number(paymentSession.amountPaise || Math.round(sessionAmount * 100));
 if(!paymentSession.razorpayOrderId || !paymentSession.paymentSessionId || !paymentSession.keyId || !Number.isFinite(sessionAmount) || sessionAmount <= 0 || !Number.isFinite(sessionAmountPaise) || sessionAmountPaise <= 0){
@@ -4300,6 +4327,11 @@ try{
   alert(error?.message || "Payment gateway could not open. Please try again.");
 }
 
+}catch(error){
+console.error("UPI OPEN ERROR:", error);
+setCheckoutLoading(false);
+resetRazorpayCheckoutState();
+setCheckoutRetry(error?.message || "Payment could not open. Please try again.", () => upiOrder());
 }finally{
 if(!razorpayOpened && razorpayInFlight) resetRazorpayCheckoutState();
 perfEnd("upiOrder");
