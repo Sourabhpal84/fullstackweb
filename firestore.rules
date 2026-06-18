@@ -121,6 +121,34 @@ service cloud.firestore {
         );
     }
 
+    function customerProfileFieldsOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        "fullName", "customerName", "email", "photoURL",
+        "birthdayDay", "birthdayMonth", "birthdayYear",
+        "defaultAddress", "savedAddresses", "lastCheckoutState",
+        "phone", "customerPhone",
+        "fcmToken", "fcmTokens", "notificationsEnabled",
+        "offerNotificationsEnabled", "tokenUpdatedAt", "lastSeenAt", "updatedAt"
+      ]);
+    }
+
+    function verifiedPhoneOnly() {
+      return (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["phone", "customerPhone"]))
+        || (
+          request.auth.token.phone_number != null
+          && (!("phone" in request.resource.data) || request.resource.data.phone == request.auth.token.phone_number)
+          && (!("customerPhone" in request.resource.data) || request.resource.data.customerPhone == request.auth.token.phone_number)
+        );
+    }
+
+    function safeNewUserWallet() {
+      return (!("walletPoints" in request.resource.data) || request.resource.data.walletPoints == 0)
+        && (!("lifetimePointsEarned" in request.resource.data) || request.resource.data.lifetimePointsEarned == 0)
+        && (!("lifetimePointsUsed" in request.resource.data) || request.resource.data.lifetimePointsUsed == 0)
+        && !("referredBy" in request.resource.data)
+        && !("ambassadorReferredBy" in request.resource.data);
+    }
+
     function orderRank(status) {
       return status in ["payment_pending", "Payment Pending"] ? 0
         : status == "Pending" ? 1
@@ -262,8 +290,53 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read, update, create: if isOwner(userId) || isAdmin();
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAdmin() || (isOwner(userId) && safeNewUserWallet());
+      allow update: if isAdmin() || (isOwner(userId) && customerProfileFieldsOnly() && verifiedPhoneOnly());
       allow delete: if isAdmin();
+    }
+
+    match /walletTransactions/{transactionId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    match /referralEvents/{eventId} {
+      allow read: if isAdmin() || (signedIn() && (
+        resource.data.referredUserId == request.auth.uid ||
+        resource.data.referrerUserId == request.auth.uid
+      ));
+      allow create, update, delete: if false;
+    }
+
+    match /growthOrderEvents/{eventId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /referralCampaigns/{campaignId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /ambassadorApplications/{applicationId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    match /ambassadors/{ambassadorId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
+    match /ambassadorTransactions/{transactionId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    match /ambassadorWithdrawals/{withdrawalId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create, update, delete: if false;
     }
 
     match /orders/{orderId} {

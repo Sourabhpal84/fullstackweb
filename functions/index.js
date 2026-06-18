@@ -19,6 +19,7 @@ const {
   assertPaymentOnlyPayload,
   buildPaymentUpdate
 } = require("./services/paymentService");
+const growth = require("./services/growthService");
 
 admin.initializeApp();
 
@@ -872,7 +873,8 @@ exports.createPaymentSession = onRequest(
       const incomingCart = compactCart(body.cart);
       const draft = compactOrderDraft(body.orderDraft || {}, incomingCart);
       const customerName = String(draft.customerName || body.customerName || "Magneetoz Customer").slice(0, 120);
-      const customerPhone = String(draft.phone || body.phone || "").replace(/\D/g, "").slice(-10);
+      const customerPhone = String(user.phone_number || "").replace(/\D/g, "").slice(-10);
+      if (!customerPhone) throw Object.assign(new Error("Verified mobile missing. Please update your profile once."), { status: 400 });
       const customerEmail = String(draft.email || body.email || "").trim();
       if (draft.restaurantLocation && draft.location) {
         const route = await calculateGoogleRouteDistance({
@@ -4161,5 +4163,240 @@ exports.generateLoyaltyRewardCoupon = onDocumentUpdated(
       requiredOrders,
       createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
+  }
+);
+
+exports.initializeGrowthProfile = onDocumentCreated(
+  { document: "users/{userId}", region: "asia-south1" },
+  async event => {
+    const snap = event.data;
+    if (!snap) return;
+    const userId = event.params.userId;
+    let authPhone = "";
+    try {
+      authPhone = (await admin.auth().getUser(userId)).phoneNumber || "";
+    } catch (error) {
+      logger.warn("Growth profile auth lookup skipped", { userId, error: error.message });
+    }
+    await growth.initializeUser({ db, FieldValue, uid: userId, authPhone, profile: snap.data() || {} });
+  }
+);
+
+exports.processGrowthRewardsOnDelivery = onDocumentUpdated(
+  { document: "orders/{orderId}", region: "asia-south1" },
+  async event => {
+    if (!event.data) return;
+    await growth.processDeliveredOrder({
+      db,
+      FieldValue,
+      orderId: event.params.orderId,
+      before: event.data.before.data() || {},
+      order: event.data.after.data() || {},
+      logger
+    });
+  }
+);
+
+exports.attachReferralToUser = onRequest(
+  { region: "asia-south1", cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") return sendJson(res, 204, {});
+    try {
+      const user = await requireAuth(req);
+      const result = await growth.attachReferral({
+        db, FieldValue, uid: user.uid, code: req.body?.code, authPhone: user.phone_number || ""
+      });
+      sendJson(res, 200, result);
+    } catch (error) {
+      logger.warn("Attach referral failed", { error: error.message });
+      sendJson(res, error.status || 500, { error: error.message });
+    }
+  }
+);
+
+exports.validateReferralCode = onRequest(
+  { region: "asia-south1", cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") return sendJson(res, 204, {});
+    try {
+      const code = growth.cleanCode(req.body?.code);
+      const [users, ambassadors] = await Promise.all([
+        db.collection("users").where("referralCode", "==", code).limit(1).get(),
+        db.collection("ambassadors").where("ambassadorCode", "==", code).where("status", "==", "approved").limit(1).get()
+      ]);
+      if (users.empty && ambassadors.empty) return sendJson(res, 404, { valid: false, error: "Code not found" });
+      sendJson(res, 200, { valid: true, path: users.empty ? "ambassador" : "normal", code });
+    } catch (error) {
+      sendJson(res, error.status || 500, { error: error.message });
+    }
+  }
+);
+
+exports.createAmbassadorApplication = onRequest(
+  { region: "asia-south1", cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") return sendJson(res, 204, {});
+    try {
+      const user = await requireAuth(req);
+      const body = req.body || {};
+      const ref = db.collection("ambassadorApplications").doc(user.uid);
+      await ref.set({
+        userId: user.uid,
+        fullName: String(body.fullName || "").trim().slice(0, 100),
+        mobile: user.phone_number || "",
+        college: String(body.college || "").trim().slice(0, 160),
+        hostelPg: String(body.hostelPg || "").trim().slice(0, 160),
+        area: String(body.area || "").trim().slice(0, 160),
+        instagram: String(body.instagram || "").trim().slice(0, 180),
+        whatsappNumber: String(body.whatsappNumber || user.phone_number || "").trim().slice(0, 20),
+        motivation: String(body.motivation || "").trim().slice(0, 1200),
+        expectedReach: Math.max(0, Number(body.expectedReach || 0)),
+        status: "pending",
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      sendJson(res, 200, { ok: true, applicationId: ref.id });
+    } catch (error) {
+      sendJson(res, error.status || 500, { error: error.message });
+    }
+  }
+);
+
+exports.requestAmbassadorWithdrawal = onRequest(
+  { region: "asia-south1", cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") return sendJson(res, 204, {});
+    try {
+      const user = await requireAuth(req);
+      const amount = normalizeAmount(req.body?.amount);
+      const upiId = String(req.body?.upiId || "").trim();
+      if (!/^[\w.\-]{2,}@[A-Za-z]{2,}$/.test(upiId)) throw Object.assign(new Error("Enter a valid UPI ID"), { status: 400 });
+      const ambassadorQuery = await db.collection("ambassadors").where("userId", "==", user.uid).where("status", "==", "approved").limit(1).get();
+      if (ambassadorQuery.empty) throw Object.assign(new Error("Approved ambassador account required"), { status: 403 });
+      const ambassadorRef = ambassadorQuery.docs[0].ref;
+      const withdrawalRef = db.collection("ambassadorWithdrawals").doc();
+      await db.runTransaction(async transaction => {
+        const snap = await transaction.get(ambassadorRef);
+        const ambassador = snap.data() || {};
+        const config = await growth.settings(db);
+        if (amount < Number(config.ambassadorMinimumWithdrawal || 100)) throw Object.assign(new Error("Amount is below minimum withdrawal"), { status: 400 });
+        if (amount > Number(ambassador.withdrawableBalance || 0)) throw Object.assign(new Error("Insufficient withdrawable balance"), { status: 409 });
+        transaction.set(ambassadorRef, {
+          withdrawableBalance: roundMoney(Number(ambassador.withdrawableBalance || 0) - amount),
+          pendingWithdrawal: roundMoney(Number(ambassador.pendingWithdrawal || 0) + amount),
+          upiId,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        transaction.set(withdrawalRef, {
+          ambassadorId: ambassadorRef.id, userId: user.uid, amount, upiId,
+          status: "pending", requestedAt: FieldValue.serverTimestamp()
+        });
+      });
+      sendJson(res, 200, { ok: true, withdrawalId: withdrawalRef.id });
+    } catch (error) {
+      sendJson(res, error.status || 500, { error: error.message });
+    }
+  }
+);
+
+exports.adminAdjustPizzaPoints = onRequest(
+  { region: "asia-south1", cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") return sendJson(res, 204, {});
+    try {
+      const adminUser = await requireAdmin(req);
+      const userId = String(req.body?.userId || "").trim();
+      const points = Math.trunc(Number(req.body?.points || 0));
+      if (!userId || !points || Math.abs(points) > 100000) throw Object.assign(new Error("Valid user and point amount required"), { status: 400 });
+      const userRef = db.collection("users").doc(userId);
+      const txRef = db.collection("walletTransactions").doc();
+      await db.runTransaction(async transaction => {
+        const snap = await transaction.get(userRef);
+        if (!snap.exists) throw Object.assign(new Error("User not found"), { status: 404 });
+        const user = snap.data();
+        const next = Number(user.walletPoints || 0) + points;
+        if (next < 0) throw Object.assign(new Error("Debit exceeds available points"), { status: 409 });
+        transaction.set(userRef, {
+          walletPoints: next,
+          lifetimePointsEarned: Number(user.lifetimePointsEarned || 0) + Math.max(0, points),
+          lifetimePointsUsed: Number(user.lifetimePointsUsed || 0) + Math.max(0, -points),
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        transaction.set(txRef, {
+          userId, type: points > 0 ? "admin_credit" : "admin_debit",
+          points, amountEquivalent: points, source: "admin",
+          status: "credited", description: String(req.body?.description || "Admin adjustment").slice(0, 240),
+          adminUid: adminUser.uid, createdAt: FieldValue.serverTimestamp()
+        });
+      });
+      sendJson(res, 200, { ok: true, transactionId: txRef.id });
+    } catch (error) {
+      sendJson(res, error.status || 500, { error: error.message });
+    }
+  }
+);
+
+exports.adminReviewAmbassador = onRequest(
+  { region: "asia-south1", cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") return sendJson(res, 204, {});
+    try {
+      const adminUser = await requireAdmin(req);
+      const applicationId = String(req.body?.applicationId || "");
+      const decision = String(req.body?.decision || "");
+      if (!["approved", "rejected", "disabled"].includes(decision)) throw Object.assign(new Error("Invalid decision"), { status: 400 });
+      const appRef = db.collection("ambassadorApplications").doc(applicationId);
+      const appSnap = await appRef.get();
+      if (!appSnap.exists) throw Object.assign(new Error("Application not found"), { status: 404 });
+      const application = appSnap.data();
+      const ambassadorRef = db.collection("ambassadors").doc(application.userId);
+      const code = growth.cleanCode(req.body?.ambassadorCode || `MAGAMB${application.userId.slice(0, 6)}`);
+      const batch = db.batch();
+      batch.set(appRef, { status: decision, reviewedBy: adminUser.uid, reviewedAt: FieldValue.serverTimestamp(), adminNote: String(req.body?.adminNote || "") }, { merge: true });
+      if (decision === "approved") {
+        batch.set(ambassadorRef, {
+          ...application, userId: application.userId, status: "approved", ambassadorCode: code,
+          rewardType: String(req.body?.rewardType || "cash_flat"),
+          rewardValue: Number(req.body?.rewardValue || 20),
+          deliveredOrders: 0, revenueGenerated: 0, rewardsEarned: 0,
+          withdrawableBalance: 0, pendingWithdrawal: 0,
+          approvedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        batch.set(db.collection("users").doc(application.userId), { ambassadorStatus: "approved", ambassadorCode: code, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      }
+      await batch.commit();
+      sendJson(res, 200, { ok: true, ambassadorCode: decision === "approved" ? code : "" });
+    } catch (error) {
+      sendJson(res, error.status || 500, { error: error.message });
+    }
+  }
+);
+
+exports.adminProcessAmbassadorWithdrawal = onRequest(
+  { region: "asia-south1", cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") return sendJson(res, 204, {});
+    try {
+      const adminUser = await requireAdmin(req);
+      const withdrawalRef = db.collection("ambassadorWithdrawals").doc(String(req.body?.withdrawalId || ""));
+      const decision = String(req.body?.decision || "");
+      if (!["paid", "rejected"].includes(decision)) throw Object.assign(new Error("Invalid decision"), { status: 400 });
+      await db.runTransaction(async transaction => {
+        const withdrawalSnap = await transaction.get(withdrawalRef);
+        if (!withdrawalSnap.exists || withdrawalSnap.data().status !== "pending") throw Object.assign(new Error("Pending withdrawal not found"), { status: 404 });
+        const withdrawal = withdrawalSnap.data();
+        const ambassadorRef = db.collection("ambassadors").doc(withdrawal.ambassadorId);
+        const ambassadorSnap = await transaction.get(ambassadorRef);
+        const ambassador = ambassadorSnap.data() || {};
+        const amount = Number(withdrawal.amount || 0);
+        const patch = { pendingWithdrawal: Math.max(0, roundMoney(Number(ambassador.pendingWithdrawal || 0) - amount)), updatedAt: FieldValue.serverTimestamp() };
+        if (decision === "rejected") patch.withdrawableBalance = roundMoney(Number(ambassador.withdrawableBalance || 0) + amount);
+        transaction.set(ambassadorRef, patch, { merge: true });
+        transaction.set(withdrawalRef, { status: decision, processedBy: adminUser.uid, processedAt: FieldValue.serverTimestamp(), adminNote: String(req.body?.adminNote || "") }, { merge: true });
+      });
+      sendJson(res, 200, { ok: true });
+    } catch (error) {
+      sendJson(res, error.status || 500, { error: error.message });
+    }
   }
 );

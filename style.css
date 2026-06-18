@@ -1224,14 +1224,31 @@ img{
 
 .invoice-download-btn{
   width:100%;
-  border:0;
+  border:1px solid color-mix(in srgb,var(--foreground,#111827) 14%,transparent);
   border-radius:12px;
   min-height:42px;
   margin:12px 0;
-  background:linear-gradient(135deg,#111827,#263241);
-  color:#fff;
+  background:linear-gradient(135deg,#ff7b00,#14b8a6);
+  color:#ffffff !important;
+  -webkit-text-fill-color:#ffffff !important;
   font:900 12px Poppins,system-ui,sans-serif;
+  text-shadow:0 1px 2px rgba(0,0,0,.28);
+  box-shadow:0 10px 24px rgba(20,184,166,.18);
   cursor:pointer;
+}
+
+.invoice-download-btn:hover,
+.invoice-download-btn:focus-visible{
+  filter:brightness(1.06);
+  transform:translateY(-1px);
+}
+
+body.dark-mode .invoice-download-btn,
+body.dark-theme .invoice-download-btn,
+body.light-theme .invoice-download-btn,
+body:not(.dark-mode):not(.dark-theme) .invoice-download-btn{
+  color:#ffffff !important;
+  -webkit-text-fill-color:#ffffff !important;
 }
 
 /* ===== RESPONSIVE ===== */
@@ -7992,3 +8009,4 @@ body .category-jump-footer a{
   .summary-card p{font-size:8px!important}.summary-card h3{font-size:9px!important;margin-top:2px!important}
   .invoice-download-btn{min-height:36px!important;margin-top:7px!important;font-size:9px!important}
 }
+.checkout-auth-phone{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid rgba(255,255,255,.12);border-radius:14px;background:rgba(255,255,255,.05);font-size:13px}.checkout-auth-phone span{color:var(--muted,#8f98a8)}.checkout-auth-phone strong{color:var(--text,#fff);text-align:right}

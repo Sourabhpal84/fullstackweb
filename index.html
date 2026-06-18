@@ -436,6 +436,10 @@ Verify OTP
   <!-- DROPDOWN -->
   <div id="headerDropdown" class="header-dropdown">
 
+    <button onclick="location.href='profile.html'">
+      👤 My Profile & Pizza Points
+    </button>
+
     <button id="dropdownTrackBtn">
       📦 Track Orders
     </button>
@@ -785,13 +789,11 @@ Verify OTP
         placeholder="Your Name"
         autocomplete="name" />
 
-      <input
-        type="tel"
-        id="customerPhone"
-        placeholder="Mobile Number"
-        autocomplete="tel"
-        inputmode="tel"
-        maxlength="16" />
+      <div class="checkout-auth-phone" id="checkoutAuthPhone">
+        <span>Verified mobile</span>
+        <strong id="checkoutAuthPhoneValue">Login to continue</strong>
+      </div>
+      <input type="hidden" id="customerPhone" />
 
       <textarea
         id="customerAddress"

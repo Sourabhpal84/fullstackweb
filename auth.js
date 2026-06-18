@@ -38,6 +38,32 @@ let webOtpController = null;
 let lastAutoVerifyCode = "";
 const VAPID_KEY_RE = /^[A-Za-z0-9_-]{80,}$/;
 const DEV_LOGS = ["localhost", "127.0.0.1"].includes(location.hostname) || location.search.includes("debugAuth=1");
+const REFERRAL_STORAGE_KEY = "magneetozPendingReferral";
+
+function captureReferralCode(){
+  const code = new URLSearchParams(location.search).get("ref");
+  if(code) localStorage.setItem(REFERRAL_STORAGE_KEY, code.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 24));
+}
+
+async function attachPendingReferral(user){
+  const code = localStorage.getItem(REFERRAL_STORAGE_KEY);
+  if(!code || !user) return;
+  try{
+    const token = await user.getIdToken();
+    const projectId = auth.app.options.projectId;
+    const response = await fetch(`https://asia-south1-${projectId}.cloudfunctions.net/attachReferralToUser`, {
+      method:"POST",
+      headers:{ "Content-Type":"application/json", Authorization:`Bearer ${token}` },
+      body:JSON.stringify({ code })
+    });
+    const data = await response.json().catch(() => ({}));
+    if(response.ok || /already attached/i.test(data.error || "")) localStorage.removeItem(REFERRAL_STORAGE_KEY);
+  }catch(error){
+    devLog("Referral attachment deferred:", error);
+  }
+}
+
+captureReferralCode();
 
 const $ = (id) => document.getElementById(id);
 
@@ -104,6 +130,7 @@ function setAuthView(user){
       pendingAuthResolve = null;
     }
     registerCustomerPushToken(user, false);
+    attachPendingReferral(user);
     return;
   }
 

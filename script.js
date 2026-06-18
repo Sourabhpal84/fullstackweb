@@ -1173,6 +1173,7 @@ function toastWarning(message){ window.MagneetozNotify?.warning(message); }
 function toastError(message){ window.MagneetozNotify?.error(message); }
 
 onAuthStateChanged(auth, user => {
+  syncAuthenticatedCheckoutPhone(user);
   if(user){
     if(authCacheNullTimer){
       clearTimeout(authCacheNullTimer);
@@ -1465,10 +1466,18 @@ function getCheckoutFields(){
   };
 }
 
+function syncAuthenticatedCheckoutPhone(user = auth.currentUser || cachedAuthUser){
+  const phone = normalizeUnicodeText(user?.phoneNumber || "");
+  const hidden = document.getElementById("customerPhone");
+  const label = document.getElementById("checkoutAuthPhoneValue");
+  if(hidden) hidden.value = phone;
+  if(label) label.textContent = phone || "Update your profile to add a verified mobile";
+  return phone;
+}
+
 function focusMissingCheckoutField(){
   const fields = [
     ["customerName", "name"],
-    ["customerPhone", "mobile number"],
     ["customerAddress", "address"]
   ];
   const missing = fields.find(([id]) => !normalizeUnicodeText(document.getElementById(id)?.value || ""));
@@ -1484,7 +1493,6 @@ function focusMissingCheckoutField(){
 function restoreCheckoutFields(state = readJSON(CHECKOUT_STATE_KEY, {}), force = false){
   const map = {
     customerName:state.name,
-    customerPhone:state.phone,
     customerAddress:state.address,
     customerLandmark:state.landmark,
     customerLat:state.lat,
@@ -1594,7 +1602,7 @@ function applySavedAddress(index){
   if(!select) return;
   if(index === ""){
     setCheckoutFieldsCollapsed(false);
-    ["customerName","customerPhone","customerAddress","customerLandmark"].forEach(id => {
+    ["customerName","customerAddress","customerLandmark"].forEach(id => {
       const el = document.getElementById(id);
       if(el) el.value = "";
     });
@@ -1652,7 +1660,9 @@ function readAddressBook(){
 
 async function saveCurrentAddressToBook(){
   const fields = getCheckoutFields();
-  if(!fields.name || !fields.phone || !fields.address) throw new Error("Fill name, phone & address first.");
+  fields.phone = syncAuthenticatedCheckoutPhone();
+  if(!fields.phone) throw new Error("Your verified mobile is missing. Please update your profile once.");
+  if(!fields.name || !fields.address) throw new Error("Fill name & address first.");
   const existing = readAddressBook();
   const nextAddress = {
     ...fields,
@@ -3341,7 +3351,9 @@ async function createOrderSafely({ paymentMethod, paymentStatus, paymentId = "",
   if(!cart.length) throw new Error("Cart empty");
 
   const fields = getCheckoutFields();
-  if(!fields.name || !fields.phone || !fields.address) throw new Error("Fill name, phone & address");
+  fields.phone = syncAuthenticatedCheckoutPhone(user);
+  if(!fields.phone) throw new Error("Your verified mobile is missing. Please update your profile once.");
+  if(!fields.name || !fields.address) throw new Error("Fill name & address");
   const normalizedPaymentMethod = String(paymentMethod || "").toLowerCase();
   const normalizedPaymentStatus = String(paymentStatus || "pending").toLowerCase();
   if(!["cod", "online", "upi"].includes(normalizedPaymentMethod)) throw new Error("Invalid payment method");
@@ -3490,7 +3502,9 @@ async function buildPaidOnlineOrderDraft(){
   if(!cart.length) throw new Error("Cart empty");
 
   const fields = getCheckoutFields();
-  if(!fields.name || !fields.phone || !fields.address) throw new Error("Fill name, phone & address");
+  fields.phone = syncAuthenticatedCheckoutPhone(user);
+  if(!fields.phone) throw new Error("Your verified mobile is missing. Please update your profile once.");
+  if(!fields.name || !fields.address) throw new Error("Fill name & address");
 
   const subtotal = getCartSubtotal();
   if(subtotal < 2) throw new Error(`Add ${formatCurrency(2 - subtotal)} more to place order`);
@@ -3930,10 +3944,15 @@ return;
 }
 
 const name = normalizeUnicodeText(document.getElementById("customerName").value);
-const phone = normalizeUnicodeText(document.getElementById("customerPhone").value);
+const phone = syncAuthenticatedCheckoutPhone();
 const address = normalizeUnicodeText(document.getElementById("customerAddress").value);
 
-  if (!name || !phone || !address) {
+  if (!phone) {
+alert("Your verified mobile is missing. Please update your profile once.");
+return;
+}
+
+  if (!name || !address) {
 focusMissingCheckoutField();
 return;
 }
@@ -4636,7 +4655,7 @@ document.addEventListener("DOMContentLoaded", () => {
     event.preventDefault();
     document.getElementById("menuSection")?.scrollIntoView({ behavior:"smooth", block:"start" });
   });
-  ["customerName","customerPhone","customerAddress","customerLandmark"].forEach(id => {
+  ["customerName","customerAddress","customerLandmark"].forEach(id => {
     document.getElementById(id)?.addEventListener("input", () => {
       setCheckoutFieldsCollapsed(false);
       persistGuestState();

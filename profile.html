@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>My Profile & Pizza Points | MAGNEETOZ</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body{background:#080b10;color:#fff;font-family:Inter,system-ui,sans-serif}.profile-shell{max-width:1050px;margin:auto;padding:24px}.profile-top,.card{background:#111721;border:1px solid #263140;border-radius:22px;padding:20px}.profile-top{display:flex;justify-content:space-between;gap:16px;align-items:center}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:16px}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.stat{background:#191f2a;border-radius:16px;padding:14px}.stat b{display:block;font-size:24px;color:#ffd166}.field{display:grid;gap:6px;margin:10px 0}.field input,.field textarea{padding:12px;border-radius:12px;border:1px solid #364153;background:#090d13;color:#fff}button,.button{border:0;border-radius:12px;padding:11px 15px;background:#ff6b00;color:#fff;font-weight:800;cursor:pointer;text-decoration:none}.soft{background:#252e3b}.row{display:flex;gap:8px;flex-wrap:wrap}.muted{color:#9aa6b6}.list{display:grid;gap:8px}.item{padding:12px;border-radius:12px;background:#181f29}.birthday{padding:12px;background:#30240c;border-radius:12px;color:#ffd166}@media(max-width:760px){.grid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.profile-top{align-items:flex-start;flex-direction:column}}
+  </style>
+</head>
+<body>
+<main class="profile-shell">
+  <div class="profile-top"><div><a class="button soft" href="index.html">← Back</a><h1>My MAGNEETOZ</h1><p class="muted" id="phone">Checking login…</p></div><button id="logout">Logout</button></div>
+  <div class="stats">
+    <div class="stat"><b id="wallet">0</b><span>Pizza Points</span></div>
+    <div class="stat"><b id="earned">0</b><span>Lifetime earned</span></div>
+    <div class="stat"><b id="used">0</b><span>Lifetime used</span></div>
+    <div class="stat"><b id="orders">0</b><span>Total orders</span></div>
+  </div>
+  <div class="grid">
+    <section class="card"><h2>Profile</h2><div class="birthday">Add your birthday and get a special MAGNEETOZ birthday reward.</div>
+      <form id="profileForm"><label class="field">Full name<input id="fullName" required></label><label class="field">Email (optional)<input id="email" type="email"></label><label class="field">Photo URL (optional)<input id="photoURL" type="url"></label><div class="row"><label class="field">Birthday day<input id="birthdayDay" type="number" min="1" max="31"></label><label class="field">Month<input id="birthdayMonth" type="number" min="1" max="12"></label><label class="field">Year<input id="birthdayYear" type="number" min="1900"></label></div><button>Save profile</button></form>
+    </section>
+    <section class="card"><h2>Refer & Earn</h2><p>Invite friends. After their first delivered order, you get 10 Pizza Points and they get 20.</p><h3 id="referralCode">Generating…</h3><div class="row"><button id="copyCode">Copy code</button><button id="copyLink" class="soft">Copy link</button><button id="shareWhatsApp" class="soft">WhatsApp</button></div><p class="muted"><span id="referrals">0</span> successful referrals</p></section>
+    <section class="card"><h2>Wallet history</h2><div id="walletHistory" class="list"><p class="muted">No transactions yet.</p></div></section>
+    <section class="card"><h2>Recent orders</h2><div id="recentOrders" class="list"><p class="muted">No orders yet.</p></div></section>
+    <section class="card"><h2>Saved addresses</h2><div id="addresses" class="list"><p class="muted">No saved address.</p></div></section>
+    <section class="card"><h2>Become a MAGNEETOZ Ambassador</h2><p class="muted">For students, hostel/PG representatives, influencers and local promoters.</p><form id="ambassadorForm"><label class="field">College<input id="college"></label><label class="field">Hostel / PG<input id="hostelPg"></label><label class="field">Area<input id="area" required></label><label class="field">Instagram (optional)<input id="instagram"></label><label class="field">WhatsApp<input id="whatsapp"></label><label class="field">Why do you want to join?<textarea id="motivation" required></textarea></label><label class="field">Expected reach<input id="expectedReach" type="number" min="0"></label><button>Apply</button></form><p id="applicationStatus" class="muted"></p></section>
+  </div>
+</main>
+<script type="module">
+import { auth, db } from "./firebase-config.js";
+import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { collection, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, setDoc, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+const $=id=>document.getElementById(id); let currentUser, profile={};
+const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+async function api(name,body){const token=await currentUser.getIdToken();const r=await fetch(`https://asia-south1-${auth.app.options.projectId}.cloudfunctions.net/${name}`,{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify(body)});const data=await r.json();if(!r.ok)throw new Error(data.error||"Request failed");return data}
+function fill(){phone.textContent=currentUser.phoneNumber||profile.phone||"Verified mobile missing";["fullName","email","photoURL","birthdayDay","birthdayMonth","birthdayYear"].forEach(id=>$(id).value=profile[id]||"");wallet.textContent=profile.walletPoints||0;earned.textContent=profile.lifetimePointsEarned||0;used.textContent=profile.lifetimePointsUsed||0;orders.textContent=profile.totalOrders||0;referrals.textContent=profile.successfulReferralCount||0;referralCode.textContent=profile.referralCode||"Generating…";const addressesList=profile.savedAddresses||[];addresses.innerHTML=addressesList.length?addressesList.map(a=>`<div class="item">${esc(a.label||a.address)}</div>`).join(""):'<p class="muted">No saved address.</p>'}
+async function load(){const snap=await getDoc(doc(db,"users",currentUser.uid));profile=snap.exists()?snap.data():{};fill();const [txs,ords,app]=await Promise.all([getDocs(query(collection(db,"walletTransactions"),where("userId","==",currentUser.uid),orderBy("createdAt","desc"),limit(20))),getDocs(query(collection(db,"orders"),where("userId","==",currentUser.uid),orderBy("createdAt","desc"),limit(8))),getDoc(doc(db,"ambassadorApplications",currentUser.uid))]);walletHistory.innerHTML=txs.empty?'<p class="muted">No transactions yet.</p>':txs.docs.map(x=>{const d=x.data();return `<div class="item"><b>${d.points>0?"+":""}${d.points} points</b><br><span class="muted">${esc(d.description||d.type)}</span></div>`}).join("");recentOrders.innerHTML=ords.empty?'<p class="muted">No orders yet.</p>':ords.docs.map(x=>{const d=x.data();return `<div class="item"><b>#${esc(d.orderNumber||x.id.slice(0,8))}</b> · ${esc(d.status||d.orderStatus||"Pending")} · ₹${Number(d.totalAmount||0).toFixed(0)}</div>`}).join("");if(app.exists())applicationStatus.textContent=`Application status: ${app.data().status}` }
+onAuthStateChanged(auth,u=>{if(!u){location.href="index.html";return}currentUser=u;load().catch(e=>alert(e.message))});
+profileForm.onsubmit=async e=>{e.preventDefault();const data={fullName:fullName.value.trim(),email:email.value.trim(),photoURL:photoURL.value.trim(),birthdayDay:Number(birthdayDay.value)||null,birthdayMonth:Number(birthdayMonth.value)||null,birthdayYear:Number(birthdayYear.value)||null,updatedAt:serverTimestamp()};await setDoc(doc(db,"users",currentUser.uid),data,{merge:true});alert("Profile saved");load()};
+const link=()=>`${location.origin}/?ref=${profile.referralCode}`;copyCode.onclick=()=>navigator.clipboard.writeText(profile.referralCode||"");copyLink.onclick=()=>navigator.clipboard.writeText(link());shareWhatsApp.onclick=()=>open(`https://wa.me/?text=${encodeURIComponent(`Order MAGNEETOZ with my code ${profile.referralCode}: ${link()}`)}`,"_blank");
+ambassadorForm.onsubmit=async e=>{e.preventDefault();await api("createAmbassadorApplication",{fullName:profile.fullName||profile.customerName,college:college.value,hostelPg:hostelPg.value,area:area.value,instagram:instagram.value,whatsappNumber:whatsapp.value,motivation:motivation.value,expectedReach:expectedReach.value});applicationStatus.textContent="Application status: pending";alert("Application submitted")};
+logout.onclick=()=>signOut(auth);
+</script>
+</body></html>
