@@ -7911,10 +7911,18 @@ body.dark-theme .menu-direct-note{
 }
 
 .menu-subcategory-chip .category-tab-label{
-  max-width:52px;
+  display:-webkit-box;
+  width:100%;
+  max-width:none;
+  min-height:24px;
   overflow:hidden;
-  text-overflow:ellipsis;
-  white-space:nowrap;
+  text-overflow:clip;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
+  line-height:1.15;
+  text-align:center;
 }
 
 body.dark-mode .menu-subcategory-chip,
@@ -8195,12 +8203,13 @@ body .inline-menu-section .new-card .card-body h3{
     border-radius:13px;
   }
   .menu-subcategory-chip{
-    width:56px;
-    min-width:56px;
-    min-height:58px;
-    padding:4px;
+    width:76px;
+    min-width:76px;
+    min-height:76px;
+    padding:5px;
     font-size:9px;
   }
+  .menu-subcategory-chip .category-tab-label{min-height:22px;font-size:8.5px;line-height:1.15}
 }
 
 /* Long menu category guidance */

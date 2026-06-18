@@ -132,6 +132,7 @@ import {
   ref,
   uploadBytesResumable
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+import { formatImageBytes, optimizeImageForUpload } from "./image-upload-utils.js";
 
 protectAdminPage();
 mountAdminLogout(document.querySelector(".top"));
@@ -153,11 +154,9 @@ async function uploadImage(file){
   preview.src = URL.createObjectURL(file);
   preview.style.display = "block";
   uploadPrompt.style.display = "none";
-  uploadStatus.textContent = "Uploading...";
+  uploadStatus.textContent = "Optimizing image...";
   setProgress("uploadProgress", 5);
-  const clean = file.name.replace(/[^a-z0-9.]/gi, "-").toLowerCase();
-  const storageRef = ref(storage, `whatsapp-campaigns/${Date.now()}-${clean}`);
-  const task = uploadBytesResumable(storageRef, file, { contentType:file.type });
+  let task;
   let lastProgressAt = Date.now();
   const stuckTimer = setInterval(() => {
     if(Date.now() - lastProgressAt > 12000){
@@ -165,6 +164,13 @@ async function uploadImage(file){
     }
   }, 3000);
   try{
+  const optimized = await optimizeImageForUpload(file, { maxWidth:1200, maxHeight:1200, targetBytes:550*1024 });
+  uploadStatus.textContent = `Compressed ${formatImageBytes(file.size)} → ${formatImageBytes(optimized.optimizedBytes)}. Uploading...`;
+  const storageRef = ref(storage, `whatsapp-campaigns/${Date.now()}.webp`);
+  task = uploadBytesResumable(storageRef, optimized.blob, {
+    contentType:optimized.contentType,
+    cacheControl:"public,max-age=31536000,immutable"
+  });
   await new Promise((resolve, reject) => {
     task.on("state_changed", snap => {
       lastProgressAt = Date.now();

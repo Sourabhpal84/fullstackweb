@@ -3139,7 +3139,7 @@ registerGlobalSnapshot(onSnapshot(query(collection(db, "combos"), orderBy("creat
           <button type="button" onclick="addComboToCart('${escapeHTML(featured.id)}')">${escapeHTML(featured.ctaText || "Add this combo")}</button>
         </div>
         <div class="combo-feature-visual">
-          <img src="${escapeHTML(normalizeImageUrl(featured.image))}" alt="${escapeHTML(featured.name || "Featured combo")}" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
+          <img src="${escapeHTML(normalizeImageUrl(featured.image))}" alt="${escapeHTML(featured.name || "Featured combo")}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
           <span>Save ${formatCurrency(Math.max(0,Number(featured.originalPrice||0)-Number(featured.comboPrice||0)))}</span>
         </div>
       </article>` : "";
@@ -3147,7 +3147,7 @@ registerGlobalSnapshot(onSnapshot(query(collection(db, "combos"), orderBy("creat
   host.hidden = secondaryCombos.length === 0;
   host.innerHTML = secondaryCombos.map(combo => `
     <article class="combo-card" style="--combo-accent:${escapeHTML(combo.accentColor || "#ff6b00")}">
-      <img src="${escapeHTML(normalizeImageUrl(combo.image))}" alt="${escapeHTML(combo.name || "Combo")}" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
+      <img src="${escapeHTML(normalizeImageUrl(combo.image))}" alt="${escapeHTML(combo.name || "Combo")}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
       <div>
         <span>${escapeHTML(combo.badge || "Combo deal")}</span>
         <h3>${escapeHTML(combo.name || "MAGNEETOZ Combo")}</h3>
