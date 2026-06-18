@@ -2207,6 +2207,10 @@ function renderMenuSubcategoryNav(group){
 function selectMenuGroup(groupKey, shouldScroll = true){
   const group = menuCategoryGroups.find(item => item.key === groupKey) || menuCategoryGroups[0];
   if(!group) return;
+  if(menuBrowserOpen && activeMenuGroup === group.key){
+    closeMenuBrowser();
+    return;
+  }
   menuBrowserOpen = true;
   menuBrowserHideOnNextScroll = false;
   activeMenuGroup = group.key;
@@ -2255,11 +2259,17 @@ function renderVisibleMenuCategories({ scroll = false } = {}){
   }
   browser.innerHTML = `
     <div class="menu-browser-head">
-      <span>${escapeHTML(group.label)}</span>
-      <strong>${group.categories.length} categories</strong>
+      <div>
+        <span>${escapeHTML(group.label)}</span>
+        <strong>${group.categories.length} categories</strong>
+      </div>
+      <button type="button" class="menu-browser-close" aria-label="Hide ${escapeHTML(group.label)} categories">
+        Hide <b aria-hidden="true">×</b>
+      </button>
     </div>
     ${renderMenuSubcategoryNav(group)}
   `;
+  browser.querySelector(".menu-browser-close")?.addEventListener("click", closeMenuBrowser);
   browser.querySelectorAll("[data-menu-category]").forEach(button => {
     button.classList.toggle("active", button.dataset.menuCategory === activeMenuCategory);
     button.addEventListener("click", () => selectMenuCategory(button.dataset.menuCategory));
