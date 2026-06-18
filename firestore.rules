@@ -233,6 +233,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /homepageSections/{sectionId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     match /feedback/{feedbackId} {
       allow create: if validFeedbackCreate()
         && (!("userId" in request.resource.data)

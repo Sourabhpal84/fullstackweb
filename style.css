@@ -3413,6 +3413,64 @@ body.dark-mode .hero::after{background:linear-gradient(to bottom,transparent,#0b
   animation:cardRise .42s ease both;
   contain: layout paint style;
 }
+.homepage-featured-sections{
+  width:min(1180px,calc(100% - 28px));
+  margin:16px auto;
+  display:grid;
+  gap:18px;
+}
+.homepage-featured-sections[hidden]{display:none;}
+.homepage-featured-section{
+  padding:16px;
+  border:1px solid rgba(15,23,42,.1);
+  border-radius:20px;
+  background:var(--section-bg,rgba(255,255,255,.78));
+  box-shadow:0 16px 44px rgba(15,23,42,.1);
+  overflow:hidden;
+}
+.homepage-featured-head{
+  display:flex;
+  align-items:end;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:12px;
+}
+.homepage-featured-head p{margin:0 0 2px;color:#ff7b00;font-size:11px;font-weight:900;text-transform:uppercase;}
+.homepage-featured-head h2{margin:0;color:var(--text-color,#111827);font-size:clamp(18px,2.4vw,25px);line-height:1.2;}
+.homepage-featured-head>span{color:var(--muted-text,#64748b);font-size:11px;font-weight:800;white-space:nowrap;}
+.homepage-featured-rail{
+  display:flex;
+  gap:14px;
+  overflow-x:auto;
+  padding:2px 2px 10px;
+  scroll-snap-type:x mandatory;
+  scrollbar-width:thin;
+  overscroll-behavior-inline:contain;
+}
+.homepage-featured-card{
+  flex:0 0 250px;
+  width:250px;
+  min-width:250px;
+  max-width:250px;
+  scroll-snap-align:start;
+}
+body.dark-mode .homepage-featured-section,
+body.dark-theme .homepage-featured-section{
+  background:var(--section-bg,rgba(10,16,27,.92));
+  border-color:rgba(255,255,255,.12);
+}
+body.dark-mode .homepage-featured-head h2,
+body.dark-theme .homepage-featured-head h2{color:var(--text-color,#f8fafc);}
+@media(max-width:640px){
+  .homepage-featured-sections{width:100%;margin:12px 0;gap:12px;}
+  .homepage-featured-section{border-radius:0;padding:12px 10px;}
+  .homepage-featured-card{flex-basis:210px;width:210px;min-width:210px;max-width:210px;}
+  .homepage-featured-card .card-body{padding:9px;}
+  .homepage-featured-card .card-body h3{font-size:14px;}
+  .homepage-featured-card .card-body p{display:none;}
+  .homepage-featured-card .quantity-box{min-height:36px;}
+  .homepage-featured-card .add-cart-btn{min-height:36px;padding:7px 12px;font-size:12px;}
+}
 .new-card::before{
   content:"";
   position:absolute;

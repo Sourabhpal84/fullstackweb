@@ -599,6 +599,8 @@ let guestStatePersistTimer = null;
 let categoryScrollRaf = false;
 let categoriesUnsub = null;
 let categoriesReady = false;
+let homepageSectionsUnsub = null;
+let homepageSections = [];
 let menuListenerStarted = false;
 let categoryGridIds = new Set();
 let cachedCategorySections = [];
@@ -639,10 +641,12 @@ function cleanupCheckoutListeners(){
   try{ phoneTrackingUnsub?.(); }catch(error){}
   try{ categoriesUnsub?.(); }catch(error){}
   try{ menuDishesUnsub?.(); }catch(error){}
+  try{ homepageSectionsUnsub?.(); }catch(error){}
   orderTrackingUnsub = null;
   phoneTrackingUnsub = null;
   categoriesUnsub = null;
   menuDishesUnsub = null;
+  homepageSectionsUnsub = null;
   while(globalSnapshotUnsubs.length){
     const unsub = globalSnapshotUnsubs.pop();
     try{ unsub?.(); }catch(error){}
@@ -2286,6 +2290,111 @@ function categoryJumpFooter(categories = [], index = 0){
   `;
 }
 
+function dishCardMarkup(d = {}, className = ""){
+  const safeCallName = String(d.name || "").replace(/\\/g,"\\\\").replace(/'/g,"\\'");
+  const dishAttrs = dishDataAttrs(d);
+  if(d.type === "simple"){
+    return `
+      <div class="card new-card ${className}" ${dishAttrs}>
+        <button type="button" class="quick-preview-btn" data-preview>Preview</button>
+        <div class="card-img">${imageMarkup(d.image, d.name, d.imageSet)}</div>
+        <div class="card-body">
+          <h3>${escapeHTML(d.name || "")}</h3>
+          <p>${escapeHTML(d.description || "")}</p>
+          <div class="quantity-box">
+            <button onclick="changeQty(this,-1)">-</button><span class="qty">1</span><button onclick="changeQty(this,1)">+</button>
+          </div>
+          <div class="card-footer">
+            <div class="price-box">
+              <span class="offer" data-base="${d.price || 0}">${formatCurrency(d.price)}</span>
+              <span class="market" data-base="${d.marketPrice || (Number(d.price || 0) + 20)}">${formatCurrency(d.marketPrice || (Number(d.price || 0) + 20))}</span>
+            </div>
+            <button class="add-cart-btn" onclick="addToCartSimple(this,'${safeCallName}')">Add +</button>
+          </div>
+        </div>
+      </div>`;
+  }
+  if(!d.sizes) return "";
+  const getSize = size => !size ? { price:0, market:50 } : typeof size === "object" ? size : { price:size, market:Number(size) + 50 };
+  const small = getSize(d.sizes.small);
+  const medium = getSize(d.sizes.medium);
+  const large = getSize(d.sizes.large);
+  return `
+    <div class="card new-card ${className}" ${dishAttrs}>
+      <button type="button" class="quick-preview-btn" data-preview>Preview</button>
+      <div class="card-img">${imageMarkup(d.image, d.name, d.imageSet)}</div>
+      <div class="card-body">
+        <h3>${escapeHTML(d.name || "")}</h3>
+        <select class="size-select" onchange="updatePrice(this)">
+          <option value="${small.price}" data-market="${small.market}">Small - ${formatCurrency(small.price)}</option>
+          <option value="${medium.price}" data-market="${medium.market}">Medium - ${formatCurrency(medium.price)}</option>
+          <option value="${large.price}" data-market="${large.market}">Large - ${formatCurrency(large.price)}</option>
+        </select>
+        <div class="quantity-box">
+          <button onclick="changeQty(this,-1)">-</button><span class="qty">1</span><button onclick="changeQty(this,1)">+</button>
+        </div>
+        <div class="card-footer">
+          <div class="price-box">
+            <span class="offer" data-base="${small.price}">${formatCurrency(small.price)}</span>
+            <span class="market" data-base="${small.market}">${formatCurrency(small.market)}</span>
+          </div>
+          <button class="add-cart-btn" onclick="addToCartFull(this,'${safeCallName}')">Add +</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderHomepageSections(){
+  const host = document.getElementById("homepageFeaturedSections");
+  if(!host) return;
+  const dishMap = new Map(allMenuDishes.map(dish => [dish.id, dish]));
+  const sections = homepageSections
+    .filter(section => section.active !== false)
+    .sort((a,b) => Number(a.order || 0) - Number(b.order || 0))
+    .map(section => ({
+      ...section,
+      dishes:(Array.isArray(section.productIds) ? section.productIds : [])
+        .map(id => dishMap.get(id))
+        .filter(dish => dish?.available)
+    }))
+    .filter(section => section.dishes.length);
+  host.innerHTML = sections.map(section => `
+    <section class="homepage-featured-section" aria-labelledby="featured-${escapeHTML(section.id)}">
+      <div class="homepage-featured-head">
+        <div>
+          <p>${escapeHTML(section.subtitle || "Popular picks near you")}</p>
+          <h2 id="featured-${escapeHTML(section.id)}">${escapeHTML(section.title || "Featured food")}</h2>
+        </div>
+        <span>${section.dishes.length} items</span>
+      </div>
+      <div class="homepage-featured-rail">
+        ${section.dishes.map(dish => dishCardMarkup(dish, "homepage-featured-card")).join("")}
+      </div>
+    </section>
+  `).join("");
+  host.hidden = !sections.length;
+  if(sections.length){
+    warmVisibleMenuImages();
+    applyRestaurantAvailability();
+  }
+}
+
+function loadHomepageSections(){
+  homepageSectionsUnsub?.();
+  homepageSectionsUnsub = onSnapshot(
+    query(collection(db,"homepageSections"), orderBy("order","asc")),
+    snapshot => {
+      homepageSections = snapshot.docs.map(item => ({ id:item.id, ...item.data() }));
+      renderHomepageSections();
+    },
+    error => {
+      console.warn("Homepage sections failed:", error);
+      const host = document.getElementById("homepageFeaturedSections");
+      if(host) host.hidden = true;
+    }
+  );
+}
+
 function loadCategories(){
   const container = document.getElementById("categoryContainer");
   const nav = document.getElementById("categoryNav");
@@ -2348,6 +2457,7 @@ function loadCategories(){
   );
 }
 loadCategories();
+loadHomepageSections();
 
 /* LOAD DELIVERY SETTINGS */
 
@@ -2532,9 +2642,6 @@ function loadMenu(){
     snapshot.forEach(docSnap => {
 
       const d = { id:docSnap.id, ...docSnap.data() };
-      const safeCallName = String(d.name || "").replace(/\\/g,"\\\\").replace(/'/g,"\\'");
-      const dishAttrs = dishDataAttrs(d);
-
       if(!d.available || !d.category) return;
 
       const gridId = "grid-cat-" + normalize(d.category);
@@ -2546,38 +2653,7 @@ function loadMenu(){
 
       // 🟢 SIMPLE CARD
       if(d.type === "simple"){
-
-        appendDish(gridId, `
-<div class="card new-card" ${dishAttrs}>
-  <button type="button" class="quick-preview-btn" data-preview>Preview</button>
-  <div class="card-img">
-    ${imageMarkup(d.image, d.name, d.imageSet)}
-  </div>
-
-  <div class="card-body">
-    <h3>${escapeHTML(d.name || '')}</h3>
-    <p>${escapeHTML(d.description || '')}</p>
-
-    <div class="quantity-box">
-      <button onclick="changeQty(this,-1)">-</button>
-      <span class="qty">1</span>
-      <button onclick="changeQty(this,1)">+</button>
-    </div>
-
-    <div class="card-footer">
-      <div class="price-box">
-        <span class="offer" data-base="${d.price || 0}">${formatCurrency(d.price)}</span>
-        <span class="market" data-base="${d.marketPrice || (d.price + 20)}">
-          ${formatCurrency(d.marketPrice || (d.price + 20))}
-        </span>
-      </div>
-
-      <button class="add-cart-btn" onclick="addToCartSimple(this,'${safeCallName}')">
-        Add +
-      </button>
-    </div>
-  </div>
-</div>`);
+        appendDish(gridId, dishCardMarkup(d));
       }
 
       // 🔵 SIZE BASED CARD
@@ -2588,58 +2664,7 @@ function loadMenu(){
           return;
         }
 
-        // safe size extraction
-        const getSize = (size) => {
-          if(!size) return { price: 0, market: 50 };
-          return typeof size === "object"
-            ? size
-            : { price: size, market: size + 50 };
-        };
-
-        const small  = getSize(d.sizes.small);
-        const medium = getSize(d.sizes.medium);
-        const large  = getSize(d.sizes.large);
-
-        appendDish(gridId, `
-<div class="card new-card" ${dishAttrs}>
-  <button type="button" class="quick-preview-btn" data-preview>Preview</button>
-  <div class="card-img">
-    ${imageMarkup(d.image, d.name, d.imageSet)}
-  </div>
-
-  <div class="card-body">
-    <h3>${escapeHTML(d.name || '')}</h3>
-
-    <select class="size-select" onchange="updatePrice(this)">
-      <option value="${small.price}" data-market="${small.market}">
-        Small - ${formatCurrency(small.price)}
-      </option>
-      <option value="${medium.price}" data-market="${medium.market}">
-        Medium - ${formatCurrency(medium.price)}
-      </option>
-      <option value="${large.price}" data-market="${large.market}">
-        Large - ${formatCurrency(large.price)}
-      </option>
-    </select>
-
-    <div class="quantity-box">
-      <button onclick="changeQty(this,-1)">-</button>
-      <span class="qty">1</span>
-      <button onclick="changeQty(this,1)">+</button>
-    </div>
-
-    <div class="card-footer">
-      <div class="price-box">
-        <span class="offer" data-base="${small.price}">${formatCurrency(small.price)}</span>
-        <span class="market" data-base="${small.market}">${formatCurrency(small.market)}</span>
-      </div>
-
-      <button class="add-cart-btn" onclick="addToCartFull(this,'${safeCallName}')">
-        Add +
-      </button>
-    </div>
-  </div>
-</div>`);
+        appendDish(gridId, dishCardMarkup(d));
       }
 
     });
@@ -2653,6 +2678,7 @@ function loadMenu(){
         count: document.querySelectorAll(".new-card").length
       });
       warmVisibleMenuImages();
+      renderHomepageSections();
       renderSmartAssistant();
       applyRestaurantAvailability();
     });
