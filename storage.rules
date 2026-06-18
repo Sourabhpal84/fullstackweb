@@ -62,6 +62,11 @@ service firebase.storage {
       allow write: if isAdmin() && validImage();
     }
 
+    match /combo-images/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() && validImage();
+    }
+
     match /whatsapp-campaigns/{fileName} {
       allow read: if true;
       allow write: if isAdmin() && validImage();
