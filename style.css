@@ -7086,6 +7086,135 @@ body .cart-backdrop{display:none!important}
   body .cart-panel>button[aria-label="Place order"]{position:fixed!important;left:50%!important;bottom:14px!important;transform:translateX(-50%)!important;width:min(720px,calc(100vw - 40px))!important;margin:0!important}
 }
 
+/* FINAL mobile checkout: one viewport, no page or nested scrolling */
+@media(max-width:760px){
+  html.cart-open-root,body.cart-open{overflow:hidden!important;height:100dvh!important}
+  body .cart-panel{
+    height:100dvh!important;
+    max-height:100dvh!important;
+    overflow:hidden!important;
+    padding:0 8px 68px!important;
+    display:grid!important;
+    grid-template-rows:52px minmax(0,1fr) 56px!important;
+    gap:6px!important;
+  }
+  body .cart-header{
+    min-height:52px!important;
+    height:52px!important;
+    margin:0 -8px!important;
+    padding:7px 12px!important;
+  }
+  .checkout-page-title small{font-size:8px!important}.checkout-page-title h3{font-size:15px!important}
+  .checkout-page-grid{
+    height:100%!important;
+    min-height:0!important;
+    display:grid!important;
+    grid-template-columns:1fr!important;
+    grid-template-rows:auto minmax(0,1fr)!important;
+    gap:6px!important;
+    overflow:hidden!important;
+  }
+  .checkout-cart-column{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) auto!important;
+    grid-template-rows:auto auto!important;
+    gap:4px 7px!important;
+    min-height:0!important;
+  }
+  body .checkout-cart-column #cartItems{
+    grid-column:1/-1!important;
+    display:flex!important;
+    gap:5px!important;
+    overflow-x:auto!important;
+    overflow-y:hidden!important;
+    max-height:64px!important;
+    padding:0!important;
+    scrollbar-width:none!important;
+  }
+  body .checkout-cart-column #cartItems::-webkit-scrollbar{display:none}
+  body .checkout-cart-column .cart-items-title{display:none!important}
+  body .checkout-cart-column .cart-item-pro{
+    flex:0 0 172px!important;
+    display:grid!important;
+    grid-template-columns:38px minmax(0,1fr)!important;
+    grid-template-rows:auto auto!important;
+    gap:3px 6px!important;
+    min-height:60px!important;
+    padding:5px!important;
+    margin:0!important;
+    border-radius:10px!important;
+  }
+  body .checkout-cart-column .cart-item-pro img{width:38px!important;height:38px!important;border-radius:8px!important}
+  body .checkout-cart-column .cart-item-pro strong{display:block;font-size:10px!important;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  body .checkout-cart-column .cart-item-pro small{font-size:8px!important}
+  body .checkout-cart-column .cart-line-actions{grid-column:1/-1!important;display:flex!important;align-items:center!important;justify-content:space-between!important;gap:3px!important}
+  body .checkout-cart-column .cart-line-actions b{font-size:9px!important}
+  body .checkout-cart-column .cart-qty-controls{display:flex!important;gap:2px!important}
+  body .checkout-cart-column .cart-qty-controls button,
+  body .checkout-cart-column .cart-line-actions>button{width:20px!important;height:20px!important;min-height:20px!important;padding:0!important;font-size:10px!important}
+  body .checkout-cart-column .cart-qty-controls span{font-size:9px!important}
+  body .checkout-cart-column .total{grid-column:1!important;margin:0!important;padding:5px 8px!important;min-height:28px!important;font-size:12px!important;border-radius:9px!important}
+  body .checkout-cart-column #freeDeliveryHint{grid-column:2!important;align-self:center;padding:0!important;font-size:8px!important;white-space:nowrap}
+  .checkout-details-column{
+    min-height:0!important;
+    display:grid!important;
+    grid-template-columns:1fr 1fr!important;
+    grid-auto-rows:min-content!important;
+    gap:5px!important;
+    overflow:hidden!important;
+  }
+  body .checkout-details-column .coupon-box,
+  body .checkout-details-column .saved-address-box{
+    grid-column:1/-1!important;
+    padding:6px!important;
+    margin:0!important;
+    border-radius:11px!important;
+  }
+  body .checkout-details-column .coupon-entry{grid-template-columns:1fr auto!important;gap:4px!important}
+  body .checkout-details-column .coupon-entry input,
+  body .checkout-details-column .coupon-entry button{min-height:30px!important;height:30px!important;padding:4px 8px!important;font-size:10px!important}
+  body .checkout-details-column .applied-coupon{margin-top:3px!important;font-size:9px!important}
+  body .checkout-details-column .cart-price-breakdown{margin-top:3px!important}
+  body .checkout-details-column .cart-price-breakdown .grand{padding:4px 7px!important;min-height:26px!important}
+  body .checkout-details-column .cart-price-breakdown .grand span,
+  body .checkout-details-column .cart-price-breakdown .grand b{font-size:10px!important}
+  body .checkout-details-column .wallet-redeem-box{margin-top:4px!important;padding:5px!important;border-radius:9px!important}
+  body .checkout-details-column .wallet-redeem-box div{font-size:9px!important}
+  body .checkout-details-column .wallet-redeem-box button{min-height:26px!important;margin-top:3px!important;padding:3px!important;font-size:9px!important}
+  body .checkout-details-column .wallet-redeem-box small{display:none!important}
+  body .checkout-details-column .saved-address-box label{margin:0 0 3px!important;font-size:9px!important}
+  body .checkout-details-column .saved-address-box select{height:30px!important;min-height:30px!important;padding:2px 7px!important;font-size:10px!important}
+  body .checkout-details-column .address-actions{display:grid!important;grid-template-columns:1fr 1fr 44px 44px!important;gap:3px!important;margin-top:4px!important}
+  body .checkout-details-column .address-actions button{min-height:27px!important;height:27px!important;padding:2px!important;font-size:8px!important;border-radius:7px!important}
+  body .checkout-details-column>input,
+  body .checkout-details-column>textarea,
+  body .checkout-details-column>.checkout-auth-phone{
+    min-height:31px!important;
+    height:31px!important;
+    margin:0!important;
+    padding:5px 8px!important;
+    border-radius:9px!important;
+    font-size:10px!important;
+  }
+  body .checkout-details-column>textarea{grid-column:1/-1!important;min-height:38px!important;height:38px!important;line-height:1.2!important;resize:none!important}
+  body .checkout-details-column>#customerLandmark{grid-column:1/-1!important}
+  body .checkout-details-column>.checkout-auth-phone span,
+  body .checkout-details-column>.checkout-auth-phone strong{font-size:9px!important}
+  body .cart-panel>button[aria-label="Place order"]{
+    position:fixed!important;
+    left:8px!important;
+    right:8px!important;
+    bottom:6px!important;
+    width:calc(100% - 16px)!important;
+    height:52px!important;
+    min-height:52px!important;
+    margin:0!important;
+    padding:8px!important;
+    border-radius:13px!important;
+    font-size:13px!important;
+  }
+}
+
 /* Scroll-aware Pizza/category button section */
 .sticky-area{
   transition:transform .28s ease,opacity .24s ease,visibility .24s ease!important;
