@@ -2192,7 +2192,6 @@ function hideMenuCategoryPicker(){
 
 function renderMenuSubcategoryNav(group){
   if(!group) return "";
-  if(group.categories.length <= 1) return `<div class="menu-direct-note">Showing all ${escapeHTML(group.label)} items</div>`;
   return `
     <div class="menu-subcategory-nav" id="menuSubcategoryNav" aria-label="${escapeHTML(group.label)} categories">
       ${group.categories.map((category, index) => `
@@ -2208,22 +2207,21 @@ function renderMenuSubcategoryNav(group){
 function selectMenuGroup(groupKey, shouldScroll = true){
   const group = menuCategoryGroups.find(item => item.key === groupKey) || menuCategoryGroups[0];
   if(!group) return;
-  menuBrowserOpen = false;
+  menuBrowserOpen = true;
   menuBrowserHideOnNextScroll = false;
   activeMenuGroup = group.key;
   activeMenuCategory = "";
   document.querySelectorAll("[data-menu-group]").forEach(button => {
     button.classList.toggle("active", button.dataset.menuGroup === activeMenuGroup);
   });
-  const browser = document.getElementById("menuCategoryBrowser");
-  if(browser) browser.innerHTML = "";
+  renderVisibleMenuCategories();
   document.querySelectorAll(".category-block").forEach(block => {
-    block.hidden = false;
+    block.hidden = true;
     block.classList.remove("menu-category-active");
   });
   if(shouldScroll){
     requestAnimationFrame(() => {
-      const target = document.getElementById(group.categories[0]?.id || "");
+      const target = document.getElementById("menuCategoryBrowser");
       if(!target) return;
       const sticky = document.querySelector(".sticky-area");
       const offset = (sticky?.getBoundingClientRect().height || 0) + 10;
@@ -2237,17 +2235,14 @@ function selectMenuGroup(groupKey, shouldScroll = true){
 
 function selectMenuCategory(categoryId){
   activeMenuCategory = categoryId || activeMenuCategory;
-  menuBrowserHideOnNextScroll = true;
+  menuBrowserHideOnNextScroll = false;
   renderVisibleMenuCategories({ scroll:true });
 }
 
 function orderedGroupCategoryIds(group){
   if(!group) return [];
   const ids = group.categories.map(category => category.id);
-  if(activeMenuCategory && ids.includes(activeMenuCategory)){
-    return [activeMenuCategory, ...ids.filter(id => id !== activeMenuCategory)];
-  }
-  return ids;
+  return activeMenuCategory && ids.includes(activeMenuCategory) ? [activeMenuCategory] : [];
 }
 
 function renderVisibleMenuCategories({ scroll = false } = {}){
@@ -2293,20 +2288,7 @@ function renderVisibleMenuCategories({ scroll = false } = {}){
 }
 
 function categoryJumpFooter(categories = [], index = 0){
-  const current = categories[index];
-  const previous = categories[index - 1];
-  const next = categories[index + 1];
-  if(!current || (!previous && !next)) return "";
-  return `
-    <div class="category-jump-footer" aria-label="More menu categories">
-      <span>More dishes</span>
-      <div>
-        ${previous ? `<a href="#${escapeHTML(previous.id)}">← ${escapeHTML(previous.name)}</a>` : ""}
-        <a href="#categoryNav">All categories</a>
-        ${next ? `<a href="#${escapeHTML(next.id)}">${escapeHTML(next.name)} →</a>` : ""}
-      </div>
-    </div>
-  `;
+  return "";
 }
 
 function dishCardMarkup(d = {}, className = ""){
