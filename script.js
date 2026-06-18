@@ -5104,23 +5104,20 @@ const timelineSteps = [
   "Accepted",
   "Preparing",
   "Ready",
-  "Searching For Rider",
   "Rider Assigned",
-  "Picked Up",
   "Out For Delivery",
   "Nearby",
-  "Cash Collected",
-  "Payment Settled",
-  "Delivery Code Pending",
-  "Payment Completed",
   "Delivered"
 
 ];
 
-const currentStepIndex =
-Math.max(0, timelineSteps.findIndex(
-  step => step === normalizeTimelineStatus(order.status)
-));
+const normalizedOrderStatus = normalizeTimelineStatus(order.status);
+const exactStepIndex = timelineSteps.findIndex(step => step === normalizedOrderStatus);
+const currentStepIndex = exactStepIndex >= 0
+  ? exactStepIndex
+  : Math.max(0, timelineSteps.reduce((bestIndex, step, index) => {
+      return statusRank(step) <= statusRank(order.status) ? index : bestIndex;
+    }, 0));
 
 const cancelHTML = buildCancelWindowHTML(order);
 const payNowHTML = buildPayNowActionHTML(order);
@@ -5129,7 +5126,15 @@ const riderLiveMapHTML = buildRiderLiveMapHTML(order);
 
 const timelineHTML = `
 
-<div class="timeline">
+<section class="timeline-journey" aria-label="Order journey">
+  <div class="timeline-journey-head">
+    <div>
+      <span>Live journey</span>
+      <strong>${escapeHTML(order.status || "Pending")}</strong>
+    </div>
+    <small>${currentStepIndex + 1} of ${timelineSteps.length}</small>
+  </div>
+  <div class="timeline">
 
   ${
     timelineSteps.map((step,index)=>`
@@ -5137,9 +5142,10 @@ const timelineHTML = `
       <div class="
       timeline-step
       ${index <= currentStepIndex ? "active" : ""}
+      ${index === currentStepIndex ? "current" : ""}
       ">
 
-        <div class="timeline-dot"></div>
+        <div class="timeline-dot">${index < currentStepIndex ? "✓" : index + 1}</div>
 
         <div>
 
@@ -5164,9 +5170,8 @@ const timelineHTML = `
     `).join("")
   }
 
-</div>
-
-`;
+  </div>
+</section>`;
 
     ordersContainer.innerHTML += `
 
@@ -5218,6 +5223,10 @@ order.status === "Delivered"
 </div>
 
       </div>
+
+      ${timelineHTML}
+
+      ${payNowHTML}
 
       <!-- ITEMS -->
 
@@ -5275,10 +5284,6 @@ order.status === "Delivered"
 
       </div>
       <button type="button" class="invoice-download-btn" onclick="downloadInvoicePDF('${order.id}')">⬇ Download Invoice PDF</button>
-
-      ${payNowHTML}
-
-      ${timelineHTML}
 
       ${cancelHTML}
 
