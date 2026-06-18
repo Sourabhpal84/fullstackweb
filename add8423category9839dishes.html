@@ -461,7 +461,7 @@ async function makeTargetImageVariant(source, spec){
   return variant;
 }
 
-async function uploadBlobWithProgress(path, blob, contentType, onProgress, timeoutMs = 30000){
+async function uploadBlobWithProgress(path, blob, contentType, onProgress, timeoutMs = 90000, maxAttempts = 2){
   const user = await waitForAdminUser();
   const storageRef = ref(storage, path);
   uploadLog("upload_start", {
@@ -472,43 +472,53 @@ async function uploadBlobWithProgress(path, blob, contentType, onProgress, timeo
     size:formatBytes(blob.size),
     contentType
   });
-  const task = uploadBytesResumable(storageRef, blob, {
-    contentType,
-    cacheControl:"public,max-age=31536000,immutable"
-  });
-  const uploadPromise = new Promise((resolve, reject) => {
-    task.on("state_changed", snap => {
-      const pct = snap.totalBytes ? Math.round((snap.bytesTransferred / snap.totalBytes) * 100) : 0;
-      uploadLog("upload_progress", {
-        fullPath:path,
-        pct,
-        bytesTransferred:snap.bytesTransferred,
-        totalBytes:snap.totalBytes
+  let lastError;
+  for(let attempt = 1; attempt <= maxAttempts; attempt++){
+    let stallTimer;
+    const task = uploadBytesResumable(storageRef, blob, {
+      contentType,
+      cacheControl:"public,max-age=31536000,immutable"
+    });
+    try{
+      await new Promise((resolve, reject) => {
+        const armStallTimer = () => {
+          clearTimeout(stallTimer);
+          stallTimer = setTimeout(() => {
+            try{ task.cancel(); }catch(_){}
+            reject(new Error(`Storage upload stalled for ${Math.round(timeoutMs / 1000)}s: ${path}`));
+          }, timeoutMs);
+        };
+        armStallTimer();
+        task.on("state_changed", snap => {
+          armStallTimer();
+          const pct = snap.totalBytes ? Math.round((snap.bytesTransferred / snap.totalBytes) * 100) : 0;
+          uploadLog("upload_progress", {
+            fullPath:path, attempt, pct,
+            bytesTransferred:snap.bytesTransferred,
+            totalBytes:snap.totalBytes
+          });
+          onProgress?.(pct);
+        }, reject, resolve);
       });
-      onProgress?.(pct);
-    }, error => {
-      uploadLog("upload_error", {
-        fullPath:path,
-        code:error?.code || "",
-        message:error?.message || String(error)
-      });
-      reject(error);
-    }, resolve);
-  });
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => {
-      try{ task.cancel(); }catch(_){}
-      reject(new Error(`Storage upload timeout after ${Math.round(timeoutMs / 1000)}s for ${path}`));
-    }, timeoutMs);
-  });
-  await Promise.race([uploadPromise, timeoutPromise]);
-  if(task.snapshot.bytesTransferred !== task.snapshot.totalBytes){
-    throw new Error(`Upload incomplete: ${task.snapshot.bytesTransferred}/${task.snapshot.totalBytes} bytes`);
+      clearTimeout(stallTimer);
+      if(task.snapshot.bytesTransferred !== task.snapshot.totalBytes){
+        throw new Error(`Upload incomplete: ${task.snapshot.bytesTransferred}/${task.snapshot.totalBytes} bytes`);
+      }
+      const url = await getDownloadURL(task.snapshot.ref);
+      if(!url) throw new Error("Download URL was not generated.");
+      uploadLog("upload_complete", { fullPath:path, attempt, url });
+      return url;
+    }catch(error){
+      clearTimeout(stallTimer);
+      lastError = error;
+      uploadLog("upload_retry", { fullPath:path, attempt, message:error?.message || String(error) });
+      if(attempt < maxAttempts){
+        onProgress?.(0);
+        await new Promise(resolve => setTimeout(resolve, 1200 * attempt));
+      }
+    }
   }
-  const url = await getDownloadURL(task.snapshot.ref);
-  if(!url) throw new Error("Download URL was not generated.");
-  uploadLog("upload_complete", { fullPath:path, url });
-  return url;
+  throw lastError || new Error(`Storage upload failed: ${path}`);
 }
 
 async function createAndUploadImageSet(file, folder, statusFn){
@@ -554,7 +564,8 @@ async function createAndUploadImageSet(file, folder, statusFn){
       primary.variant.blob,
       primary.variant.contentType,
       pct => statusFn(`Uploading ${primary.spec.key} ${pct}%`, 48 + Math.round(pct * .3)),
-      30000
+      90000,
+      2
     );
     variants[primary.spec.key] = {
       url:primaryUrl,
@@ -572,7 +583,8 @@ async function createAndUploadImageSet(file, folder, statusFn){
         variant.blob,
         variant.contentType,
         pct => statusFn(`Uploading ${spec.key} ${pct}%`, 78 + Math.round(((index + pct / 100) / Math.max(1, remaining.length)) * 18)),
-        30000
+        90000,
+        2
       ).then(url => ({ spec, variant, url }))
     ));
     uploads.forEach(result => {
