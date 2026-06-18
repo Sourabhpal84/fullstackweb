@@ -7069,7 +7069,9 @@ body .cart-backdrop{display:none!important}
   body .checkout-cart-column .cart-items-title{padding:7px 10px!important;margin:0!important}
   body .checkout-cart-column .total{margin-top:8px!important;padding:10px 13px!important}
   body .checkout-details-column .available-coupons{display:none!important}
-  body .checkout-details-column .address-search-row{display:none!important}
+  body .checkout-details-column .address-search-row{display:grid!important;grid-template-columns:1fr 44px!important;gap:4px!important;margin-top:4px!important}
+  body .checkout-details-column .address-search-row input,
+  body .checkout-details-column .address-search-row button{height:28px!important;min-height:28px!important;padding:3px 7px!important;font-size:9px!important;border-radius:7px!important}
   body .checkout-details-column .saved-address-box small{display:none!important}
   body .checkout-details-column .coupon-box,
   body .checkout-details-column .saved-address-box{margin-top:0!important}
@@ -7110,7 +7112,7 @@ body .cart-backdrop{display:none!important}
     min-height:0!important;
     display:grid!important;
     grid-template-columns:1fr!important;
-    grid-template-rows:auto minmax(0,1fr)!important;
+    grid-template-rows:auto auto!important;
     gap:6px!important;
     overflow:hidden!important;
   }
@@ -7156,7 +7158,7 @@ body .cart-backdrop{display:none!important}
   body .checkout-cart-column .total{grid-column:1!important;margin:0!important;padding:5px 8px!important;min-height:28px!important;font-size:12px!important;border-radius:9px!important}
   body .checkout-cart-column #freeDeliveryHint{grid-column:2!important;align-self:center;padding:0!important;font-size:8px!important;white-space:nowrap}
   .checkout-details-column{
-    min-height:0!important;
+    min-height:auto!important;
     display:grid!important;
     grid-template-columns:1fr 1fr!important;
     grid-auto-rows:min-content!important;
@@ -7186,6 +7188,8 @@ body .cart-backdrop{display:none!important}
   body .checkout-details-column .saved-address-box select{height:30px!important;min-height:30px!important;padding:2px 7px!important;font-size:10px!important}
   body .checkout-details-column .address-actions{display:grid!important;grid-template-columns:1fr 1fr 44px 44px!important;gap:3px!important;margin-top:4px!important}
   body .checkout-details-column .address-actions button{min-height:27px!important;height:27px!important;padding:2px!important;font-size:8px!important;border-radius:7px!important}
+  body .checkout-details-column .checkout-location-status{margin-top:4px;padding:4px 7px;border-radius:7px;background:rgba(20,184,166,.10);color:#99f6e4;font-size:8px;font-weight:800;line-height:1.2}
+  body .checkout-details-column .checkout-location-status[data-state="permission"]{background:rgba(239,68,68,.12);color:#fecaca}
   body .checkout-details-column>input,
   body .checkout-details-column>textarea,
   body .checkout-details-column>.checkout-auth-phone{

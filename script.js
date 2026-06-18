@@ -852,6 +852,7 @@ function updateCustomerDistanceBanner(message){
 
 function setLocationUiState(state, detail = ""){
   const status = document.getElementById("locationStatus");
+  const checkoutStatus = document.getElementById("checkoutLocationStatus");
   const banner = ensureCustomerDistanceBanner();
   const messages = {
     detecting:"Detecting location...",
@@ -862,6 +863,14 @@ function setLocationUiState(state, detail = ""){
   };
   const text = detail || messages[state] || messages.idle;
   if(status) status.textContent = text;
+  if(checkoutStatus){
+    checkoutStatus.textContent = state === "detecting" ? "📍 Detecting your current location…"
+      : state === "current" ? `✓ ${text}`
+      : state === "lastSaved" ? `📌 Saved location selected · ${detail || "refresh for live GPS"}`
+      : state === "permission" ? `⚠ ${text}`
+      : `📍 ${text}`;
+    checkoutStatus.dataset.state = state || "idle";
+  }
   if(banner) {
     banner.textContent = state === "lastSaved" ? `📍 Last saved location · ${detail || "Tap Refresh Location for current GPS"}` : `📍 ${text}`;
     banner.title = state === "lastSaved" ? "This is not live GPS. Tap to refresh current location." : "Tap to refresh current location";
