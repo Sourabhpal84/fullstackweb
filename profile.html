@@ -27,7 +27,7 @@
   </div>
   <div class="grid">
     <section class="card"><h2>Profile</h2><div class="birthday">Add your birthday and get a special MAGNEETOZ birthday reward.</div>
-      <form id="profileForm"><label class="field">Full name<input id="fullName" required></label><label class="field">Email (optional)<input id="email" type="email"></label><label class="field">Photo URL (optional)<input id="photoURL" type="url"></label><div class="row"><label class="field">Birthday day<input id="birthdayDay" type="number" min="1" max="31"></label><label class="field">Month<input id="birthdayMonth" type="number" min="1" max="12"></label><label class="field">Year<input id="birthdayYear" type="number" min="1900"></label></div><button>Save profile</button></form>
+      <form id="profileForm"><label class="field">Full name<input id="fullName" required></label><div class="row"><label class="field">Birthday day<input id="birthdayDay" type="number" min="1" max="31" placeholder="DD"></label><label class="field">Birthday month<input id="birthdayMonth" type="number" min="1" max="12" placeholder="MM"></label></div><button>Save profile</button></form>
     </section>
     <section class="card"><h2>Refer & Earn</h2><p>Invite friends. After their first delivered order, you get 10 Pizza Points and they get 20.</p><h3 id="referralCode">Generating…</h3><div class="row"><button id="copyCode">Copy code</button><button id="copyLink" class="soft">Copy link</button><button id="shareWhatsApp" class="soft">WhatsApp</button></div><p class="muted"><span id="referrals">0</span> successful referrals</p></section>
     <section class="card"><h2>Wallet history</h2><div id="walletHistory" class="list"><p class="muted">No transactions yet.</p></div></section>
@@ -43,11 +43,35 @@ import { collection, doc, getDoc, getDocs, limit, orderBy, query, serverTimestam
 const $=id=>document.getElementById(id); let currentUser, profile={};
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 async function api(name,body){const token=await currentUser.getIdToken();const r=await fetch(`https://asia-south1-${auth.app.options.projectId}.cloudfunctions.net/${name}`,{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify(body)});const data=await r.json();if(!r.ok)throw new Error(data.error||"Request failed");return data}
-function fill(){phone.textContent=currentUser.phoneNumber||profile.phone||"Verified mobile missing";["fullName","email","photoURL","birthdayDay","birthdayMonth","birthdayYear"].forEach(id=>$(id).value=profile[id]||"");wallet.textContent=profile.walletPoints||0;earned.textContent=profile.lifetimePointsEarned||0;used.textContent=profile.lifetimePointsUsed||0;orders.textContent=profile.totalOrders||0;referrals.textContent=profile.successfulReferralCount||0;referralCode.textContent=profile.referralCode||"Generating…";const addressesList=profile.savedAddresses||[];addresses.innerHTML=addressesList.length?addressesList.map(a=>`<div class="item">${esc(a.label||a.address)}</div>`).join(""):'<p class="muted">No saved address.</p>'}
-async function load(){const snap=await getDoc(doc(db,"users",currentUser.uid));profile=snap.exists()?snap.data():{};fill();const [txs,ords,app]=await Promise.all([getDocs(query(collection(db,"walletTransactions"),where("userId","==",currentUser.uid),orderBy("createdAt","desc"),limit(20))),getDocs(query(collection(db,"orders"),where("userId","==",currentUser.uid),orderBy("createdAt","desc"),limit(8))),getDoc(doc(db,"ambassadorApplications",currentUser.uid))]);walletHistory.innerHTML=txs.empty?'<p class="muted">No transactions yet.</p>':txs.docs.map(x=>{const d=x.data();return `<div class="item"><b>${d.points>0?"+":""}${d.points} points</b><br><span class="muted">${esc(d.description||d.type)}</span></div>`}).join("");recentOrders.innerHTML=ords.empty?'<p class="muted">No orders yet.</p>':ords.docs.map(x=>{const d=x.data();return `<div class="item"><b>#${esc(d.orderNumber||x.id.slice(0,8))}</b> · ${esc(d.status||d.orderStatus||"Pending")} · ₹${Number(d.totalAmount||0).toFixed(0)}</div>`}).join("");if(app.exists())applicationStatus.textContent=`Application status: ${app.data().status}` }
+function fill(){phone.textContent=currentUser.phoneNumber||profile.phone||"Verified mobile missing";["fullName","birthdayDay","birthdayMonth"].forEach(id=>$(id).value=profile[id]||"");wallet.textContent=profile.walletPoints||0;earned.textContent=profile.lifetimePointsEarned||0;used.textContent=profile.lifetimePointsUsed||0;orders.textContent=profile.totalOrders||0;referrals.textContent=profile.successfulReferralCount||0;referralCode.textContent=profile.referralCode||"Generating…";const addressesList=profile.savedAddresses||[];addresses.innerHTML=addressesList.length?addressesList.map(a=>`<div class="item">${esc(a.label||a.address)}</div>`).join(""):'<p class="muted">No saved address.</p>'}
+async function load(){
+  await api("ensureGrowthProfile",{}).catch(e=>console.warn("Growth profile setup deferred",e));
+  const snap=await getDoc(doc(db,"users",currentUser.uid));
+  profile=snap.exists()?snap.data():{};
+  fill();
+  const [txResult,orderResult,appResult]=await Promise.allSettled([
+    getDocs(query(collection(db,"walletTransactions"),where("userId","==",currentUser.uid),orderBy("createdAt","desc"),limit(20))),
+    getDocs(query(collection(db,"orders"),where("userId","==",currentUser.uid),orderBy("createdAt","desc"),limit(8))),
+    getDoc(doc(db,"ambassadorApplications",currentUser.uid))
+  ]);
+  if(txResult.status==="fulfilled"){
+    const txs=txResult.value;
+    walletHistory.innerHTML=txs.empty?'<p class="muted">No transactions yet.</p>':txs.docs.map(x=>{const d=x.data();return `<div class="item"><b>${d.points>0?"+":""}${d.points} points</b><br><span class="muted">${esc(d.description||d.type)}</span></div>`}).join("");
+  }else walletHistory.innerHTML='<p class="muted">Wallet history is temporarily unavailable.</p>';
+  if(orderResult.status==="fulfilled"){
+    const ords=orderResult.value;
+    recentOrders.innerHTML=ords.empty?'<p class="muted">No orders yet.</p>':ords.docs.map(x=>{const d=x.data();return `<div class="item"><b>#${esc(d.orderNumber||x.id.slice(0,8))}</b> · ${esc(d.status||d.orderStatus||"Pending")} · ₹${Number(d.totalAmount||0).toFixed(0)}</div>`}).join("");
+  }else recentOrders.innerHTML='<p class="muted">Recent orders are temporarily unavailable.</p>';
+  if(appResult.status==="fulfilled"&&appResult.value.exists())applicationStatus.textContent=`Application status: ${appResult.value.data().status}`;
+}
 onAuthStateChanged(auth,u=>{if(!u){location.href="index.html";return}currentUser=u;load().catch(e=>alert(e.message))});
-profileForm.onsubmit=async e=>{e.preventDefault();const data={fullName:fullName.value.trim(),email:email.value.trim(),photoURL:photoURL.value.trim(),birthdayDay:Number(birthdayDay.value)||null,birthdayMonth:Number(birthdayMonth.value)||null,birthdayYear:Number(birthdayYear.value)||null,updatedAt:serverTimestamp()};await setDoc(doc(db,"users",currentUser.uid),data,{merge:true});alert("Profile saved");load()};
-const link=()=>`${location.origin}/?ref=${profile.referralCode}`;copyCode.onclick=()=>navigator.clipboard.writeText(profile.referralCode||"");copyLink.onclick=()=>navigator.clipboard.writeText(link());shareWhatsApp.onclick=()=>open(`https://wa.me/?text=${encodeURIComponent(`Order MAGNEETOZ with my code ${profile.referralCode}: ${link()}`)}`,"_blank");
+profileForm.onsubmit=async e=>{e.preventDefault();const data={fullName:fullName.value.trim(),birthdayDay:Number(birthdayDay.value)||null,birthdayMonth:Number(birthdayMonth.value)||null,updatedAt:serverTimestamp()};await setDoc(doc(db,"users",currentUser.uid),data,{merge:true});alert("Profile saved");load()};
+const referralCodeValue=()=>String(profile.referralCode||"").trim();
+const link=()=>referralCodeValue()?`${location.origin}/?ref=${encodeURIComponent(referralCodeValue())}`:"";
+function requireReferralCode(){if(referralCodeValue())return true;alert("Referral code is being generated. Please refresh once.");return false}
+copyCode.onclick=()=>{if(requireReferralCode())navigator.clipboard.writeText(referralCodeValue())};
+copyLink.onclick=()=>{if(requireReferralCode())navigator.clipboard.writeText(link())};
+shareWhatsApp.onclick=()=>{if(requireReferralCode())open(`https://wa.me/?text=${encodeURIComponent(`Order MAGNEETOZ with my code ${referralCodeValue()}: ${link()}`)}`,"_blank")};
 ambassadorForm.onsubmit=async e=>{e.preventDefault();await api("createAmbassadorApplication",{fullName:profile.fullName||profile.customerName,college:college.value,hostelPg:hostelPg.value,area:area.value,instagram:instagram.value,whatsappNumber:whatsapp.value,motivation:motivation.value,expectedReach:expectedReach.value});applicationStatus.textContent="Application status: pending";alert("Application submitted")};
 logout.onclick=()=>signOut(auth);
 </script>

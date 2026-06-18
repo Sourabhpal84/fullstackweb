@@ -320,7 +320,7 @@ service cloud.firestore {
     }
 
     match /ambassadorApplications/{applicationId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow read: if isAdmin() || (signedIn() && applicationId == request.auth.uid);
       allow create, update, delete: if false;
     }
 

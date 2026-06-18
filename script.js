@@ -200,6 +200,8 @@ const DISTANCE_CACHE_MAX_AGE_MS = 60 * 1000;
 const DEFAULT_FREE_DELIVERY_MIN = 199;
 let resumeCheckoutAfterAuth = false;
 let checkoutInFlightId = "";
+let walletPointsAvailable = 0;
+let walletPointsRequested = 0;
 let orderTrackingUnsub = null;
 let orderTrackingUserId = "";
 let phoneTrackingUnsub = null;
@@ -776,13 +778,17 @@ function calculateInvoicePricing(subtotal, basePricing = calculateCouponPricing(
   const delivery = Math.max(0, Number(basePricing.deliveryCharge) || 0);
   const taxableAmount = Math.max(0, Number(subtotal) - Number(basePricing.couponDiscount || 0));
   const gstAmount = Math.round(taxableAmount * gstPercent / 100);
-  const grandTotal = Math.max(0, Math.round(taxableAmount + gstAmount + handlingCharge + delivery));
+  const beforeWallet = Math.max(0, Math.round(taxableAmount + gstAmount + handlingCharge + delivery));
+  const walletDiscount = Math.max(0, Math.min(walletPointsRequested, Math.floor(beforeWallet * .2), walletPointsAvailable));
+  const grandTotal = Math.max(0, beforeWallet - walletDiscount);
   return {
     ...basePricing,
     gstPercent,
     gstAmount,
     handlingCharge,
     discount,
+    beforeWallet,
+    walletDiscount,
     grandTotal,
     finalTotal:grandTotal
   };
@@ -790,6 +796,28 @@ function calculateInvoicePricing(subtotal, basePricing = calculateCouponPricing(
 
 function ensureCustomerDistanceBanner(){
   return document.getElementById("customerDistanceBanner");
+}
+
+async function loadWalletForCheckout(user = auth.currentUser){
+  const box = document.getElementById("walletRedeemBox");
+  if(!user?.uid){ if(box) box.hidden = true; return; }
+  try{
+    const snap = await getDoc(doc(db,"users",user.uid));
+    walletPointsAvailable = Math.max(0, Math.floor(Number(snap.data()?.walletPoints || 0)));
+    if(box) box.hidden = walletPointsAvailable < 1;
+    const text = document.getElementById("walletBalanceText");
+    if(text) text.textContent = `${walletPointsAvailable} points available`;
+    renderCouponPanel();
+  }catch(error){ console.warn("Wallet balance load failed", error); }
+}
+
+function toggleWalletRedemption(){
+  const pricing = calculateInvoicePricing(getCartSubtotal());
+  walletPointsRequested = walletPointsRequested > 0 ? 0 : Math.min(walletPointsAvailable, Math.floor(pricing.beforeWallet * .2));
+  document.getElementById("walletRedeemBox")?.classList.toggle("active", walletPointsRequested > 0);
+  const btn = document.getElementById("walletToggleBtn");
+  if(btn) btn.textContent = walletPointsRequested ? `Remove ${walletPointsRequested} points` : "Use points";
+  renderCouponPanel();
 }
 
 function updateCustomerDistanceGlobals(){
@@ -1174,6 +1202,7 @@ function toastError(message){ window.MagneetozNotify?.error(message); }
 
 onAuthStateChanged(auth, user => {
   syncAuthenticatedCheckoutPhone(user);
+  loadWalletForCheckout(user);
   if(user){
     if(authCacheNullTimer){
       clearTimeout(authCacheNullTimer);
@@ -3211,6 +3240,7 @@ function renderCouponPanel(result = calculateInvoicePricing(getCartSubtotal())){
       <div><span>Handling Charges</span><b>${formatCurrency(result.handlingCharge || 0)}</b></div>
       <div><span>Delivery Fee</span><b>${formatCurrency(result.deliveryCharge)}</b></div>
       ${result.freeDeliveryDiscount ? `<div><span>Free Delivery</span><b>-${formatCurrency(result.freeDeliveryDiscount)}</b></div>` : ""}
+      ${result.walletDiscount ? `<div><span>Pizza Points</span><b>-${formatCurrency(result.walletDiscount)}</b></div>` : ""}
       <div class="grand"><span>Grand Total</span><b>${formatCurrency(result.finalTotal)}</b></div>
     `;
   }
@@ -3373,6 +3403,7 @@ async function createOrderSafely({ paymentMethod, paymentStatus, paymentId = "",
   if(!inventory.ok) throw new Error(inventory.message);
 
   const pricing = calculateInvoicePricing(subtotal);
+  const orderTotalBeforeWallet = pricing.beforeWallet;
   const restaurantAssignment = {
   restaurantId: "primary",
   restaurantName: "MAGNEETOZ",
@@ -3409,7 +3440,7 @@ async function createOrderSafely({ paymentMethod, paymentStatus, paymentId = "",
         addressLng:fields.lng || userLocation?.lng || null,
         items:itemsSnapshot,
         subtotalAmount:subtotal,
-        totalAmount:pricing.grandTotal,
+        totalAmount:orderTotalBeforeWallet,
         deliveryDistance,
         ...deliveryMetrics(),
         deliveryCharge:pricing.deliveryCharge,
@@ -3419,22 +3450,24 @@ async function createOrderSafely({ paymentMethod, paymentStatus, paymentId = "",
         couponPgName:activeCoupon?.pgName || activeCoupon?.pg || "",
         couponPgCode:activeCoupon?.pgCode || "",
         couponDiscount:pricing.couponDiscount,
+        walletPointsRequested:pricing.walletDiscount,
+        walletPointsUsed:0,
         freeDelivery:!!activeCoupon?.freeDelivery,
         gstPercent:pricing.gstPercent,
         gstAmount:pricing.gstAmount,
         handlingCharge:pricing.handlingCharge,
         subtotal,
-        grandTotal:pricing.grandTotal,
+        grandTotal:orderTotalBeforeWallet,
         invoiceNumber:buildInvoiceNumber(orderRef.id),
         invoiceGeneratedAt:serverTimestamp(),
-        finalAmount:pricing.grandTotal,
+        finalAmount:orderTotalBeforeWallet,
         paymentMethod:normalizedPaymentMethod === "upi" ? "online" : normalizedPaymentMethod,
         paymentStatus:normalizedPaymentStatus,
-        paymentRequired:pricing.grandTotal > 0,
+        paymentRequired:orderTotalBeforeWallet > 0,
         paymentCompleted:normalizedPaymentStatus === "paid",
-        amountDue:normalizedPaymentStatus === "paid" ? 0 : pricing.grandTotal,
-        amountPaid:normalizedPaymentStatus === "paid" ? pricing.grandTotal : 0,
-        amountToCollect:normalizedPaymentStatus === "paid" ? 0 : pricing.grandTotal,
+        amountDue:normalizedPaymentStatus === "paid" ? 0 : orderTotalBeforeWallet,
+        amountPaid:normalizedPaymentStatus === "paid" ? orderTotalBeforeWallet : 0,
+        amountToCollect:normalizedPaymentStatus === "paid" ? 0 : orderTotalBeforeWallet,
         paymentCaptured:normalizedPaymentStatus === "paid",
         orderSource:"online",
         checkoutSource:source,
@@ -3500,6 +3533,7 @@ async function buildPaidOnlineOrderDraft(){
   const user = await waitForAuthReady();
   if(!user?.uid) throw new Error("Please login again to place this order.");
   if(!cart.length) throw new Error("Cart empty");
+  if(walletPointsRequested > 0) throw new Error("Pizza Points are currently available with Cash on Delivery. Remove points to pay online.");
 
   const fields = getCheckoutFields();
   fields.phone = syncAuthenticatedCheckoutPhone(user);
@@ -4113,6 +4147,7 @@ async function prepareOrderSummary(options = {}) {
     Handling: ${formatCurrency(pricing.handlingCharge)} <br>
     Distance: ${deliveryDistance} km ${estimatedTravelTime ? `(${estimatedTravelTime})` : ""}<br>
     Delivery: ${formatCurrency(pricing.deliveryCharge)} <br>
+    ${pricing.walletDiscount ? `Pizza Points: -${formatCurrency(pricing.walletDiscount)} <br>` : ""}
     <hr style="margin:6px 0;">
     <strong>Total Payable: ${formatCurrency(pricing.grandTotal)}</strong>
   `;
@@ -4159,6 +4194,14 @@ async function codOrder(){
       paymentStatus:"pending",
       source:"cod"
     }));
+    if(walletPointsRequested > 0){
+      const walletResult = await callPaymentFunction("applyWalletToOrder", {
+        orderId:result.orderId,
+        requestedPoints:walletPointsRequested
+      }, 15000);
+      walletPointsAvailable = Number(walletResult.walletBalance || 0);
+      walletPointsRequested = 0;
+    }
     finishSuccessfulCheckout(result.orderNumber);
 
   }catch(e){
@@ -6030,6 +6073,8 @@ window.removeItem = removeItem;
 window.changeCartItemQty = changeCartItemQty;
 window.toggleCart = toggleCart;
 window.placeOrder = placeOrder;
+window.toggleWalletRedemption = toggleWalletRedemption;
+document.getElementById("walletToggleBtn")?.addEventListener("click", toggleWalletRedemption);
 window.codOrder = codOrder;
 window.upiOrder = upiOrder;
 window.closePaymentPopup = closePaymentPopup;

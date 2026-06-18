@@ -4214,6 +4214,31 @@ exports.attachReferralToUser = onRequest(
   }
 );
 
+exports.ensureGrowthProfile = onRequest(
+  { region: "asia-south1", cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") return sendJson(res, 204, {});
+    try {
+      const user = await requireAuth(req);
+      const profile = await growth.initializeUser({
+        db,
+        FieldValue,
+        uid: user.uid,
+        authPhone: user.phone_number || "",
+        profile: {}
+      });
+      sendJson(res, 200, {
+        ok: true,
+        referralCode: profile.referralCode || "",
+        walletPoints: Number(profile.walletPoints || 0)
+      });
+    } catch (error) {
+      logger.warn("Ensure growth profile failed", { error: error.message });
+      sendJson(res, error.status || 500, { error: error.message });
+    }
+  }
+);
+
 exports.validateReferralCode = onRequest(
   { region: "asia-south1", cors: true },
   async (req, res) => {
@@ -4331,6 +4356,72 @@ exports.adminAdjustPizzaPoints = onRequest(
       });
       sendJson(res, 200, { ok: true, transactionId: txRef.id });
     } catch (error) {
+      sendJson(res, error.status || 500, { error: error.message });
+    }
+  }
+);
+
+exports.applyWalletToOrder = onRequest(
+  { region: "asia-south1", cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") return sendJson(res, 204, {});
+    try {
+      const authUser = await requireAuth(req);
+      const orderId = String(req.body?.orderId || "");
+      const requestedPoints = Math.max(0, Math.floor(Number(req.body?.requestedPoints || 0)));
+      if (!orderId || !requestedPoints) throw Object.assign(new Error("Order and points are required"), { status: 400 });
+      const orderRef = db.collection("orders").doc(orderId);
+      const userRef = db.collection("users").doc(authUser.uid);
+      const ledgerRef = db.collection("walletTransactions").doc(`order_redeem_${orderId}_${authUser.uid}`);
+      const result = await db.runTransaction(async transaction => {
+        const [orderSnap, userSnap, ledgerSnap] = await Promise.all([
+          transaction.get(orderRef), transaction.get(userRef), transaction.get(ledgerRef)
+        ]);
+        if (!orderSnap.exists || orderSnap.data().userId !== authUser.uid) throw Object.assign(new Error("Order not found"), { status: 404 });
+        if (!userSnap.exists) throw Object.assign(new Error("Wallet not found"), { status: 404 });
+        if (ledgerSnap.exists) return { pointsUsed: Number(ledgerSnap.data().points || 0), walletBalance: Number(userSnap.data().walletPoints || 0) };
+        const order = orderSnap.data();
+        if (String(order.paymentMethod || "").toLowerCase() !== "cod" || !["pending", "payment pending"].includes(String(order.status || "").toLowerCase())) {
+          throw Object.assign(new Error("Pizza Points can only be applied to a new COD order"), { status: 409 });
+        }
+        const user = userSnap.data();
+        const config = await growth.settings(db);
+        const pointsUsed = growth.calculateWalletRedemption({
+          orderValue: Number(order.grandTotal || order.totalAmount || 0),
+          deliveryFee: Number(order.deliveryCharge || 0),
+          requestedPoints,
+          availablePoints: Number(user.walletPoints || 0),
+          config
+        });
+        if (!pointsUsed) throw Object.assign(new Error("No Pizza Points can be applied to this order"), { status: 409 });
+        const finalTotal = Math.max(0, roundMoney(Number(order.grandTotal || order.totalAmount || 0) - pointsUsed));
+        const walletBalance = Number(user.walletPoints || 0) - pointsUsed;
+        transaction.set(userRef, {
+          walletPoints: walletBalance,
+          lifetimePointsUsed: Number(user.lifetimePointsUsed || 0) + pointsUsed,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        transaction.set(orderRef, {
+          walletPointsUsed: pointsUsed,
+          walletDiscount: pointsUsed,
+          totalAmount: finalTotal,
+          grandTotal: finalTotal,
+          finalAmount: finalTotal,
+          amountDue: finalTotal,
+          amountToCollect: finalTotal,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        transaction.set(ledgerRef, {
+          userId: authUser.uid, type: "order_redeem", points: -pointsUsed,
+          amountEquivalent: pointsUsed, source: "checkout", orderId,
+          status: "debited", description: "Pizza Points used on order",
+          createdAt: FieldValue.serverTimestamp()
+        });
+        return { pointsUsed, walletBalance, finalTotal };
+      });
+      sendJson(res, 200, { ok: true, ...result });
+    } catch (error) {
+      logger.warn("Wallet redemption failed", { error: error.message });
       sendJson(res, error.status || 500, { error: error.message });
     }
   }
