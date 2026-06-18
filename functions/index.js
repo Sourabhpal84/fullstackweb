@@ -4245,6 +4245,64 @@ exports.reconcilePendingReferralRewards = onSchedule(
   }
 );
 
+function feedbackRewardPoints(orderAmount) {
+  const amount = Number(orderAmount || 0);
+  if (amount >= 500) return 50;
+  if (amount >= 400) return 40;
+  if (amount >= 300) return 25;
+  if (amount >= 200) return 10;
+  if (amount >= 100) return 5;
+  return 0;
+}
+
+exports.creditFeedbackPizzaPoints = onDocumentCreated(
+  { document: "feedback/{feedbackId}", region: "asia-south1" },
+  async event => {
+    const feedbackSnap = event.data;
+    if (!feedbackSnap) return;
+    const feedback = feedbackSnap.data() || {};
+    if (feedback.feedbackType !== "order_feedback" || !feedback.orderId || !feedback.userId) return;
+    const orderRef = db.collection("orders").doc(String(feedback.orderId));
+    const userRef = db.collection("users").doc(String(feedback.userId));
+    const ledgerRef = db.collection("walletTransactions").doc(`feedback_reward_${feedback.orderId}_${feedback.userId}`);
+    await db.runTransaction(async transaction => {
+      const [orderSnap, userSnap, ledgerSnap] = await Promise.all([
+        transaction.get(orderRef), transaction.get(userRef), transaction.get(ledgerRef)
+      ]);
+      if (!orderSnap.exists || !userSnap.exists) return;
+      const order = orderSnap.data() || {};
+      const user = userSnap.data() || {};
+      const delivered = String(order.status || order.orderStatus || "").toLowerCase() === "delivered";
+      if (ledgerSnap.exists) {
+        transaction.set(feedbackSnap.ref, { rewardStatus: "already_credited", rewardPoints: Math.abs(Number(ledgerSnap.data().points || 0)) }, { merge: true });
+        return;
+      }
+      if (!delivered || order.userId !== feedback.userId) {
+        transaction.set(feedbackSnap.ref, { rewardStatus: "ineligible", rewardReason: delivered ? "order_owner_mismatch" : "order_not_delivered" }, { merge: true });
+        return;
+      }
+      const points = feedbackRewardPoints(order.subtotalAmount || order.subtotal || order.grandTotal || order.totalAmount);
+      if (!points) {
+        transaction.set(feedbackSnap.ref, { rewardStatus: "ineligible", rewardReason: "order_below_100", rewardPoints: 0 }, { merge: true });
+        return;
+      }
+      transaction.set(userRef, {
+        walletPoints: Number(user.walletPoints || 0) + points,
+        lifetimePointsEarned: Number(user.lifetimePointsEarned || 0) + points,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      transaction.set(ledgerRef, {
+        userId: feedback.userId, type: "loyalty_bonus", points, amountEquivalent: points,
+        source: "delivered_order_feedback", orderId: feedback.orderId, feedbackId: event.params.feedbackId,
+        status: "credited", description: "Pizza Points earned for order feedback",
+        createdAt: FieldValue.serverTimestamp()
+      });
+      transaction.set(feedbackSnap.ref, { rewardStatus: "credited", rewardPoints: points, rewardCreditedAt: FieldValue.serverTimestamp() }, { merge: true });
+      transaction.set(orderRef, { feedbackRewardCredited: true, feedbackRewardPoints: points, feedbackRewardAt: FieldValue.serverTimestamp() }, { merge: true });
+    });
+  }
+);
+
 exports.attachReferralToUser = onRequest(
   { region: "asia-south1", cors: true },
   async (req, res) => {

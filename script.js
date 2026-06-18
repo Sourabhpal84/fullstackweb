@@ -3105,23 +3105,46 @@ function renderLiveOfferCard(offer = {}){
 
 registerGlobalSnapshot(onSnapshot(query(collection(db, "combos"), orderBy("createdAt", "desc")), (snapshot) => {
   const host = document.getElementById("comboRail");
+  const featuredHost = document.getElementById("comboFeatured");
   if(!host) return;
   const combos = snapshot.docs
     .map(item => ({ id:item.id, ...item.data() }))
     .filter(combo => combo.active !== false)
-    .slice(0, 10);
+    .sort((a,b) => Number(b.featured === true) - Number(a.featured === true) || Number(a.displayOrder ?? 999) - Number(b.displayOrder ?? 999))
+    .slice(0, 12);
+  const featured = combos.find(combo => combo.featured === true) || combos[0];
+  if(featuredHost){
+    featuredHost.innerHTML = featured ? `
+      <article class="combo-feature-card" style="--combo-accent:${escapeHTML(featured.accentColor || "#ff6b00")}">
+        <div class="combo-feature-copy">
+          <span class="combo-badge">${escapeHTML(featured.badge || "Chef's Combo Pick")}</span>
+          <p>${escapeHTML(featured.subtitle || "A complete MAGNEETOZ feast")}</p>
+          <h3>${escapeHTML(featured.name || "MAGNEETOZ Combo")}</h3>
+          <strong>${escapeHTML(featured.description || featured.itemsIncluded || "")}</strong>
+          <div class="combo-highlights">
+            ${String(featured.highlights || featured.itemsIncluded || "").split(",").map(text=>text.trim()).filter(Boolean).slice(0,4).map(text=>`<span>✓ ${escapeHTML(text)}</span>`).join("")}
+          </div>
+          <div class="combo-feature-price"><div><small>Combo price</small><b>${formatCurrency(featured.comboPrice || 0)}</b><s>${formatCurrency(featured.originalPrice || featured.comboPrice || 0)}</s></div><em>${Math.max(0,Math.round((Number(featured.originalPrice||0)-Number(featured.comboPrice||0))/Math.max(1,Number(featured.originalPrice||0))*100))}% OFF</em></div>
+          <button type="button" onclick="addComboToCart('${escapeHTML(featured.id)}')">${escapeHTML(featured.ctaText || "Add this combo")}</button>
+        </div>
+        <div class="combo-feature-visual">
+          <img src="${escapeHTML(normalizeImageUrl(featured.image))}" alt="${escapeHTML(featured.name || "Featured combo")}" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
+          <span>Save ${formatCurrency(Math.max(0,Number(featured.originalPrice||0)-Number(featured.comboPrice||0)))}</span>
+        </div>
+      </article>` : "";
+  }
   host.innerHTML = combos.map(combo => `
-    <article class="combo-card">
+    <article class="combo-card" style="--combo-accent:${escapeHTML(combo.accentColor || "#ff6b00")}">
       <img src="${escapeHTML(normalizeImageUrl(combo.image))}" alt="${escapeHTML(combo.name || "Combo")}" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
       <div>
-        <span>Combo deal</span>
+        <span>${escapeHTML(combo.badge || "Combo deal")}</span>
         <h3>${escapeHTML(combo.name || "MAGNEETOZ Combo")}</h3>
         <p>${escapeHTML(combo.description || combo.itemsIncluded || "")}</p>
         <div class="combo-price-row">
           <s>${formatCurrency(combo.originalPrice || combo.comboPrice || 0)}</s>
           <b>${formatCurrency(combo.comboPrice || 0)}</b>
         </div>
-        <button type="button" onclick="addComboToCart('${escapeHTML(combo.id)}')">Add Combo</button>
+        <button type="button" onclick="addComboToCart('${escapeHTML(combo.id)}')">${escapeHTML(combo.ctaText || "Add Combo")}</button>
       </div>
     </article>
   `).join("") || `<p class="coupon-empty">Active combos will appear here.</p>`;
@@ -4691,12 +4714,12 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   document.querySelector(".hero")?.addEventListener("click", event => {
     if(event.target.closest("button,a,select,input,textarea")) return;
-    document.getElementById("menuSection")?.scrollIntoView({ behavior:"smooth", block:"start" });
+    document.getElementById("combosSection")?.scrollIntoView({ behavior:"smooth", block:"start" });
   });
   document.querySelector(".hero")?.addEventListener("keydown", event => {
     if(event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
-    document.getElementById("menuSection")?.scrollIntoView({ behavior:"smooth", block:"start" });
+    document.getElementById("combosSection")?.scrollIntoView({ behavior:"smooth", block:"start" });
   });
   ["customerName","customerAddress","customerLandmark"].forEach(id => {
     document.getElementById(id)?.addEventListener("input", () => {
@@ -5844,19 +5867,14 @@ function ensureFeedbackPopup(){
   popup.innerHTML = `
     <div class="delivery-feedback-card" role="dialog" aria-modal="true" aria-labelledby="deliveryFeedbackTitle">
       <button type="button" class="feedback-close" aria-label="Close">x</button>
-      <h2 id="deliveryFeedbackTitle">How was your MAGNEETOZ order?</h2>
-      <p class="feedback-step-label">Step 1 - Overall Rating</p>
+      <h2 id="deliveryFeedbackTitle">Give feedback and earn reward 🍕</h2>
+      <div class="feedback-reward-banner" id="feedbackRewardBanner">Earn Pizza Points for this delivered order</div>
+      <p class="feedback-step-label">Overall rating *</p>
       <div class="feedback-stars feedback-overall-stars" data-feedback-stars="overall" aria-label="Overall rating">
         ${[1,2,3,4,5].map(i => `<button type="button" data-rating="${i}" aria-label="${i} star">★</button>`).join("")}
       </div>
-      <p class="feedback-step-label">Step 2 - Optional details</p>
       <div class="feedback-detail-list">
         ${starGroup("foodQuality", "🍕 Food Quality", true)}
-        ${starGroup("taste", "😋 Taste")}
-        ${starGroup("freshness", "🔥 Freshness")}
-        ${starGroup("delivery", "🚚 Delivery Speed")}
-        ${starGroup("service", "🤝 Service")}
-        ${starGroup("valueForMoney", "💰 Value for Money")}
       </div>
       <div class="feedback-chips" aria-label="Quick feedback">
         ${["Great Taste","Fast Delivery","Good Service","Fresh Food","Value For Money"].map(label => `<button type="button" data-feedback-chip="${label}">${label}</button>`).join("")}
@@ -5950,6 +5968,12 @@ async function analyzeFeedbackWithAI(feedbackId, payload){
 function showDeliveryFeedbackPopup(order){
   const popup = ensureFeedbackPopup();
   popup.dataset.orderId = order.id;
+  const eligibleAmount = Number(order.subtotalAmount || order.subtotal || order.grandTotal || order.totalAmount || 0);
+  const rewardPoints = eligibleAmount >= 500 ? 50 : eligibleAmount >= 400 ? 40 : eligibleAmount >= 300 ? 25 : eligibleAmount >= 200 ? 10 : eligibleAmount >= 100 ? 5 : 0;
+  const rewardBanner = popup.querySelector("#feedbackRewardBanner");
+  if(rewardBanner) rewardBanner.textContent = rewardPoints
+    ? `Submit feedback and get ${rewardPoints} Pizza Points`
+    : "Your feedback helps MAGNEETOZ improve";
   ["overall","foodQuality","taste","freshness","delivery","service","valueForMoney"].forEach(key => resetFeedbackStarValue(popup, key));
   const text = popup.querySelector("#deliveryFeedbackText");
   if(text) text.value = "";
@@ -6026,7 +6050,7 @@ function showDeliveryFeedbackPopup(order){
       }).catch(() => {});
       markFeedbackPrompted(order.id);
       popup.classList.remove("show");
-      toastSuccess("Thank you for your feedback.");
+      toastSuccess(rewardPoints ? `Thank you! ${rewardPoints} Pizza Points will be credited.` : "Thank you for your feedback.");
     }catch(error){
       console.warn("Feedback save failed:", error);
       toastError("Unable to save feedback right now.");
