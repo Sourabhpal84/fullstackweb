@@ -67,7 +67,7 @@ setPersistence(auth, browserLocalPersistence).catch(error => {
 });
 
 export const db = initializeFirestore(app, {
-  experimentalAutoDetectLongPolling:true,
+  experimentalForceLongPolling:true,
   useFetchStreams:false
 });
 
