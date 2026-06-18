@@ -6961,7 +6961,7 @@ html{
 /* Combo section final theme-safe overrides */
 #combosSection .combo-feature-card,
 #combosSection .combo-card{color:#f8fafc!important}
-#combosSection .combo-feature-copy h3{display:block!important;min-height:0!important;padding:0!important;border:0!important;background:transparent!important;color:#fff!important;-webkit-text-fill-color:#fff!important;font-size:clamp(30px,5vw,52px)!important;line-height:1.04!important;overflow:visible!important}
+#combosSection .combo-feature-copy h3{display:block!important;min-height:0!important;padding:0!important;border:0!important;background:transparent!important;color:#fff!important;-webkit-text-fill-color:#fff!important;font-size:clamp(25px,4vw,42px)!important;line-height:1.08!important;overflow:visible!important}
 #combosSection .combo-feature-copy>p{color:#ffbd86!important}
 #combosSection .combo-feature-copy>strong{display:block;color:#d6deea!important}
 #combosSection .combo-highlights span{color:#edf3fb!important}
@@ -6977,8 +6977,100 @@ html{
 #combosSection .combo-price-row s{color:#94a3b8!important}
 #combosSection .combo-card button{margin-top:2px}
 body.light-theme #combosSection,body:not(.dark-mode):not(.dark-theme) #combosSection{background:linear-gradient(145deg,#111827,#1e293b 60%,#0f172a)!important}
-@media(max-width:760px){#combosSection .combo-feature-card{height:auto;max-height:none;overflow:visible}#combosSection .combo-feature-copy{overflow:visible}#combosSection .combo-feature-copy h3{font-size:32px!important}#combosSection .combo-card{grid-template-columns:110px minmax(0,1fr)!important}#combosSection .combo-card img{width:110px!important;height:100%!important;min-height:150px;object-fit:cover}}
+@media(max-width:760px){#combosSection .combo-feature-card{height:auto;max-height:none;overflow:visible}#combosSection .combo-feature-copy{overflow:visible}#combosSection .combo-feature-copy h3{font-size:26px!important}#combosSection .combo-card{grid-template-columns:110px minmax(0,1fr)!important}#combosSection .combo-card img{width:110px!important;height:100%!important;min-height:150px;object-fit:cover}}
 @media(max-width:420px){#combosSection .combo-card{grid-template-columns:1fr!important}#combosSection .combo-card img{width:100%!important;height:190px!important}}
+
+/* Full-screen professional checkout page */
+body .cart-panel{
+  position:fixed!important;
+  inset:0!important;
+  width:100vw!important;
+  max-width:none!important;
+  height:100dvh!important;
+  max-height:none!important;
+  border-radius:0!important;
+  transform:translate3d(100%,0,0)!important;
+  overflow-y:auto!important;
+  overflow-x:hidden!important;
+  padding:0 max(20px,calc((100vw - 1120px)/2)) 110px!important;
+  background:
+    radial-gradient(circle at 8% 8%,rgba(255,107,0,.12),transparent 24rem),
+    radial-gradient(circle at 94% 55%,rgba(20,184,166,.10),transparent 25rem),
+    var(--page-bg,#f8fafc)!important;
+}
+body .cart-panel.active{transform:translate3d(0,0,0)!important}
+body .cart-header{
+  margin:0 calc(-1 * max(20px,calc((100vw - 1120px)/2))) 22px!important;
+  padding:18px max(20px,calc((100vw - 1120px)/2))!important;
+  min-height:76px!important;
+  background:color-mix(in srgb,var(--card,#fff) 94%,transparent)!important;
+  backdrop-filter:blur(18px);
+  border-bottom:1px solid var(--border,#e2e8f0)!important;
+}
+.checkout-page-title{display:flex;flex-direction:column;gap:2px}.checkout-page-title small{color:var(--brand,#ff6b00);font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.12em}.checkout-page-title h3{margin:0!important;color:var(--foreground,#111827)!important}
+body .cart-panel #cartItems,
+body .cart-panel .total,
+body .cart-panel #freeDeliveryHint,
+body .cart-panel .coupon-box,
+body .cart-panel .saved-address-box,
+body .cart-panel>.checkout-auth-phone,
+body .cart-panel>input,
+body .cart-panel>textarea{
+  width:min(100%,760px)!important;
+  margin-left:auto!important;
+  margin-right:auto!important;
+}
+body .cart-panel #cartItems{max-height:none!important;overflow:visible!important;padding:0!important}
+body .cart-panel .cart-items-title{margin-bottom:10px}
+body .cart-panel .cart-item{background:var(--card,#fff)!important;border-color:var(--border,#e2e8f0)!important;box-shadow:0 10px 28px rgba(15,23,42,.06)}
+body .cart-panel .total{margin-top:15px!important;padding:15px 18px!important;border:1px solid var(--border,#e2e8f0)!important;border-radius:17px;background:var(--card,#fff)!important;color:var(--foreground,#111827)!important}
+body .cart-panel .coupon-box,
+body .cart-panel .saved-address-box{margin-top:14px!important;margin-bottom:0!important;padding:16px!important;background:var(--card,#fff)!important;border:1px solid var(--border,#e2e8f0)!important;box-shadow:0 12px 34px rgba(15,23,42,.06)}
+body .cart-panel>.checkout-auth-phone,
+body .cart-panel>input,
+body .cart-panel>textarea{margin-top:12px!important;margin-bottom:0!important;background:var(--input,#fff)!important;color:var(--foreground,#111827)!important}
+body .cart-panel>button[aria-label="Place order"]{
+  position:sticky!important;
+  bottom:14px!important;
+  display:block!important;
+  width:min(100%,760px)!important;
+  margin:20px auto 0!important;
+  min-height:60px!important;
+  border-radius:17px!important;
+  z-index:30!important;
+  box-shadow:0 18px 45px rgba(255,107,0,.30)!important;
+}
+body.cart-open .bottom-nav,body.cart-open .cart-wrapper{display:none!important}
+body .cart-backdrop{display:none!important}
+@media(max-width:760px){
+  body .cart-panel{padding:0 12px 100px!important;transform:translate3d(100%,0,0)!important}
+  body .cart-panel.active{transform:translate3d(0,0,0)!important}
+  body .cart-header{margin:0 -12px 14px!important;padding:12px 16px!important;min-height:64px!important}
+  body .cart-header:before{display:none!important}
+  body .cart-panel #cartItems{max-height:none!important;padding:0!important;overflow:visible!important}
+  body .cart-panel .cart-item-pro{grid-template-columns:58px minmax(0,1fr)!important}
+  body .cart-panel .cart-line-actions{grid-column:1/-1!important}
+  body .cart-panel .coupon-box,body .cart-panel .saved-address-box{margin-left:auto!important;margin-right:auto!important;padding:12px!important}
+  body .cart-panel>input,body .cart-panel>textarea,body .cart-panel>.checkout-auth-phone{width:100%!important;margin-left:auto!important;margin-right:auto!important}
+  body .cart-panel>button[aria-label="Place order"]{width:100%!important;margin:16px auto 0!important;bottom:8px!important}
+}
+
+/* Scroll-aware Pizza/category button section */
+.sticky-area{
+  transition:transform .28s ease,opacity .24s ease,visibility .24s ease!important;
+  will-change:transform;
+}
+.sticky-area.category-controls-hidden{
+  transform:translateY(-115%)!important;
+  opacity:0!important;
+  visibility:hidden!important;
+  pointer-events:none!important;
+}
+.sticky-area.category-controls-visible{
+  transform:translateY(0)!important;
+  opacity:1!important;
+  visibility:visible!important;
+}
 
 body{
   overscroll-behavior-y:contain;

@@ -202,6 +202,7 @@ let resumeCheckoutAfterAuth = false;
 let checkoutInFlightId = "";
 let walletPointsAvailable = 0;
 let walletPointsRequested = 0;
+let guestCartAuthPrompted = false;
 let orderTrackingUnsub = null;
 let orderTrackingUserId = "";
 let phoneTrackingUnsub = null;
@@ -3838,6 +3839,15 @@ function updatePrice(selectElement){
 
 /* ================= ADD TO CART ================= */
 
+function promptGuestLoginAfterCartAction(){
+  if(auth.currentUser || guestCartAuthPrompted) return;
+  guestCartAuthPrompted = true;
+  setTimeout(async () => {
+    const user = await window.requireMagneetozAuth?.("cart");
+    if(!user) guestCartAuthPrompted = false;
+  }, 280);
+}
+
 function addToCartFull(btn, name){
   if(restaurantUnavailable()){
     alert(restaurantState.unavailableMessage || "Restaurant currently closed");
@@ -3869,6 +3879,7 @@ function addToCartFull(btn, name){
   persistGuestState();
   updateCart();
   notifyPremiumUI("magneetoz:item-added", { name, qty, price: price * qty });
+  promptGuestLoginAfterCartAction();
 
   btn.innerText = "Added ✓";
   setTimeout(()=>{
@@ -3903,6 +3914,7 @@ function addToCartSimple(btn, name){
   persistGuestState();
   updateCart();
   notifyPremiumUI("magneetoz:item-added", { name, qty, price });
+  promptGuestLoginAfterCartAction();
 
   btn.innerText = "Added ✓";
   setTimeout(()=>{
@@ -3933,6 +3945,7 @@ window.addComboToCart = function(id){
   persistGuestState();
   updateCart();
   notifyPremiumUI("magneetoz:item-added", { name:combo.name || "Combo", qty:1, price });
+  promptGuestLoginAfterCartAction();
 };
 
 
@@ -4002,20 +4015,6 @@ applyRestaurantAvailability();
 return;
 }
 
-const name = normalizeUnicodeText(document.getElementById("customerName").value);
-const phone = syncAuthenticatedCheckoutPhone();
-const address = normalizeUnicodeText(document.getElementById("customerAddress").value);
-
-  if (!phone) {
-alert("Your verified mobile is missing. Please update your profile once.");
-return;
-}
-
-  if (!name || !address) {
-focusMissingCheckoutField();
-return;
-}
-
 if (cart.length === 0) {
 alert("Cart empty");
 return;
@@ -4033,6 +4032,29 @@ if(!auth.currentUser){
   await timedStep("placeOrder:mergeGuestCart", () => mergeGuestCartWithUser(auth.currentUser));
   resumeCheckoutAfterAuth = false;
 }
+
+if(!isFreshCustomerLocation(CHECKOUT_LOCATION_REUSE_MAX_AGE_MS)){
+  setCheckoutLoading(true, "Fetching your current delivery location...");
+  await timedStep("placeOrder:autoLocation", () =>
+    fetchFreshCurrentLocation({ updateAddress:true, source:"fresh_gps:auto_checkout" })
+  ).catch(error => console.warn("Automatic checkout location failed", error));
+  setCheckoutLoading(false);
+}
+
+const name = normalizeUnicodeText(document.getElementById("customerName").value);
+const phone = syncAuthenticatedCheckoutPhone();
+const address = normalizeUnicodeText(document.getElementById("customerAddress").value);
+
+if(!phone){
+  alert("Your verified mobile is missing. Please update your profile once.");
+  return;
+}
+
+if(!name || !address){
+  focusMissingCheckoutField();
+  return;
+}
+
 await timedStep("placeOrder:saveCustomerProfile", () => saveCustomerProfile(auth.currentUser || cachedAuthUser));
 await timedStep("placeOrder:saveAddressBook", () => saveCurrentAddressToBook().catch(error => console.warn("Address book save skipped", error)));
 
@@ -4732,7 +4754,29 @@ document.addEventListener("DOMContentLoaded", () => {
 
 });
 
+let categoryControlsLastScrollY = window.scrollY;
+let categoryControlsScrollTimer = null;
 window.addEventListener("scroll", ()=>{
+  const categoryControls = document.querySelector(".sticky-area");
+  const currentScrollY = Math.max(0, window.scrollY);
+  const scrollingDown = currentScrollY > categoryControlsLastScrollY;
+  if(categoryControls && !document.body.classList.contains("cart-open")){
+    if(currentScrollY < 120){
+      categoryControls.classList.remove("category-controls-hidden");
+      categoryControls.classList.add("category-controls-visible");
+    }else if(scrollingDown){
+      categoryControls.classList.remove("category-controls-hidden");
+      categoryControls.classList.add("category-controls-visible");
+    }else{
+      categoryControls.classList.add("category-controls-hidden");
+      categoryControls.classList.remove("category-controls-visible");
+    }
+    clearTimeout(categoryControlsScrollTimer);
+    categoryControlsScrollTimer = setTimeout(() => {
+      if(window.scrollY < 120) categoryControls.classList.remove("category-controls-hidden");
+    }, 180);
+  }
+  categoryControlsLastScrollY = currentScrollY;
   if(menuBrowserHideOnNextScroll){
     hideMenuCategoryPicker();
     return;
