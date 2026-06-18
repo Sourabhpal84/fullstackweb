@@ -217,6 +217,12 @@ function resetRazorpayCheckoutState({ clearCheckoutId = true } = {}){
   if(clearCheckoutId) checkoutInFlightId = "";
 }
 
+function cancelRazorpayCheckout(){
+  clearRazorpayPaymentRecovery();
+  resetRazorpayCheckoutState();
+  setCheckoutLoading(false);
+}
+
 function hasVisibleRazorpayCheckout(){
   return [...document.querySelectorAll(".razorpay-container, iframe[src*='razorpay'], iframe[name*='razorpay']")]
     .some(node => {
@@ -374,13 +380,11 @@ function armRazorpayOpenWatchdog(){
       return;
     }
     if(!hasVisibleRazorpayCheckout() && checks >= 3){
-      resetRazorpayCheckoutState();
-      setCheckoutLoading(false);
+      cancelRazorpayCheckout();
       clearInterval(timer);
     }
     if(checks >= 12 && razorpayInFlight){
-      resetRazorpayCheckoutState();
-      setCheckoutLoading(false);
+      cancelRazorpayCheckout();
       clearInterval(timer);
     }
   }, 1000);
@@ -476,7 +480,9 @@ async function retryCapturedPaymentRecovery(){
       return;
     }
     if(recovery?.mode === "payment_session" && recovery.paymentSessionId){
-      await recoverPendingPaymentSession(recovery.paymentSessionId);
+      clearRazorpayPaymentRecovery();
+      setCheckoutLoading(false);
+      resetRazorpayCheckoutState();
       return;
     }
     if(recovery?.orderId || recovery?.paymentId){
@@ -2143,10 +2149,7 @@ function buildMenuCategoryGroups(categories = []){
     }
     map.get(group.key).categories.push(category);
   });
-  const priority = new Map([["pizza",0],["burger",1]]);
-  return [...map.values()].sort((a,b) =>
-    (priority.get(a.key) ?? 99) - (priority.get(b.key) ?? 99)
-  );
+  return [...map.values()];
 }
 
 function renderMenuGroupNav(groups = []){
@@ -2439,12 +2442,11 @@ function loadCategories(){
       });
 
       menuCategoryGroups = buildMenuCategoryGroups(activeCategories);
-      const orderedActiveCategories = menuCategoryGroups.flatMap(group => group.categories);
       if(!activeMenuGroup || !menuCategoryGroups.some(group => group.key === activeMenuGroup)){
         activeMenuGroup = menuCategoryGroups[0]?.key || "";
       }
 
-      orderedActiveCategories.forEach((category, index) => {
+      activeCategories.forEach((category, index) => {
         categoryHTML.push(`
   <div class="category-block" id="${escapeHTML(category.id)}">
           <div class="section-header">
@@ -2453,7 +2455,7 @@ function loadCategories(){
           <span class="line"></span>
          </div>
           <div class="grid" id="grid-cat-${escapeHTML(category.id)}"></div>
-          ${categoryJumpFooter(orderedActiveCategories, index)}
+          ${categoryJumpFooter(activeCategories, index)}
         </div>
       `);
       });
@@ -4335,7 +4337,7 @@ if(!keepRetryOverlay){
 modal:{
 ondismiss:function(){
 console.log("Payment cancelled");
-resetRazorpayCheckoutState();
+cancelRazorpayCheckout();
 }
 }
 
@@ -4355,7 +4357,7 @@ const rzp = new Razorpay(options);
 
 rzp.on('payment.failed', function (response){
 
-resetRazorpayCheckoutState();
+cancelRazorpayCheckout();
 console.log("PAYMENT_ERROR", response?.error || response);
 alert(response?.error?.description || "Payment failed. Please try again.");
 
@@ -4462,13 +4464,13 @@ async function payPendingOrder(orderId){
       },
       modal:{
         ondismiss:function(){
-          resetRazorpayCheckoutState();
+          cancelRazorpayCheckout();
         }
       }
     };
     const rzp = new Razorpay(options);
     rzp.on("payment.failed", function(response){
-      resetRazorpayCheckoutState();
+      cancelRazorpayCheckout();
       alert(response?.error?.description || "Payment failed. You can try again from this order.");
     });
     razorpayOpened = true;
