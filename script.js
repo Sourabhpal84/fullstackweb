@@ -2347,6 +2347,8 @@ function dishCardMarkup(d = {}, className = ""){
 function renderHomepageSections(){
   const host = document.getElementById("homepageFeaturedSections");
   if(!host) return;
+  host.classList.remove("is-loading");
+  host.setAttribute("aria-busy","false");
   const dishMap = new Map(allMenuDishes.map(dish => [dish.id, dish]));
   const sections = homepageSections
     .filter(section => section.active !== false)

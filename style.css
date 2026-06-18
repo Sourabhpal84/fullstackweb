@@ -3420,6 +3420,9 @@ body.dark-mode .hero::after{background:linear-gradient(to bottom,transparent,#0b
   gap:18px;
 }
 .homepage-featured-sections[hidden]{display:none;}
+.homepage-featured-skeleton{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;padding:16px;border-radius:20px;background:rgba(255,255,255,.72);}
+.homepage-featured-skeleton span{min-height:260px;border-radius:18px;background:linear-gradient(100deg,rgba(148,163,184,.16) 20%,rgba(255,255,255,.72) 40%,rgba(148,163,184,.16) 60%);background-size:220% 100%;animation:homepageFeaturedLoading 1.2s linear infinite;}
+@keyframes homepageFeaturedLoading{to{background-position-x:-220%;}}
 .homepage-featured-section{
   padding:16px;
   border:1px solid rgba(15,23,42,.1);
@@ -3470,6 +3473,8 @@ body.dark-theme .homepage-featured-head h2{color:var(--text-color,#f8fafc);}
   .homepage-featured-card .card-body p{display:none;}
   .homepage-featured-card .quantity-box{min-height:36px;}
   .homepage-featured-card .add-cart-btn{min-height:36px;padding:7px 12px;font-size:12px;}
+  .homepage-featured-skeleton{grid-template-columns:repeat(2,210px);overflow:hidden;border-radius:0;padding:12px 10px;}
+  .homepage-featured-skeleton span{min-height:250px;}
 }
 .new-card::before{
   content:"";
