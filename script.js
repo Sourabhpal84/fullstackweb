@@ -2143,7 +2143,10 @@ function buildMenuCategoryGroups(categories = []){
     }
     map.get(group.key).categories.push(category);
   });
-  return [...map.values()];
+  const priority = new Map([["pizza",0],["burger",1]]);
+  return [...map.values()].sort((a,b) =>
+    (priority.get(a.key) ?? 99) - (priority.get(b.key) ?? 99)
+  );
 }
 
 function renderMenuGroupNav(groups = []){
@@ -2157,10 +2160,6 @@ function renderMenuGroupNav(groups = []){
   `).join("");
   nav.querySelectorAll("[data-menu-group]").forEach(button => {
     button.addEventListener("click", () => {
-      if(menuBrowserOpen && activeMenuGroup === button.dataset.menuGroup){
-        closeMenuBrowser();
-        return;
-      }
       selectMenuGroup(button.dataset.menuGroup, true);
     });
   });
@@ -2175,7 +2174,7 @@ function closeMenuBrowser(){
   const browser = document.getElementById("menuCategoryBrowser");
   if(browser) browser.innerHTML = "";
   document.querySelectorAll(".category-block").forEach(block => {
-    block.hidden = true;
+    block.hidden = false;
     block.classList.remove("menu-category-active");
   });
 }
@@ -2206,14 +2205,31 @@ function renderMenuSubcategoryNav(group){
 function selectMenuGroup(groupKey, shouldScroll = true){
   const group = menuCategoryGroups.find(item => item.key === groupKey) || menuCategoryGroups[0];
   if(!group) return;
-  menuBrowserOpen = true;
+  menuBrowserOpen = false;
   menuBrowserHideOnNextScroll = false;
   activeMenuGroup = group.key;
   activeMenuCategory = "";
   document.querySelectorAll("[data-menu-group]").forEach(button => {
     button.classList.toggle("active", button.dataset.menuGroup === activeMenuGroup);
   });
-  renderVisibleMenuCategories({ scroll:shouldScroll });
+  const browser = document.getElementById("menuCategoryBrowser");
+  if(browser) browser.innerHTML = "";
+  document.querySelectorAll(".category-block").forEach(block => {
+    block.hidden = false;
+    block.classList.remove("menu-category-active");
+  });
+  if(shouldScroll){
+    requestAnimationFrame(() => {
+      const target = document.getElementById(group.categories[0]?.id || "");
+      if(!target) return;
+      const sticky = document.querySelector(".sticky-area");
+      const offset = (sticky?.getBoundingClientRect().height || 0) + 10;
+      window.scrollTo({
+        top:Math.max(0,target.getBoundingClientRect().top + window.scrollY - offset),
+        behavior:"smooth"
+      });
+    });
+  }
 }
 
 function selectMenuCategory(categoryId){
@@ -2423,11 +2439,12 @@ function loadCategories(){
       });
 
       menuCategoryGroups = buildMenuCategoryGroups(activeCategories);
+      const orderedActiveCategories = menuCategoryGroups.flatMap(group => group.categories);
       if(!activeMenuGroup || !menuCategoryGroups.some(group => group.key === activeMenuGroup)){
         activeMenuGroup = menuCategoryGroups[0]?.key || "";
       }
 
-      activeCategories.forEach((category, index) => {
+      orderedActiveCategories.forEach((category, index) => {
         categoryHTML.push(`
   <div class="category-block" id="${escapeHTML(category.id)}">
           <div class="section-header">
@@ -2436,7 +2453,7 @@ function loadCategories(){
           <span class="line"></span>
          </div>
           <div class="grid" id="grid-cat-${escapeHTML(category.id)}"></div>
-          ${categoryJumpFooter(activeCategories, index)}
+          ${categoryJumpFooter(orderedActiveCategories, index)}
         </div>
       `);
       });

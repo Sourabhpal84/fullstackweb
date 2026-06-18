@@ -3093,6 +3093,7 @@ body.dark-mode .hero::after{background:linear-gradient(to bottom,transparent,#0b
   gap:10px;
   margin-top:20px;
 }
+.premium-search-band[hidden]{display:none !important;}
 .smart-search-trigger{
   min-height:60px;
   border:1px solid rgba(0,0,0,.08);

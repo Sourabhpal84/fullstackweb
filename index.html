@@ -552,10 +552,13 @@ Verify OTP
       <section class="menu-category-browser" id="menuCategoryBrowser" aria-label="Selected food categories"></section>
 
     </div>
+    <main id="menuSection" class="inline-menu-section">
+      <div id="categoryContainer"></div>
+    </main>
     <section class="homepage-featured-sections is-loading" id="homepageFeaturedSections" aria-label="Featured food sections" aria-busy="true">
       <div class="homepage-featured-skeleton" aria-hidden="true"><span></span><span></span><span></span></div>
     </section>
-    <section class="premium-search-band">
+    <section class="premium-search-band" hidden aria-hidden="true">
       <button type="button" class="smart-search-trigger" id="smartSearchTrigger">
         <span>Search pizzas, snacks, combos...</span>
         <b>✕</b>
@@ -605,10 +608,6 @@ Verify OTP
       </div>
       <div class="recommendation-rail" id="recommendedRail"></div>
     </section>
-
-    <main id="menuSection" class="inline-menu-section">
-      <div id="categoryContainer"></div>
-    </main>
 
     <section class="smart-food-assistant reveal-on-scroll" aria-label="Smart food assistant">
       <div class="smart-assistant-copy">
