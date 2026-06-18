@@ -3113,6 +3113,7 @@ registerGlobalSnapshot(onSnapshot(query(collection(db, "combos"), orderBy("creat
     .sort((a,b) => Number(b.featured === true) - Number(a.featured === true) || Number(a.displayOrder ?? 999) - Number(b.displayOrder ?? 999))
     .slice(0, 12);
   const featured = combos.find(combo => combo.featured === true) || combos[0];
+  const secondaryCombos = featured ? combos.filter(combo => combo.id !== featured.id) : combos;
   if(featuredHost){
     featuredHost.innerHTML = featured ? `
       <article class="combo-feature-card" style="--combo-accent:${escapeHTML(featured.accentColor || "#ff6b00")}">
@@ -3133,7 +3134,8 @@ registerGlobalSnapshot(onSnapshot(query(collection(db, "combos"), orderBy("creat
         </div>
       </article>` : "";
   }
-  host.innerHTML = combos.map(combo => `
+  host.hidden = secondaryCombos.length === 0;
+  host.innerHTML = secondaryCombos.map(combo => `
     <article class="combo-card" style="--combo-accent:${escapeHTML(combo.accentColor || "#ff6b00")}">
       <img src="${escapeHTML(normalizeImageUrl(combo.image))}" alt="${escapeHTML(combo.name || "Combo")}" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
       <div>
@@ -3147,7 +3149,7 @@ registerGlobalSnapshot(onSnapshot(query(collection(db, "combos"), orderBy("creat
         <button type="button" onclick="addComboToCart('${escapeHTML(combo.id)}')">${escapeHTML(combo.ctaText || "Add Combo")}</button>
       </div>
     </article>
-  `).join("") || `<p class="coupon-empty">Active combos will appear here.</p>`;
+  `).join("");
   window.__magneetozActiveCombos = combos;
 }));
 
