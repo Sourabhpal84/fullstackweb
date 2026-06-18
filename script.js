@@ -2198,20 +2198,45 @@ function buildMenuCategoryGroups(categories = []){
     }
     map.get(group.key).categories.push(category);
   });
-  return [...map.values()];
+  const priority = { pizza:0, burger:1 };
+  return [...map.values()].sort((a,b) =>
+    (priority[a.key] ?? 99) - (priority[b.key] ?? 99) ||
+    a.label.localeCompare(b.label)
+  );
 }
 
 function renderMenuGroupNav(groups = []){
   const nav = document.getElementById("categoryNav");
   if(!nav) return;
-  nav.innerHTML = groups.map((group, index) => `
+  const menuGroups = groups.filter(group => group.key !== "combo");
+  nav.innerHTML = `
+    <button type="button" class="category-tab menu-special-tab active" data-menu-action="all">
+      <span class="category-special-icon">ALL</span>
+      <span class="category-tab-label">All</span>
+    </button>
+    <button type="button" class="category-tab menu-special-tab" data-menu-action="combo">
+      <span class="category-special-icon">🍕+</span>
+      <span class="category-tab-label">Combo</span>
+    </button>
+  ` + menuGroups.map((group, index) => `
     <button type="button" class="category-tab menu-group-tab" data-menu-group="${escapeHTML(group.key)}">
       ${categoryImageMarkup({ ...(group.categories[0] || {}), groupImage:group.groupImage }, group.label)}
       <span class="category-tab-label">${escapeHTML(group.label)}</span>
     </button>
   `).join("");
+  nav.querySelector('[data-menu-action="all"]')?.addEventListener("click", () => {
+    closeMenuBrowser();
+    document.querySelectorAll("[data-menu-action]").forEach(button => button.classList.toggle("active", button.dataset.menuAction === "all"));
+    document.getElementById("menuSection")?.scrollIntoView({ behavior:"smooth", block:"start" });
+  });
+  nav.querySelector('[data-menu-action="combo"]')?.addEventListener("click", () => {
+    closeMenuBrowser();
+    document.querySelectorAll("[data-menu-action]").forEach(button => button.classList.toggle("active", button.dataset.menuAction === "combo"));
+    document.getElementById("combosSection")?.scrollIntoView({ behavior:"smooth", block:"start" });
+  });
   nav.querySelectorAll("[data-menu-group]").forEach(button => {
     button.addEventListener("click", () => {
+      document.querySelectorAll("[data-menu-action]").forEach(item => item.classList.remove("active"));
       selectMenuGroup(button.dataset.menuGroup, true);
     });
   });

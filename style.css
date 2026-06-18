@@ -7929,6 +7929,24 @@ body.dark-theme .menu-direct-note{
   text-align:center;
 }
 
+.category-special-icon{
+  display:grid;
+  place-items:center;
+  width:38px;
+  height:38px;
+  border-radius:50%;
+  background:linear-gradient(135deg,#ff7b00,#14b8a6);
+  color:#fff;
+  font-size:10px;
+  font-weight:950;
+  letter-spacing:-.02em;
+  box-shadow:0 7px 16px rgba(255,123,0,.2);
+}
+.menu-special-tab.active .category-special-icon{
+  outline:3px solid rgba(255,123,0,.2);
+  transform:scale(1.04);
+}
+
 body.dark-mode .menu-subcategory-chip,
 body.dark-theme .menu-subcategory-chip{
   background:rgba(255,255,255,.08);
