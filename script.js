@@ -4764,28 +4764,23 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 let categoryControlsLastScrollY = window.scrollY;
-let categoryControlsScrollTimer = null;
 window.addEventListener("scroll", ()=>{
   const categoryControls = document.querySelector(".sticky-area");
   const currentScrollY = Math.max(0, window.scrollY);
-  const scrollingDown = currentScrollY > categoryControlsLastScrollY;
+  const scrollDelta = currentScrollY - categoryControlsLastScrollY;
   if(categoryControls && !document.body.classList.contains("cart-open")){
     if(currentScrollY < 120){
       categoryControls.classList.remove("category-controls-hidden");
       categoryControls.classList.add("category-controls-visible");
-    }else if(scrollingDown){
+    }else if(scrollDelta > 7){
       categoryControls.classList.remove("category-controls-hidden");
       categoryControls.classList.add("category-controls-visible");
-    }else{
+    }else if(scrollDelta < -7){
       categoryControls.classList.add("category-controls-hidden");
       categoryControls.classList.remove("category-controls-visible");
     }
-    clearTimeout(categoryControlsScrollTimer);
-    categoryControlsScrollTimer = setTimeout(() => {
-      if(window.scrollY < 120) categoryControls.classList.remove("category-controls-hidden");
-    }, 180);
   }
-  categoryControlsLastScrollY = currentScrollY;
+  if(Math.abs(scrollDelta) > 7 || currentScrollY < 120) categoryControlsLastScrollY = currentScrollY;
   if(menuBrowserHideOnNextScroll){
     hideMenuCategoryPicker();
     return;

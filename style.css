@@ -7313,6 +7313,10 @@ body .cart-backdrop{display:none!important}
   opacity:1!important;
   visibility:visible!important;
 }
+@media(max-width:760px){
+  body .sticky-area.category-controls-hidden{transform:translate3d(0,-120%,0)!important}
+  body .sticky-area.category-controls-visible{transform:translate3d(0,0,0)!important}
+}
 
 body{
   overscroll-behavior-y:contain;
