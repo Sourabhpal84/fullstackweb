@@ -9,7 +9,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 import {
-  getFirestore
+  initializeFirestore
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 import {
@@ -66,7 +66,10 @@ setPersistence(auth, browserLocalPersistence).catch(error => {
   console.warn("Firebase auth persistence unavailable:", error);
 });
 
-export const db = getFirestore(app);
+export const db = initializeFirestore(app, {
+  experimentalAutoDetectLongPolling:true,
+  useFetchStreams:false
+});
 
 export const storage = getStorage(app);
 
