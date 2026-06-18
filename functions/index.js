@@ -4197,6 +4197,54 @@ exports.processGrowthRewardsOnDelivery = onDocumentUpdated(
   }
 );
 
+exports.reconcilePendingReferralRewards = onSchedule(
+  {
+    schedule: "every 15 minutes",
+    region: "asia-south1",
+    timeZone: "Asia/Kolkata"
+  },
+  async () => {
+    const pending = await db.collection("referralEvents")
+      .where("status", "==", "attached")
+      .limit(50)
+      .get();
+    if (pending.empty) return;
+
+    for (const eventDoc of pending.docs) {
+      const referral = eventDoc.data() || {};
+      if (referral.rewardCredited === true || !referral.referredUserId) continue;
+      try {
+        const orders = await db.collection("orders")
+          .where("userId", "==", referral.referredUserId)
+          .get();
+        const deliveredOrder = orders.docs
+          .map(item => ({ id: item.id, data: item.data() || {} }))
+          .filter(item => String(item.data.status || item.data.orderStatus || "").toLowerCase() === "delivered")
+          .sort((a, b) => {
+            const aTime = a.data.deliveredAt?.toMillis?.() || a.data.createdAt?.toMillis?.() || 0;
+            const bTime = b.data.deliveredAt?.toMillis?.() || b.data.createdAt?.toMillis?.() || 0;
+            return aTime - bTime;
+          })[0];
+        if (!deliveredOrder) continue;
+        await growth.processDeliveredOrder({
+          db,
+          FieldValue,
+          orderId: deliveredOrder.id,
+          before: {},
+          order: deliveredOrder.data,
+          logger
+        });
+      } catch (error) {
+        logger.error("Pending referral reconciliation failed", {
+          referralEventId: eventDoc.id,
+          referredUserId: referral.referredUserId,
+          error: error.message
+        });
+      }
+    }
+  }
+);
+
 exports.attachReferralToUser = onRequest(
   { region: "asia-south1", cors: true },
   async (req, res) => {

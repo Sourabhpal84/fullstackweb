@@ -183,11 +183,6 @@ async function processDeliveredOrder({ db, FieldValue, orderId, before = {}, ord
     const userRef = userSnap.ref;
     const deliveredOrders = await db.collection("orders").where("userId", "==", order.userId).where("status", "==", "Delivered").limit(2).get();
     const firstDelivered = deliveredOrders.size <= 1;
-    transaction.set(userRef, {
-      totalOrders: Number(user.totalOrders || 0) + 1,
-      updatedAt: FieldValue.serverTimestamp()
-    }, { merge: true });
-
     let rewardPath = "none";
     if (firstDelivered && rewardSettings.referralEnabled !== false && user.referralPath === "normal" && user.referredBy) {
       const referrerRef = db.collection("users").doc(user.referredBy);
@@ -239,6 +234,10 @@ async function processDeliveredOrder({ db, FieldValue, orderId, before = {}, ord
         rewardPath = "ambassador";
       }
     }
+    transaction.set(userRef, {
+      totalOrders: Number(user.totalOrders || 0) + 1,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
     transaction.set(eventRef, {
       orderId, userId: order.userId, processed: true, firstDelivered, rewardPath,
       processedAt: FieldValue.serverTimestamp()
