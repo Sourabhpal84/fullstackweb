@@ -3930,6 +3930,19 @@ body.dark-theme .homepage-featured-head h2{color:var(--text-color,#f8fafc);}
   background:rgba(17,24,39,.88);
   box-shadow:0 20px 80px rgba(0,0,0,.28);
   backdrop-filter:blur(20px);
+  transition:transform .3s cubic-bezier(.22,.8,.22,1),opacity .22s ease,visibility .22s ease;
+  will-change:transform,opacity;
+}
+.bottom-nav.scroll-controls-hidden{
+  transform:translate3d(0,calc(130% + env(safe-area-inset-bottom)),0);
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+}
+.bottom-nav.scroll-controls-visible{
+  transform:translate3d(0,0,0);
+  opacity:1;
+  visibility:visible;
 }
 .bottom-nav button{
   border:0;
