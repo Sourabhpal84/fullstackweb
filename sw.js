@@ -1,5 +1,5 @@
-const CACHE_NAME = "magneetoz-premium-v10";
-const RUNTIME_CACHE = "magneetoz-runtime-v4";
+const CACHE_NAME = "magneetoz-premium-v11";
+const RUNTIME_CACHE = "magneetoz-runtime-v5";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -38,6 +38,12 @@ self.addEventListener("fetch", event => {
 
   const url = new URL(event.request.url);
 
+  // Firestore/Auth/Functions streaming and API responses must never pass
+  // through Cache Storage. Caching these requests breaks WebChannel.
+  if(url.origin !== self.location.origin){
+    return;
+  }
+
   if(url.pathname.endsWith(".js") || url.pathname.endsWith(".mjs")){
     event.respondWith(
       fetch(event.request, { cache:"no-store" })
@@ -51,7 +57,9 @@ self.addEventListener("fetch", event => {
       fetch(event.request)
         .then(response => {
           const copy = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
+          caches.open(CACHE_NAME)
+            .then(cache => cache.put(event.request, copy))
+            .catch(() => {});
           return response;
         })
         .catch(() => caches.match(event.request))
@@ -63,7 +71,7 @@ self.addEventListener("fetch", event => {
     event.respondWith(
       caches.open(RUNTIME_CACHE).then(cache =>
         cache.match(event.request).then(cached => cached || fetch(event.request).then(response => {
-          if(response.ok) cache.put(event.request, response.clone());
+          if(response.ok) cache.put(event.request, response.clone()).catch(() => {});
           return response;
         }).catch(() => caches.match("/logo_tran.jpeg")))
       )
@@ -75,9 +83,11 @@ self.addEventListener("fetch", event => {
     fetch(event.request)
       .then(response => {
         const copy = response.clone();
-        caches.open(RUNTIME_CACHE).then(cache => cache.put(event.request, copy));
+        caches.open(RUNTIME_CACHE)
+          .then(cache => cache.put(event.request, copy))
+          .catch(() => {});
         return response;
       })
-      .catch(() => caches.match(event.request))
+      .catch(() => caches.match(event.request).then(cached => cached || Response.error()))
   );
 });

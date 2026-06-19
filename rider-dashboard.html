@@ -994,9 +994,13 @@ function listenOrders(){
       const requestDocs = snap.docs
         .map(item => ({ id:item.id, ...item.data() }))
         .filter(item => activeRequestStatuses.has(String(item.status || "").toLowerCase()));
-      const orderSnaps = await Promise.all(requestDocs.map(item => getDoc(doc(db,"orders",item.orderId))));
-      directRequestOrderDocs = orderSnaps
-        .map((orderSnap, index) => {
+      const orderResults = await Promise.allSettled(
+        requestDocs.map(item => getDoc(doc(db,"orders",item.orderId)))
+      );
+      directRequestOrderDocs = orderResults
+        .map((result, index) => {
+          if(result.status !== "fulfilled") return null;
+          const orderSnap = result.value;
           if(!orderSnap.exists()) return null;
           const terminalStatus = normalizeStatus(orderSnap.data().status || orderSnap.data().orderStatus);
           if(["Delivered","Cancelled","Rejected","Failed"].includes(terminalStatus)) return null;
@@ -1020,7 +1024,11 @@ function listenOrders(){
         .filter(Boolean);
       rebuildOrders();
       logStructured("FIRESTORE LISTENER", { name:"riderRequests-direct", count:requestDocs.length });
-    }, error => console.warn("[FIRESTORE LISTENER] Direct rider requests failed", error));
+    }, error => {
+      directRequestOrderDocs = [];
+      rebuildOrders();
+      console.warn("[FIRESTORE LISTENER] Direct rider requests unavailable; using order assignment listener.", error?.code || error?.message || error);
+    });
 }
 
 function enterDashboard(){
