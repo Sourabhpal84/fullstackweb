@@ -114,6 +114,30 @@ img[loading="lazy"] {
   background: #f1f5f9;
 }
 
+/* Combo rail: preserve original cards, enable horizontal swipe right-to-left. */
+#combosSection .combo-rail{
+  display:flex!important;
+  flex-wrap:nowrap!important;
+  gap:14px!important;
+  width:100%!important;
+  overflow-x:auto!important;
+  overflow-y:visible!important;
+  padding:4px 2px 12px!important;
+  scroll-snap-type:x proximity!important;
+  scroll-behavior:smooth!important;
+  overscroll-behavior-inline:contain!important;
+  -webkit-overflow-scrolling:touch!important;
+}
+#combosSection .combo-rail>.combo-card{
+  flex:0 0 min(420px,86vw)!important;
+  scroll-snap-align:start!important;
+}
+#combosSection .combo-rail::-webkit-scrollbar{height:5px}
+#combosSection .combo-rail::-webkit-scrollbar-thumb{border-radius:999px;background:rgba(255,123,0,.42)}
+@media(max-width:760px){
+  #combosSection .combo-rail>.combo-card{flex-basis:88vw!important}
+}
+
 /* CART V2 FINAL CASCADE — intentionally last */
 @media(max-width:760px){
   body .cart-panel{
