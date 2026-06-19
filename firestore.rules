@@ -95,9 +95,15 @@ service cloud.firestore {
           (
             (resource.data.status == "Pending" || resource.data.status == "Payment Pending")
             && request.resource.data.diff(resource.data).affectedKeys()
-              .hasOnly(["status", "cancelledAt", "riderStatus"])
+              .hasOnly([
+                "status", "orderStatus", "cancelledBy", "cancelledAt", "riderStatus",
+                "pizzaPointsRefundEligible", "pizzaPointsForfeited", "pizzaPointsForfeitureReason"
+              ])
             && request.resource.data.status == "Cancelled"
+            && request.resource.data.orderStatus == "Cancelled"
+            && request.resource.data.cancelledBy == "customer"
             && request.resource.data.riderStatus == "Cancelled by customer"
+            && request.resource.data.pizzaPointsRefundEligible == false
           )
           ||
           (

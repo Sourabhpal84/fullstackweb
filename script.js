@@ -814,6 +814,11 @@ function ensureCustomerDistanceBanner(){
   return document.getElementById("customerDistanceBanner");
 }
 
+function isTerminalOrderStatus(status = ""){
+  return ["Delivered","Cancelled","Rejected","Failed"]
+    .includes(normalizeTimelineStatus(status));
+}
+
 async function loadWalletForCheckout(user = auth.currentUser){
   const box = document.getElementById("walletRedeemBox");
   if(!user?.uid){ if(box) box.hidden = true; return; }
@@ -5350,7 +5355,10 @@ function orderStatusDisplay(order = {}){
     Nearby:{ label:"Arriving Soon", icon:"📍" },
     "Delivery Code Pending":{ label:"Delivery OTP Ready", icon:"🔐" },
     "Payment Completed":{ label:"Payment Completed", icon:"✅" },
-    Delivered:{ label:"Delivered", icon:"✅" }
+    Delivered:{ label:"Delivered", icon:"✅" },
+    Cancelled:{ label:"Order Cancelled", icon:"🚫" },
+    Rejected:{ label:"Order Rejected", icon:"❌" },
+    Failed:{ label:"Order Failed", icon:"⚠️" }
   };
   return labels[status] || { label:status || "Order Updating", icon:"🟢" };
 }
@@ -5424,13 +5432,24 @@ function startOrderTrackingListener(user){
 
       const incoming = { id:docSnap.id, ...docSnap.data() };
       const previous = previousById.get(docSnap.id);
-      const orderData = previous && statusRank(incoming.status) < statusRank(previous.status)
+      const orderData = previous
+        && !isTerminalOrderStatus(incoming.status || incoming.orderStatus)
+        && statusRank(incoming.status) < statusRank(previous.status)
         ? { ...incoming, status:previous.status, orderStatus:previous.status }
         : incoming;
-      if(previous && statusRank(incoming.status) < statusRank(previous.status)){
+      if(previous
+        && !isTerminalOrderStatus(incoming.status || incoming.orderStatus)
+        && statusRank(incoming.status) < statusRank(previous.status)){
         logStructured("ORDER STATUS", { event:"ignored_backward_status", orderId:docSnap.id, incoming:incoming.status, kept:previous.status });
       }
       nextOrders.push(orderData);
+      if(previous
+        && !isTerminalOrderStatus(previous.status || previous.orderStatus)
+        && isTerminalOrderStatus(orderData.status || orderData.orderStatus)){
+        const terminalStatus = normalizeTimelineStatus(orderData.status || orderData.orderStatus);
+        if(terminalStatus === "Rejected") toastError("Restaurant rejected this order. Check Cancelled Orders for details.");
+        if(terminalStatus === "Cancelled") toastError("This order has been cancelled.");
+      }
       if(orderData.status === "Delivered" && !feedbackPromptedOrders.has(docSnap.id) && !orderData.feedbackSubmitted){
         setTimeout(() => showDeliveryFeedbackPopup(orderData), 500);
       }
@@ -5526,7 +5545,8 @@ function renderOrders(){
     }
 
     if(currentFilter === "cancelled"){
-      return order.status === "Cancelled" || order.status === "Rejected";
+      const status = normalizeTimelineStatus(order.status || order.orderStatus);
+      return status === "Cancelled" || status === "Rejected" || status === "Failed";
     }
 
     return (
@@ -6451,9 +6471,13 @@ window.cancelPendingOrder = async function(orderId){
       if(Date.now() >= timestampToMillis(order.cancelWindowEndsAt)) throw new Error("The cancellation window has closed.");
       transaction.update(orderRef, {
         status:"Cancelled",
+        orderStatus:"Cancelled",
         cancelledBy:"customer",
         cancelledAt:serverTimestamp(),
-        riderStatus:"Cancelled by customer"
+        riderStatus:"Cancelled by customer",
+        pizzaPointsRefundEligible:false,
+        pizzaPointsForfeited:Number(order.walletPointsUsed || order.walletDiscount || 0),
+        pizzaPointsForfeitureReason:"customer_cancelled_order"
       });
     });
   }catch(error){

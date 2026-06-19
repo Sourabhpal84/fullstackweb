@@ -3005,7 +3005,11 @@ exports.adminUpdateOrderStatus = onRequest(
         if (nextStatus === "Accepted") updates.acceptedAt = FieldValue.serverTimestamp();
         if (nextStatus === "Preparing") updates.preparingAt = FieldValue.serverTimestamp();
         if (nextStatus === "Ready") updates.readyAt = FieldValue.serverTimestamp();
-        if (nextStatus === "Rejected" || nextStatus === "Cancelled") updates.completedAt = FieldValue.serverTimestamp();
+        if (nextStatus === "Rejected" || nextStatus === "Cancelled") {
+          updates.completedAt = FieldValue.serverTimestamp();
+          updates.cancelledBy = nextStatus === "Rejected" ? "admin" : "admin";
+          updates.pizzaPointsRefundEligible = true;
+        }
         transaction.update(orderRef, updates);
         addOrderAudit(transaction, orderId, "ADMIN_STATUS_UPDATE", {
           from: currentStatus,
@@ -4782,6 +4786,91 @@ async function consumePizzaPointBatches(transaction, userId, points, sourceId) {
   if (remaining) throw Object.assign(new Error("Available Pizza Point batches are insufficient"), { status: 409 });
   return allocations;
 }
+
+exports.settlePizzaPointsOnOrderCancellation = onDocumentUpdated(
+  { document: "orders/{orderId}", region: "asia-south1" },
+  async event => {
+    const before = event.data?.before?.data() || {};
+    const after = event.data?.after?.data() || {};
+    const beforeStatus = String(before.status || before.orderStatus || "").toLowerCase();
+    const afterStatus = String(after.status || after.orderStatus || "").toLowerCase();
+    if (beforeStatus === afterStatus || !["cancelled", "rejected"].includes(afterStatus) || !after.userId) return;
+    const orderId = event.params.orderId;
+    const customerCancelled = String(after.cancelledBy || "").toLowerCase() === "customer";
+    const pointsUsed = Math.max(0, Number(after.walletPointsUsed || after.walletDiscount || 0));
+    if (!pointsUsed) {
+      await event.data.after.ref.set({
+        pizzaPointsRefundEligible: !customerCancelled,
+        pizzaPointsSettlementStatus: "not_applicable"
+      }, { merge: true });
+      return;
+    }
+    if (customerCancelled) {
+      await event.data.after.ref.set({
+        pizzaPointsRefundEligible: false,
+        pizzaPointsForfeited: pointsUsed,
+        pizzaPointsSettlementStatus: "forfeited",
+        pizzaPointsForfeitureReason: "customer_cancelled_order",
+        pizzaPointsSettledAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      return;
+    }
+    const userRef = db.collection("users").doc(String(after.userId));
+    const codLedgerRef = db.collection("walletTransactions").doc(`order_redeem_${orderId}_${after.userId}`);
+    const onlineLedgerRef = after.paymentSessionId
+      ? db.collection("walletTransactions").doc(`online_reserve_${after.paymentSessionId}`)
+      : null;
+    await db.runTransaction(async transaction => {
+      const refs = [userRef, codLedgerRef, ...(onlineLedgerRef ? [onlineLedgerRef] : [])];
+      const [userSnap, codLedgerSnap, onlineLedgerSnap] = await Promise.all(refs.map(ref => transaction.get(ref)));
+      const ledgerSnap = codLedgerSnap.exists ? codLedgerSnap : onlineLedgerSnap;
+      if (!ledgerSnap?.exists) return;
+      const ledger = ledgerSnap.data() || {};
+      if (ledger.refundStatus === "refunded" || !["debited", "reserved"].includes(String(ledger.status || ""))) return;
+      const allocations = Array.isArray(ledger.allocations) ? ledger.allocations : [];
+      const creditRefs = allocations.map(allocation =>
+        db.collection("walletTransactions").doc(String(allocation.transactionId || ""))
+      );
+      const creditSnaps = await Promise.all(creditRefs.map(ref => transaction.get(ref)));
+      let refundable = 0;
+      allocations.forEach((allocation, index) => {
+        const creditSnap = creditSnaps[index];
+        if (!creditSnap.exists) return;
+        const credit = creditSnap.data() || {};
+        const expiryMs = credit.expiresAt?.toMillis?.() || 0;
+        if (credit.status === "expired" || (expiryMs && expiryMs <= Date.now())) return;
+        const amount = Math.max(0, Number(allocation.points || 0));
+        refundable += amount;
+        transaction.set(creditRefs[index], {
+          status: "credited",
+          remainingPoints: Math.max(0, Number(credit.remainingPoints || 0)) + amount,
+          lastRefundedAt: FieldValue.serverTimestamp(),
+          lastRefundSource: `order_${orderId}`
+        }, { merge: true });
+      });
+      const user = userSnap.data() || {};
+      transaction.set(userRef, {
+        walletPoints: Number(user.walletPoints || 0) + refundable,
+        pendingPoints: Math.max(0, Number(user.pendingPoints || 0) - (ledger.status === "reserved" ? pointsUsed : 0)),
+        lifetimePointsUsed: Math.max(0, Number(user.lifetimePointsUsed || 0) - (ledger.status === "debited" ? refundable : 0)),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      transaction.set(ledgerSnap.ref, {
+        status: "refunded",
+        refundStatus: "refunded",
+        refundedPoints: refundable,
+        refundedAt: FieldValue.serverTimestamp(),
+        refundReason: "restaurant_or_admin_cancelled_order"
+      }, { merge: true });
+      transaction.set(event.data.after.ref, {
+        pizzaPointsRefundEligible: true,
+        pizzaPointsRefunded: refundable,
+        pizzaPointsSettlementStatus: "refunded",
+        pizzaPointsSettledAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    });
+  }
+);
 
 exports.creditFeedbackPizzaPoints = onDocumentCreated(
   { document: "feedback/{feedbackId}", region: "asia-south1" },
