@@ -456,6 +456,14 @@ Verify OTP
     <!-- HERO -->
 
     <section class="hero" id="homeHero" role="button" tabindex="0" aria-label="View combo offers">
+      <button type="button" class="hero-location-pill" id="heroLocationPill" aria-label="Select delivery location">
+        <span class="hero-location-icon">📍</span>
+        <span>
+          <strong id="heroLocationTitle">Select delivery location</strong>
+          <small id="heroLocationAddress">Tap to use your current location</small>
+        </span>
+        <b>⌄</b>
+      </button>
 
       <div class="hero-bg-slider" id="heroBgSlider" aria-hidden="true"></div>
       <div class="hero-bg bg1"></div>
@@ -754,26 +762,11 @@ Verify OTP
       </section>
 
       <section class="checkout-details-column" aria-label="Delivery and checkout details">
-      <!-- CUSTOMER DETAILS -->
-
-      <section class="saved-address-box" aria-label="Saved delivery address">
-        <label for="savedAddressSelect">Delivery Address</label>
-        <select id="savedAddressSelect">
-          <option value="">Add new address</option>
-        </select>
-        <div class="address-actions">
-          <button type="button" id="useCurrentLocationBtn">📍 Use Current Location</button>
-          <button type="button" id="refreshLocationBtn">↻ Refresh Location</button>
-          <button type="button" id="editSavedAddressBtn">Edit</button>
-          <button type="button" id="deleteSavedAddressBtn">Delete</button>
-        </div>
-        <div class="address-search-row">
-          <input id="addressSearchInput" type="search" placeholder="Search address / area" autocomplete="off">
-          <button type="button" id="searchAddressBtn">Find</button>
-        </div>
-        <div class="checkout-location-status" id="checkoutLocationStatus">📍 Location will be verified automatically before order.</div>
-        <small>Saved addresses auto-fill with GPS coordinates for delivery tracking.</small>
-      </section>
+      <button type="button" class="cart-location-card" id="cartLocationCard" onclick="openLocationSelector()">
+        <span>📍</span>
+        <span><strong id="cartLocationTitle">Select delivery location</strong><small id="cartLocationAddress">Required for delivery pricing</small></span>
+        <b>Change</b>
+      </button>
 
       <input
         type="text"
@@ -786,17 +779,6 @@ Verify OTP
         <strong id="checkoutAuthPhoneValue">Login to continue</strong>
       </div>
       <input type="hidden" id="customerPhone" />
-
-      <textarea
-        id="customerAddress"
-        placeholder="Full Address"
-        rows="3"
-        autocomplete="street-address"></textarea>
-
-      <input
-        type="text"
-        id="customerLandmark"
-        placeholder="Landmark (Optional)" />
 
       <input type="hidden" id="customerLat">
       <input type="hidden" id="customerLng">
@@ -833,6 +815,42 @@ Verify OTP
       </button>
 
     </aside>
+
+    <div id="locationSelectorPopup" class="location-selector-popup" role="dialog" aria-modal="true" aria-labelledby="locationSelectorTitle" style="display:none">
+      <div class="location-selector-card">
+        <div class="location-selector-head">
+          <button type="button" onclick="closeLocationSelector()">←</button>
+          <h2 id="locationSelectorTitle">Select a location</h2>
+        </div>
+        <div class="address-search-row location-search-row">
+          <input id="addressSearchInput" type="search" placeholder="Search for area, street name..." autocomplete="off">
+          <button type="button" id="searchAddressBtn">Search</button>
+        </div>
+        <section class="saved-address-box location-actions-box" aria-label="Saved delivery address">
+          <button type="button" id="useCurrentLocationBtn" class="location-primary-action">
+            <span>◎</span><span><strong>Use current location</strong><small id="locationStatus">Detecting your current location…</small></span><b>›</b>
+          </button>
+          <button type="button" class="location-add-action" onclick="document.getElementById('customerAddress')?.focus()">
+            <span>＋</span><strong>Add address</strong><b>›</b>
+          </button>
+          <select id="savedAddressSelect" aria-label="Saved addresses">
+            <option value="">Add new address</option>
+          </select>
+          <div class="address-actions">
+            <button type="button" id="refreshLocationBtn">↻ Refresh Current Location</button>
+            <button type="button" id="editSavedAddressBtn">Edit Selected</button>
+            <button type="button" id="deleteSavedAddressBtn">Delete</button>
+          </div>
+          <div class="checkout-location-status" id="checkoutLocationStatus">📍 Location will be verified automatically.</div>
+        </section>
+        <div class="location-address-form">
+          <label>Complete delivery address</label>
+          <textarea id="customerAddress" placeholder="House / flat, street, area" rows="3" autocomplete="street-address"></textarea>
+          <input type="text" id="customerLandmark" placeholder="Landmark (Optional)">
+          <button type="button" class="location-save-btn" onclick="saveLocationSelection()">Use this address</button>
+        </div>
+      </div>
+    </div>
 
     <!-- ORDER SUCCESS -->
 

@@ -887,7 +887,47 @@ function setLocationUiState(state, detail = ""){
     banner.textContent = state === "lastSaved" ? `📍 Last saved location · ${detail || "Tap Refresh Location for current GPS"}` : `📍 ${text}`;
     banner.title = state === "lastSaved" ? "This is not live GPS. Tap to refresh current location." : "Tap to refresh current location";
   }
+  updateSelectedLocationUi(detail);
 }
+
+function locationDisplayParts(detail = ""){
+  const address = normalizeUnicodeText(detail || document.getElementById("customerAddress")?.value || userLocation?.address || "");
+  if(!address) return { title:"Select delivery location", address:"Tap to use your current location" };
+  const parts = address.split(",").map(item => item.trim()).filter(Boolean);
+  return {
+    title:parts[0] || "Current location",
+    address:parts.slice(1).join(", ") || address
+  };
+}
+
+function updateSelectedLocationUi(detail = ""){
+  const display = locationDisplayParts(detail);
+  [["heroLocationTitle",display.title],["heroLocationAddress",display.address],["cartLocationTitle",display.title],["cartLocationAddress",display.address]]
+    .forEach(([id,text]) => { const el = document.getElementById(id); if(el) el.textContent = text; });
+}
+
+function openLocationSelector(){
+  const popup = document.getElementById("locationSelectorPopup");
+  if(popup) popup.style.display = "flex";
+}
+
+function closeLocationSelector(){
+  const popup = document.getElementById("locationSelectorPopup");
+  if(popup) popup.style.display = "none";
+}
+
+async function saveLocationSelection(){
+  const address = normalizeUnicodeText(document.getElementById("customerAddress")?.value || "");
+  if(!address){ alert("Please enter a complete delivery address."); return; }
+  updateSelectedLocationUi(address);
+  persistGuestState();
+  if(auth.currentUser) await saveCurrentAddressToBook().catch(error => console.warn("Address save skipped", error));
+  closeLocationSelector();
+}
+
+window.openLocationSelector = openLocationSelector;
+window.closeLocationSelector = closeLocationSelector;
+window.saveLocationSelection = saveLocationSelection;
 
 async function getLocationPermissionState(){
   try{
@@ -968,6 +1008,7 @@ async function fetchFreshCurrentLocation({ updateAddress = true, source = "fresh
       if(lngEl) lngEl.value = geocode.lng || fresh.lng;
       setCheckoutFieldsCollapsed(false);
       persistGuestState();
+      updateSelectedLocationUi(geocode.formattedAddress);
     }
     setLocationUiState("current", geocode?.formattedAddress || "Current location updated");
     updateCustomerDistanceGlobals();
@@ -1665,6 +1706,7 @@ function applySavedAddress(index){
   const item = addresses[Number(index)];
   if(!item) return;
   restoreCheckoutFields(item, true);
+  updateSelectedLocationUi(item.address || item.label || "");
   if(isUsableLocation(item)){
     setCustomerLocation({
       lat:Number(item.lat),
@@ -1678,6 +1720,7 @@ function applySavedAddress(index){
   }
   setCheckoutFieldsCollapsed(true);
   persistGuestState();
+  closeLocationSelector();
 }
 
 function isUsableLocation(item = {}){
@@ -1728,18 +1771,20 @@ async function saveCurrentAddressToBook(){
 
 async function useCurrentLocationForAddress(){
   const btn = document.getElementById("useCurrentLocationBtn");
+  const status = document.getElementById("locationStatus");
   try{
     if(!auth.currentUser){
       alert("Please login first so we can save your delivery address.");
       await window.requireMagneetozAuth?.("address");
       if(!auth.currentUser) return;
     }
-    if(btn) btn.textContent = "Detecting...";
+    if(btn) btn.disabled = true;
+    if(status) status.textContent = "Detecting your current location…";
     await fetchFreshCurrentLocation({ updateAddress:true, source:"fresh_gps:address_button" });
   }catch(error){
     alert("Please enable location permission and GPS, then retry.");
   }finally{
-    if(btn) btn.textContent = "📍 Use Current Location";
+    if(btn) btn.disabled = false;
   }
 }
 
@@ -1752,7 +1797,8 @@ async function searchAddressForCheckout(){
   }
   try{
     const result = await callPaymentFunction("geocodeAddress", { address:query }, 15000);
-    document.getElementById("customerAddress").value = result.formattedAddress || query;
+    const selectedAddress = result.formattedAddress || query;
+    document.getElementById("customerAddress").value = selectedAddress;
     document.getElementById("customerLat").value = result.lat || "";
     document.getElementById("customerLng").value = result.lng || "";
     setCustomerLocation({
@@ -1762,6 +1808,7 @@ async function searchAddressForCheckout(){
       mapLink:`https://www.google.com/maps?q=${result.lat},${result.lng}`
     }, "address_geocode_search");
     setCheckoutFieldsCollapsed(false);
+    updateSelectedLocationUi(selectedAddress);
     refreshDeliveryDistance().catch(() => updateCustomerDistanceBanner());
     persistGuestState();
   }catch(error){
@@ -4863,6 +4910,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const button = event.target.closest("[data-ai-intent]");
     if(!button) return;
     renderSmartAssistant(button.dataset.aiIntent || "popular");
+  });
+  document.getElementById("heroLocationPill")?.addEventListener("click", event => {
+    event.stopPropagation();
+    openLocationSelector();
   });
   document.querySelector(".hero")?.addEventListener("click", event => {
     if(event.target.closest("button,a,select,input,textarea")) return;
