@@ -193,6 +193,9 @@
 .dish-row-info{display:flex;align-items:center;gap:10px;min-width:0;flex:1}
 .dish-drag-handle{display:grid;place-items:center;width:38px;height:38px;flex:0 0 auto;border:1px solid #334155;border-radius:10px;color:#94a3b8;font-size:21px;cursor:grab;touch-action:none}.dish-drag-handle:active{cursor:grabbing;color:#22c55e;border-color:#22c55e}
 .dish-sortable-ghost{opacity:.35}.dish-sortable-chosen{border-color:#22c55e;box-shadow:0 12px 35px rgba(34,197,94,.16)}
+.order-controls{display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;margin:5px 0}
+.order-controls button{min-width:38px;min-height:36px;margin:0;padding:5px 8px;border:1px solid #334155;background:#172033;color:#cbd5e1;font-size:11px}
+.order-controls button:hover{border-color:#22c55e;color:#22c55e}
 .dish-row strong{color:#f8fafc}.dish-row small{display:block;color:#94a3b8;margin-top:3px}
 .dish-actions{display:flex;gap:6px;flex-wrap:wrap}
 .dish-edit-panel{display:none;margin-top:12px;padding:12px;border-radius:14px;background:#020617;border:1px solid #334155}
@@ -835,6 +838,12 @@ onSnapshot(collection(db,"categories"), snap=>{
       onclick="toggleCat('${docSnap.id}',${c.active})">
       ${c.active ? "Disable" : "Enable"}
     </button>
+    <div class="order-controls">
+      <button type="button" onclick="moveCategory('${docSnap.id}','top')">Top</button>
+      <button type="button" onclick="moveCategory('${docSnap.id}','up')">↑</button>
+      <button type="button" onclick="moveCategory('${docSnap.id}','down')">↓</button>
+      <button type="button" onclick="moveCategory('${docSnap.id}','bottom')">Bottom</button>
+    </div>
 
     <button class="btn-red"
       onclick="deleteCategory('${docSnap.id}','${c.name}')">
@@ -889,6 +898,21 @@ function initSortable(){
   }
   });
 }
+window.moveCategory = async function(id, direction){
+  const container = document.getElementById("categoryList");
+  const cards = [...container.querySelectorAll(":scope > .card")];
+  const current = cards.findIndex(card => card.dataset.id === id);
+  if(current < 0) return;
+  const target = direction === "top" ? 0 : direction === "bottom" ? cards.length - 1 : direction === "up" ? Math.max(0,current - 1) : Math.min(cards.length - 1,current + 1);
+  if(target === current) return;
+  const [moved] = cards.splice(current,1);
+  cards.splice(target,0,moved);
+  cards.forEach(card => container.appendChild(card));
+  isSorting = true;
+  try{ await Promise.all(cards.map((card,index) => updateDoc(doc(db,"categories",card.dataset.id),{order:index + 1}))); }
+  finally{ setTimeout(() => { isSorting = false; },350); }
+}
+
 /* ➕ DISH */
 window.addDish = async function(){
 
@@ -1031,6 +1055,12 @@ onSnapshot(collection(db,"categories"), (catSnap)=>{
               </div>
 
               <div class="dish-actions">
+                <div class="order-controls">
+                  <button type="button" onclick="moveDish('${d.id}','top')">Top</button>
+                  <button type="button" onclick="moveDish('${d.id}','up')">↑</button>
+                  <button type="button" onclick="moveDish('${d.id}','down')">↓</button>
+                  <button type="button" onclick="moveDish('${d.id}','bottom')">Bottom</button>
+                </div>
                 <button class="btn-blue" onclick="openDishEditor('${d.id}')">Edit</button>
                 <button 
                   style="background:${dish.available ? '#22c55e' : '#facc15'}; color:black;"
@@ -1138,6 +1168,23 @@ function initDishSortables(){
     });
   });
 }
+window.moveDish = async function(id, direction){
+  const row = document.getElementById(`dishRow-${id}`);
+  const group = row?.parentElement;
+  if(!row || !group) return;
+  const rows = [...group.querySelectorAll(":scope > .dish-row")];
+  const current = rows.findIndex(item => item.dataset.dishId === id);
+  if(current < 0) return;
+  const target = direction === "top" ? 0 : direction === "bottom" ? rows.length - 1 : direction === "up" ? Math.max(0,current - 1) : Math.min(rows.length - 1,current + 1);
+  if(target === current) return;
+  const [moved] = rows.splice(current,1);
+  rows.splice(target,0,moved);
+  rows.forEach(item => group.appendChild(item));
+  isDishSorting = true;
+  try{ await Promise.all(rows.map((item,index) => updateDoc(doc(db,"dishes",item.dataset.dishId),{order:index + 1}))); }
+  finally{ setTimeout(() => { isDishSorting = false; },350); }
+}
+
 /* TOGGLE */
 window.toggleDish = async(id,c)=>{
   await updateDoc(doc(db,"dishes",id),{available:!c});
