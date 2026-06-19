@@ -3934,6 +3934,16 @@ function updateCart() {
   const totalEl = document.getElementById("total");
   const countEl = document.getElementById("cartCount");
   const headerTitle = document.querySelector("#cartPanel .cart-header h3");
+  const emptyState = document.getElementById("emptyCartState");
+  const cartPanel = document.getElementById("cartPanel");
+  const placeOrderButton = document.querySelector("#cartPanel > button[aria-label='Place order']");
+  const hasItems = totalQty > 0;
+  cartPanel?.classList.toggle("cart-is-empty", !hasItems);
+  if(emptyState) emptyState.hidden = hasItems;
+  if(placeOrderButton){
+    placeOrderButton.hidden = !hasItems;
+    placeOrderButton.disabled = !hasItems || isOrderProcessing;
+  }
   if(cartItems){
     cartItems.innerHTML = totalQty
       ? `<div class="cart-items-title">Items in cart <b>${totalQty}</b></div>${itemsHTML}`
@@ -3941,10 +3951,21 @@ function updateCart() {
   }
   const couponResult = calculateInvoicePricing(total);
   if(totalEl) totalEl.innerText = formatCurrency(couponResult.finalTotal);
+  const stickyTotal = document.getElementById("stickyCheckoutTotal");
+  if(stickyTotal) stickyTotal.textContent = formatCurrency(couponResult.finalTotal);
   if(countEl) countEl.innerText = totalQty;
   if(headerTitle) headerTitle.textContent = `Your Cart (${totalQty} ${totalQty === 1 ? "item" : "items"})`;
-  renderCouponPanel(couponResult);
-  renderDeliveryCampaign(total);
+  if(hasItems){
+    renderCouponPanel(couponResult);
+    renderDeliveryCampaign(total);
+  }else{
+    const breakdown = document.getElementById("cartPriceBreakdown");
+    const freeHint = document.getElementById("freeDeliveryHint");
+    const applied = document.getElementById("appliedCoupon");
+    if(breakdown) breakdown.innerHTML = "";
+    if(freeHint) freeHint.innerHTML = "";
+    if(applied) applied.innerHTML = "";
+  }
   persistGuestState();
   notifyPremiumUI("magneetoz:cart-updated", {
     count: totalQty,

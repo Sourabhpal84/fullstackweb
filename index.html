@@ -740,6 +740,13 @@ Verify OTP
 
       <div class="checkout-page-grid">
       <section class="checkout-cart-column" aria-label="Cart items">
+      <section id="emptyCartState" class="empty-cart-state" hidden>
+        <div class="empty-cart-art" aria-hidden="true">🍕</div>
+        <small>YOUR CART IS EMPTY</small>
+        <h3>Your cart is waiting for something delicious.</h3>
+        <p>Explore the MAGNEETOZ menu and add your favourites.</p>
+        <button type="button" onclick="toggleCart(false);document.getElementById('menuSection')?.scrollIntoView({behavior:'smooth'})">Browse Menu</button>
+      </section>
       <div id="cartItems"></div>
 
       <div class="total">
@@ -803,8 +810,8 @@ Verify OTP
         type="button"
         aria-label="Place order"
         onclick="placeOrder()">
-
-        Place Order 🍕
+        <span class="checkout-bar-total"><small>Grand Total</small><strong id="stickyCheckoutTotal">₹0</strong></span>
+        <span class="checkout-bar-action">Place Order <b>›</b></span>
       </button>
 
     </aside>
