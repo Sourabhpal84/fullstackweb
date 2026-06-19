@@ -3402,7 +3402,7 @@ function validateActiveCoupon(){
 
 function renderDeliveryCampaign(subtotal = getCartSubtotal()){
   const pricing = calculateDistanceDeliveryPricing(deliveryDistance, subtotal);
-  const hosts = [document.getElementById("freeDeliveryHint"), document.getElementById("productDeliveryAlert")].filter(Boolean);
+  const hosts = [document.getElementById("freeDeliveryHint")].filter(Boolean);
   const message = !deliveryDistance
     ? "🚚 Enable location to check delivery charges"
     : !pricing.serviceable
