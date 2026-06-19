@@ -259,6 +259,11 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 let onlineRiders = [];
 let ordersUnsub = null;
+const incomingOrderAlarm = new Audio("ringtone.mp3");
+incomingOrderAlarm.loop = true;
+incomingOrderAlarm.preload = "auto";
+let incomingOrderAlarmIds = new Set();
+let incomingOrderAlarmUnlocked = false;
 const FUNCTIONS_BASE_URL = "https://asia-south1-magneetoz.cloudfunctions.net";
 protectAdminPage();
 mountAdminLogout(document.body);
@@ -306,6 +311,41 @@ function toast(message){
   node.classList.add("show");
   clearTimeout(node._t);
   node._t = setTimeout(() => node.classList.remove("show"), 2600);
+}
+
+function unlockIncomingOrderAlarm(){
+  if(incomingOrderAlarmUnlocked) return;
+  incomingOrderAlarm.volume = 1;
+  incomingOrderAlarm.play()
+    .then(() => {
+      incomingOrderAlarm.pause();
+      incomingOrderAlarm.currentTime = 0;
+      incomingOrderAlarmUnlocked = true;
+    })
+    .catch(() => {});
+}
+
+["click","touchstart","keydown"].forEach(eventName => {
+  window.addEventListener(eventName, unlockIncomingOrderAlarm, { once:true, passive:true });
+});
+
+function syncIncomingOrderAlarm(pendingOrders = []){
+  const nextIds = new Set(pendingOrders.map(order => order.id));
+  const newest = pendingOrders
+    .filter(order => !incomingOrderAlarmIds.has(order.id))
+    .sort((a,b) => tsMillis(b.createdAt) - tsMillis(a.createdAt))[0];
+  incomingOrderAlarmIds = nextIds;
+  if(!pendingOrders.length){
+    incomingOrderAlarm.pause();
+    incomingOrderAlarm.currentTime = 0;
+    document.title = "Orders | MAGNEETOZ";
+    return;
+  }
+  const current = newest || pendingOrders[0];
+  const orderNumber = current.orderNumber || current.orderId || current.id;
+  document.title = `Order #${orderNumber} received | MAGNEETOZ`;
+  toast(`Order #${orderNumber} received`);
+  incomingOrderAlarm.play().catch(() => {});
 }
 
 async function callAdminFunction(name, payload = {}, timeoutMs = 25000){
@@ -499,6 +539,11 @@ window.loadOrders = function(filter) {
     container.innerHTML = "";
     const docs = [];
     snap.forEach(docSnap => docs.push(docSnap));
+    syncIncomingOrderAlarm(docs.map(docSnap => ({ id:docSnap.id, ...docSnap.data() }))
+      .filter(order => {
+        const status = normalizeStatus(order.status || order.orderStatus || "Pending");
+        return status === "Pending" && !isUnpaidOnline(order);
+      }));
     docs
       .sort((a,b) => tsMillis(b.data().createdAt) - tsMillis(a.data().createdAt))
       .forEach(docSnap => {

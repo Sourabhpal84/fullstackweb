@@ -405,6 +405,11 @@ let currentFilter = "Requests";
 let riderLocationWatchId = null;
 let lastRiderLocationWriteAt = 0;
 let riderRazorpayInFlight = false;
+const deliveryRequestAlarm = new Audio("ring2.mp3");
+deliveryRequestAlarm.loop = true;
+deliveryRequestAlarm.preload = "auto";
+let deliveryRequestAlarmIds = new Set();
+let deliveryRequestAlarmUnlocked = false;
 let PRICING = {
   BASE_FARE:20,
   PAID_PER_KM:5,
@@ -528,6 +533,48 @@ function isUnpaidOnlineOrder(order = {}){
 
 function logStructured(scope, detail = {}){
   if(localStorage.getItem("magneetozDebug") === "1") console.info(`[${scope}]`, detail);
+}
+
+function unlockDeliveryRequestAlarm(){
+  if(deliveryRequestAlarmUnlocked) return;
+  deliveryRequestAlarm.volume = 1;
+  deliveryRequestAlarm.play()
+    .then(() => {
+      deliveryRequestAlarm.pause();
+      deliveryRequestAlarm.currentTime = 0;
+      deliveryRequestAlarmUnlocked = true;
+    })
+    .catch(() => {});
+}
+
+["click","touchstart","keydown"].forEach(eventName => {
+  window.addEventListener(eventName, unlockDeliveryRequestAlarm, { once:true, passive:true });
+});
+
+function syncDeliveryRequestAlarm(){
+  const requests = allOrders.filter(order => {
+    const request = order.riderRequest || {};
+    const candidates = Array.isArray(request.candidateRiderIds) ? request.candidateRiderIds : [];
+    const declined = Array.isArray(request.declinedRiderIds) ? request.declinedRiderIds : [];
+    const directStatus = String(request.directRequestStatus || request.status || "").toLowerCase();
+    return candidates.includes(rider.riderId)
+      && !declined.includes(rider.riderId)
+      && ["searching","pending","accepted"].includes(directStatus)
+      && !order.assignedRiderId
+      && !order.riderId;
+  });
+  const nextIds = new Set(requests.map(order => order.id));
+  const newest = requests.find(order => !deliveryRequestAlarmIds.has(order.id)) || requests[0];
+  deliveryRequestAlarmIds = nextIds;
+  if(!requests.length){
+    deliveryRequestAlarm.pause();
+    deliveryRequestAlarm.currentTime = 0;
+    document.title = "Rider Dashboard | MAGNEETOZ";
+    return;
+  }
+  const orderNumber = newest?.orderNumber || newest?.orderId || newest?.id || "";
+  document.title = `HIGH ALERT: Order #${orderNumber}`;
+  deliveryRequestAlarm.play().catch(() => {});
 }
 
 function isCashCollectedOrder(order = {}){
@@ -968,6 +1015,7 @@ function listenOrders(){
       ...d.data()
     }));
     allOrders = Array.from(byId.values());
+    syncDeliveryRequestAlarm();
     renderOrders();
   };
 
