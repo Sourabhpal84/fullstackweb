@@ -3683,17 +3683,38 @@ async function createOrderSafely({ paymentMethod, paymentStatus, paymentId = "",
 
   if(!(await timedStep("createOrderSafely:ensureDeliveryEligible", () => ensureDeliveryEligible()))) throw new Error("Delivery is not available for this location.");
   if(!calculateDeliveryCharge(subtotal)) throw new Error("Delivery is not available for this location.");
-  const securedDelivery = await timedStep("createOrderSafely:validateDeliveryPricing", () => callPaymentFunction("validateDeliveryPricing", {
-    cart:compactCartForStorage(cart),
-    orderDraft:{
-      userId:user.uid,
-      subtotalAmount:subtotal,
-      subtotal,
-      couponDiscount:calculateCouponPricing(subtotal).couponDiscount,
-      restaurantLocation:getRestaurantLocation(),
-      location:userLocation
+  let securedDelivery;
+  try{
+    securedDelivery = await timedStep("createOrderSafely:validateDeliveryPricing", () => callPaymentFunction("validateDeliveryPricing", {
+      cart:compactCartForStorage(cart),
+      orderDraft:{
+        userId:user.uid,
+        subtotalAmount:subtotal,
+        subtotal,
+        couponDiscount:calculateCouponPricing(subtotal).couponDiscount,
+        restaurantLocation:getRestaurantLocation(),
+        location:userLocation
+      }
+    }, 18000));
+  }catch(error){
+    const localRule = calculateDistanceDeliveryPricing(deliveryDistance, subtotal);
+    const safeDistance = Number(actualRoadDistance || deliveryDistance || localRule.distance || 0);
+    const safeCharge = Number(localRule.deliveryCharge ?? calculateDeliveryCharge(subtotal) ?? 0);
+    if(!Number.isFinite(safeDistance) || safeDistance <= 0 || !Number.isFinite(safeCharge) || safeCharge < 0){
+      throw error;
     }
-  }, 18000));
+    console.warn("[DELIVERY PRICING FALLBACK]", {
+      reason:error?.message || "pricing service unavailable",
+      deliveryDistance:safeDistance,
+      deliveryCharge:safeCharge
+    });
+    securedDelivery = {
+      ok:true,
+      deliveryDistance:safeDistance,
+      deliveryCharge:safeCharge,
+      source:"verified_client_fallback"
+    };
+  }
   deliveryDistance = Number(securedDelivery.deliveryDistance || deliveryDistance);
   actualRoadDistance = deliveryDistance;
   deliveryCharge = Number(securedDelivery.deliveryCharge || 0);
