@@ -179,6 +179,11 @@
 .size-edit-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
 .size-edit-grid label{display:grid;gap:6px;color:#cbd5e1;font-size:12px;font-weight:800}
 .btn-blue{background:#38bdf8 !important;color:#020617 !important}
+.dish-edit-image{display:grid;grid-template-columns:110px minmax(0,1fr);gap:12px;align-items:center;padding:12px;border:1px solid #25334a;border-radius:14px;background:#0b1220}
+.dish-edit-image img{width:110px;height:90px;object-fit:cover;border-radius:12px;background:#fff}
+.dish-edit-image-copy strong,.dish-edit-image-copy small{display:block}.dish-edit-image-copy small{margin:5px 0;color:#94a3b8}
+.dish-edit-image-copy button{margin-left:0}.dish-edit-upload-status{min-height:18px;color:#22c55e;font-size:11px;font-weight:700}
+@media(max-width:560px){.dish-edit-image{grid-template-columns:78px minmax(0,1fr)}.dish-edit-image img{width:78px;height:72px}}
 
   </style>
 </head>
@@ -313,6 +318,7 @@ let uploadedDishImageUrl = "";
 let uploadedCategoryImageUrl = "";
 let uploadedDishImageSet = null;
 let uploadedCategoryImageSet = null;
+const editedDishImages = new Map();
 let activeUploadTask = null;
 const IMAGE_VARIANTS = [
   { key:"thumbnail", width:200, quality:.7, target:120 * 1024 },
@@ -995,10 +1001,20 @@ onSnapshot(collection(db,"categories"), (catSnap)=>{
             </div>
 
             <div class="dish-edit-panel" id="edit-${d.id}">
+              <div class="dish-edit-image">
+                <img id="edit-preview-${d.id}" src="${escapeHTML(dish.image || "logo_tran.jpeg")}" alt="${escapeHTML(dish.name || "Dish")} image preview" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
+                <div class="dish-edit-image-copy">
+                  <strong>Dish Image</strong>
+                  <small>Replace image without deleting this dish.</small>
+                  <input id="edit-image-file-${d.id}" type="file" accept="image/*" hidden onchange="uploadEditedDishImage('${d.id}',this.files?.[0])">
+                  <button type="button" class="btn-blue" onclick="document.getElementById('edit-image-file-${d.id}').click()">Change Image</button>
+                  <div class="dish-edit-upload-status" id="edit-image-status-${d.id}"></div>
+                </div>
+              </div>
               <div class="dish-edit-grid">
                 <input id="edit-name-${d.id}" value="${escapeHTML(dish.name || "")}" placeholder="Dish name">
                 <input id="edit-desc-${d.id}" value="${escapeHTML(dish.description || "")}" placeholder="Description">
-                <input id="edit-image-${d.id}" value="${escapeHTML(dish.image || "")}" placeholder="Image URL">
+                <input id="edit-image-${d.id}" value="${escapeHTML(dish.image || "")}" data-original-image="${escapeHTML(dish.image || "")}" placeholder="Image URL">
                 <select id="edit-category-${d.id}">
                   ${Array.from(document.getElementById("category").options).map(option => `<option value="${escapeHTML(option.value)}" ${option.value === dish.category ? "selected" : ""}>${escapeHTML(option.textContent)}</option>`).join("")}
                 </select>
@@ -1056,6 +1072,38 @@ window.openDishEditor = function(id){
 
 window.closeDishEditor = function(id){
   document.getElementById(`edit-${id}`)?.classList.remove("active");
+  editedDishImages.delete(id);
+}
+
+window.uploadEditedDishImage = async function(id, file){
+  if(!file || !file.type.startsWith("image/")){
+    alert("Please choose a valid image.");
+    return;
+  }
+  const previewEl = document.getElementById(`edit-preview-${id}`);
+  const imageInput = document.getElementById(`edit-image-${id}`);
+  const statusEl = document.getElementById(`edit-image-status-${id}`);
+  const localPreview = URL.createObjectURL(file);
+  if(previewEl) previewEl.src = localPreview;
+  const setStatus = (message, percent = 0) => {
+    if(statusEl) statusEl.textContent = percent ? `${message} ${Math.round(percent)}%` : message;
+  };
+  try{
+    const imageSet = await createAndUploadImageSet(file, "dishes", setStatus);
+    editedDishImages.set(id, { url:imageSet.url, imageSet });
+    if(imageInput) imageInput.value = imageSet.url;
+    if(previewEl) previewEl.src = imageSet.url;
+    setStatus("New image ready. Click Save Changes.");
+  }catch(error){
+    console.error("Dish edit image upload failed:", error);
+    const dataUrl = await compressImageToDataUrl(file);
+    editedDishImages.set(id, { url:dataUrl, imageSet:null });
+    if(imageInput) imageInput.value = dataUrl;
+    if(previewEl) previewEl.src = dataUrl;
+    setStatus("Compressed image ready. Click Save Changes.");
+  }finally{
+    URL.revokeObjectURL(localPreview);
+  }
 }
 
 window.toggleDishEditorType = function(id){
@@ -1076,6 +1124,16 @@ window.saveDishEdit = async function(id){
       category: normalizeUnicodeText(document.getElementById(`edit-category-${id}`)?.value),
       type
     };
+    const editedImage = editedDishImages.get(id);
+    if(editedImage){
+      data.image = editedImage.url;
+      data.imageSet = editedImage.imageSet;
+    }else{
+      const imageInput = document.getElementById(`edit-image-${id}`);
+      if(data.image !== normalizeUnicodeText(imageInput?.dataset.originalImage || "")){
+        data.imageSet = null;
+      }
+    }
 
     if(!data.name || !data.image){
       alert("Dish name aur image required hai ❌");
@@ -1117,6 +1175,7 @@ window.saveDishEdit = async function(id){
     }
 
     await updateDoc(doc(db,"dishes",id), data);
+    editedDishImages.delete(id);
     alert("Dish updated ✅");
   }catch(error){
     console.error(error);
