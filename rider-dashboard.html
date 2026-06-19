@@ -579,19 +579,10 @@ function unlockDeliveryRequestAlarm(){
 });
 
 function syncDeliveryRequestAlarm(){
-  const requests = allOrders.filter(order => {
-    const request = order.riderRequest || {};
-    const candidates = Array.isArray(request.candidateRiderIds) ? request.candidateRiderIds : [];
-    const declined = Array.isArray(request.declinedRiderIds) ? request.declinedRiderIds : [];
-    const directStatus = String(request.directRequestStatus || request.status || "").toLowerCase();
-    return candidates.includes(rider.riderId)
-      && !declined.includes(rider.riderId)
-      && ["searching","pending","accepted"].includes(directStatus)
-      && !order.assignedRiderId
-      && !order.riderId;
-  });
+  const requests = allOrders.filter(requestedForMe);
   const nextIds = new Set(requests.map(order => order.id));
   const newest = requests.find(order => !deliveryRequestAlarmIds.has(order.id)) || requests[0];
+  const hasNewRequest = requests.some(order => !deliveryRequestAlarmIds.has(order.id));
   deliveryRequestAlarmIds = nextIds;
   if(!requests.length){
     deliveryRequestAlarm.pause();
@@ -600,6 +591,11 @@ function syncDeliveryRequestAlarm(){
     return;
   }
   const orderNumber = newest?.orderNumber || newest?.orderId || newest?.id || "";
+  if(hasNewRequest && currentFilter !== "Requests"){
+    currentFilter = "Requests";
+    document.querySelectorAll(".filter")
+      .forEach(button => button.classList.toggle("active", button.dataset.filter === "Requests"));
+  }
   document.title = `HIGH ALERT: Order #${orderNumber}`;
   deliveryRequestAlarm.play().catch(() => {});
 }
@@ -756,13 +752,11 @@ messagingReady.then(messaging => {
   if(!messaging) return;
   onMessage(messaging, payload => {
     const data = payload.data || {};
-    const audio = new Audio("order-alert.mpeg");
-    audio.play().catch(() => {});
     if(Notification.permission === "granted"){
       const notification = new Notification(payload.notification?.title || "New Delivery Request", {
         body:payload.notification?.body || data.body || "A new order is waiting.",
-        icon:"logo_tran.png",
-        badge:"logo_tran.png",
+        icon:"logo_tran.jpeg",
+        badge:"logo_tran.jpeg",
         tag:data.orderId || "magneetoz-delivery",
         requireInteraction:true,
         vibrate:[220,90,220,90,320],
@@ -810,15 +804,13 @@ function assignedToMe(order){
 
 function requestedForMe(order){
   if(["Delivered","Cancelled","Rejected","Failed"].includes(normalizeStatus(order.status || order.orderStatus))) return false;
-  if(Number(currentWallet.companySettlementDue || rider?.companyDue || rider?.pendingCashSubmission || 0) > 300) return false;
   const request = order.riderRequest || {};
   const candidates = request.candidateRiderIds || [];
   const declined = request.declinedRiderIds || [];
   return !!(rider?.riderId &&
-    request.status === "searching" &&
+    ["searching","pending"].includes(String(request.status || "").toLowerCase()) &&
     candidates.includes(rider.riderId) &&
     !declined.includes(rider.riderId) &&
-    !rider.currentActiveOrderId &&
     !order.assignedRiderId &&
     !order.riderId);
 }
@@ -910,6 +902,14 @@ function renderOrders(){
     const settlementNetPaid = Number(order.companySettlementNetPaid ?? order.companyRazorpaySettlementAmount ?? 0);
     const amountToCollect = prepaidOnline ? 0 : Number(order.amountToCollect ?? order.totalAmount ?? order.finalAmount ?? order.total ?? 0);
     const activeLocked = !!rider.currentActiveOrderId && rider.currentActiveOrderId !== order.id;
+    const companyDueNow = Number(currentWallet.companySettlementDue || rider.companyDue || rider.pendingCashSubmission || 0);
+    const settlementLocked = companyDueNow > 300;
+    const requestLocked = activeLocked || settlementLocked;
+    const requestButtonLabel = activeLocked
+      ? "Complete current delivery first"
+      : settlementLocked
+        ? `Settle due ${formatCurrency(companyDueNow)}`
+        : "Accept";
     const isDelivered = order.status === "Delivered";
     const riderCollectedOnline = prepaidOnline && order.paymentCollectedBy === rider.riderId;
     const canDeliver = !isDelivered && paymentReady && (convertedCodPaid || !isCashOrder || cashSettlementDone) && (!prepaidOnline || prepaidOtpDone || riderCollectedOnline || convertedCodPaid);
@@ -939,7 +939,7 @@ function renderOrders(){
         <div class="actions">
           ${!isDelivered && order.location?.lat ? `<button class="btn-soft" onclick="openCustomer(${order.location.lat},${order.location.lng})">Navigate</button>` : ""}
           ${!isDelivered && order.phone ? `<button class="btn-soft" onclick="callUser('${order.phone}')">Call</button>` : ""}
-          ${group === "Requests" && !isDelivered ? `<button class="btn-green" ${activeLocked ? "disabled" : ""} onclick="acceptRequest('${order.id}')">${activeLocked ? "Complete current delivery first" : "Accept"}</button><button class="btn-red" onclick="rejectRequest('${order.id}')">Reject</button>` : ""}
+          ${group === "Requests" && !isDelivered ? `<button class="btn-green" ${requestLocked ? "disabled" : ""} onclick="acceptRequest('${order.id}')">${requestButtonLabel}</button><button class="btn-red" onclick="rejectRequest('${order.id}')">Reject</button>` : ""}
           ${group === "Assigned" ? `<button class="btn-blue" onclick="pickupOrder('${order.id}')">Picked Up</button>` : ""}
           ${order.status === "Picked Up" ? `<button class="btn-blue" onclick="startDelivery('${order.id}')">Out For Delivery</button>` : ""}
           ${order.status === "Out For Delivery" ? `<button class="btn-green" onclick="reachNearby('${order.id}')">Reached Nearby</button>` : ""}

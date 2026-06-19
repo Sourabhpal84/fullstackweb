@@ -21,8 +21,8 @@ messaging.onBackgroundMessage(payload => {
   const body = payload.notification?.body || data.body || (isOffer ? "A fresh MAGNEETOZ deal is live." : isOrderStatus ? "Your order status has changed." : "A new MAGNEETOZ order is waiting.");
   self.registration.showNotification(title, {
     body,
-    icon:payload.notification?.image || "logo_tran.png",
-    badge:"logo_tran.png",
+    icon:payload.notification?.image || "logo_tran.jpeg",
+    badge:"logo_tran.jpeg",
     tag:isOrderStatus ? `order-${data.orderId}-${data.status}` : (data.orderId || data.offerId || "magneetoz-delivery"),
     renotify:isDeliveryRequest,
     requireInteraction:isDeliveryRequest,
