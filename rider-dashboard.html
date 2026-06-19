@@ -725,6 +725,7 @@ function assignedToMe(order){
 }
 
 function requestedForMe(order){
+  if(["Delivered","Cancelled","Rejected","Failed"].includes(normalizeStatus(order.status || order.orderStatus))) return false;
   const request = order.riderRequest || {};
   const candidates = request.candidateRiderIds || [];
   const declined = request.declinedRiderIds || [];
@@ -853,7 +854,7 @@ function renderOrders(){
         <div class="actions">
           ${!isDelivered && order.location?.lat ? `<button class="btn-soft" onclick="openCustomer(${order.location.lat},${order.location.lng})">Navigate</button>` : ""}
           ${!isDelivered && order.phone ? `<button class="btn-soft" onclick="callUser('${order.phone}')">Call</button>` : ""}
-          ${group === "Requests" ? `<button class="btn-green" ${activeLocked ? "disabled" : ""} onclick="acceptRequest('${order.id}')">${activeLocked ? "Complete current delivery first" : "Accept"}</button><button class="btn-red" onclick="rejectRequest('${order.id}')">Reject</button>` : ""}
+          ${group === "Requests" && !isDelivered ? `<button class="btn-green" ${activeLocked ? "disabled" : ""} onclick="acceptRequest('${order.id}')">${activeLocked ? "Complete current delivery first" : "Accept"}</button><button class="btn-red" onclick="rejectRequest('${order.id}')">Reject</button>` : ""}
           ${group === "Assigned" ? `<button class="btn-blue" onclick="pickupOrder('${order.id}')">Picked Up</button>` : ""}
           ${order.status === "Picked Up" ? `<button class="btn-blue" onclick="startDelivery('${order.id}')">Out For Delivery</button>` : ""}
           ${order.status === "Out For Delivery" ? `<button class="btn-green" onclick="reachNearby('${order.id}')">Reached Nearby</button>` : ""}
@@ -862,7 +863,7 @@ function renderOrders(){
           ${prepaidOtpActive ? `<button class="btn-green" onclick="completeWithCustomerCode('${order.id}')">Enter Delivery OTP</button>` : ""}
           ${isCashOrder && String(order.paymentStatus || "").toLowerCase() === "collected" && !cashSettlementDone ? `<button class="btn-blue" onclick="payCompanyAndDeliver('${order.id}', ${dist || 1}, this)">Settle Company</button><button class="btn-soft" onclick="requestExceptionCode('${order.id}')">Use Customer Code</button>` : ""}
           ${order.status === "Delivery Code Pending" ? `<button class="btn-green" onclick="completeWithCustomerCode('${order.id}')">Enter Customer Code</button>` : ""}
-          ${canDeliver && order.status !== "Out For Delivery" ? `<button class="btn-green" onclick="deliver('${order.id}', ${dist || 1})">Delivered</button>` : ""}
+          ${canDeliver && order.status !== "Out For Delivery" && !isDelivered ? `<button class="btn-green" onclick="deliver('${order.id}', ${dist || 1})">Delivered</button>` : ""}
           ${isDelivered ? `<button class="btn-green" disabled>Delivered</button>` : ""}
         </div>
       </article>
@@ -986,6 +987,8 @@ function listenOrders(){
       directRequestOrderDocs = orderSnaps
         .map((orderSnap, index) => {
           if(!orderSnap.exists()) return null;
+          const terminalStatus = normalizeStatus(orderSnap.data().status || orderSnap.data().orderStatus);
+          if(["Delivered","Cancelled","Rejected","Failed"].includes(terminalStatus)) return null;
           const request = requestDocs[index];
           return {
             id:orderSnap.id,

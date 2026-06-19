@@ -24,8 +24,21 @@ function assertAllowed(from, to) {
 }
 
 function assertPaymentDoesNotCarryDeliveryFields() {
-  const update = buildPaymentUpdate({ paymentId: "pay_123", transactionId: "pay_123", paidAt: new Date("2026-06-15T00:00:00Z") });
-  assert.deepEqual(Object.keys(update).sort(), ["paidAt", "paymentId", "paymentStatus", "transactionId"].sort());
+  const update = buildPaymentUpdate({
+    paymentId: "pay_123",
+    transactionId: "pay_123",
+    paymentSessionId: "session_123",
+    razorpayOrderId: "order_123",
+    amount: 103,
+    paidAt: new Date("2026-06-15T00:00:00Z")
+  });
+  assert.equal(update.paymentStatus, "paid");
+  assert.equal(update.paymentMethod, "online");
+  assert.equal(update.amountToCollect, 0);
+  assert.equal(update.amountDue, 0);
+  assert.equal(update.amountPaid, 103);
+  assert.equal(update.paymentCompleted, true);
+  assert.equal(update.paymentCaptured, true);
   assertPaymentOnlyPayload(update);
   assert.throws(
     () => assertPaymentOnlyPayload({ ...update, status: "Pending" }),

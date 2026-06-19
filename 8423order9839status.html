@@ -504,8 +504,9 @@ window.loadOrders = function(filter) {
       .forEach(docSnap => {
       const d = docSnap.data();
       const displayStatus = normalizeStatus(d.status || d.orderStatus || "Pending");
-      const method = String(d.paymentMethod || d.paymentMode || "").toLowerCase();
-      const paidOnline = (method === "online" || method === "upi") && (String(d.paymentStatus || "").toLowerCase() === "paid" || d.paymentCaptured === true || !!d.razorpayPaymentId);
+      const paidProof = String(d.paymentStatus || "").toLowerCase() === "paid" || d.paymentCaptured === true || !!d.razorpayPaymentId;
+      const method = paidProof ? "online" : String(d.paymentMethod || d.paymentMode || "").toLowerCase();
+      const paidOnline = (method === "online" || method === "upi") && paidProof;
       const pendingOnlineDraft = (method === "online" || method === "upi") && !paidOnline;
       if(pendingOnlineDraft && filter !== "Payment Pending") return;
       if (filter !== "All" && displayStatus !== normalizeStatus(filter)) return;
@@ -529,7 +530,7 @@ window.loadOrders = function(filter) {
             Threshold used: ${formatCurrency(d.freeDeliveryThreshold || 0)}<br>
             Serviceable: ${d.deliveryServiceable === false ? "No" : "Yes"}
           </div>
-          <div class="assigned-rider">Payment: ${d.paymentStatus || "pending"} ${d.paymentMethod ? `(${d.paymentMethod})` : ""}<br>Amount to collect: ${formatCurrency(d.amountToCollect ?? d.totalAmount ?? 0)}<br>Coupon: ${d.couponCode || "None"} ${d.couponDiscount ? `- ${formatCurrency(d.couponDiscount)}` : ""}</div>
+          <div class="assigned-rider">Payment: ${paidOnline ? "paid (online)" : `${d.paymentStatus || "pending"} ${d.paymentMethod ? `(${d.paymentMethod})` : ""}`}<br>Amount to collect: ${formatCurrency(paidOnline ? 0 : (d.amountToCollect ?? d.totalAmount ?? 0))}<br>Coupon: ${d.couponCode || "None"} ${d.couponDiscount ? `- ${formatCurrency(d.couponDiscount)}` : ""}</div>
           ${d.riderName || d.assignedRider?.name ? `<div class="assigned-rider">Rider: ${d.riderName || d.assignedRider.name}<br>${d.riderPhone || d.assignedRider?.phone || ""}</div>` : ""}
           <div class="btn-group status-grid">
 

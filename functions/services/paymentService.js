@@ -2,6 +2,20 @@
 
 const PAYMENT_ALLOWED_FIELDS = Object.freeze([
   "paymentStatus",
+  "paymentMethod",
+  "paymentMode",
+  "paymentCompleted",
+  "paymentRequired",
+  "paymentCaptured",
+  "paymentStage",
+  "amountDue",
+  "amountPaid",
+  "amountToCollect",
+  "razorpayPaymentId",
+  "razorpayOrderId",
+  "paymentSessionId",
+  "companyReceivedAmount",
+  "paymentCollectedAt",
   "paymentId",
   "transactionId",
   "paidAt"
@@ -37,9 +51,23 @@ function assertPaymentOnlyPayload(payload = {}) {
   return true;
 }
 
-function buildPaymentUpdate({ paymentId, transactionId, paidAt } = {}) {
+function buildPaymentUpdate({ paymentId, transactionId, paidAt, amount = 0, paymentSessionId = "", razorpayOrderId = "" } = {}) {
   const update = {
     paymentStatus: "paid",
+    paymentMethod: "online",
+    paymentMode: "online",
+    paymentCompleted: true,
+    paymentRequired: false,
+    paymentCaptured: true,
+    paymentStage: "Payment Completed",
+    amountDue: 0,
+    amountPaid: Number(amount || 0),
+    amountToCollect: 0,
+    razorpayPaymentId: paymentId || transactionId || "",
+    razorpayOrderId,
+    paymentSessionId,
+    companyReceivedAmount: Number(amount || 0),
+    paymentCollectedAt: paidAt || new Date(),
     paymentId: paymentId || transactionId || "",
     transactionId: transactionId || paymentId || "",
     paidAt: paidAt || new Date()

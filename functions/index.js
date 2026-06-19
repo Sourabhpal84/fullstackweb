@@ -322,8 +322,11 @@ function assertPaymentOnlyUpdate(update = {}) {
 
 function paymentOnlyUpdate({ paymentSessionId, razorpayOrderId, paymentId, amount, source }) {
   const update = buildPaymentUpdate({
+    paymentSessionId,
+    razorpayOrderId,
     paymentId,
     transactionId: paymentId,
+    amount,
     paidAt: FieldValue.serverTimestamp()
   });
   assertPaymentOnlyPayload(update);
