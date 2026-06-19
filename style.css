@@ -180,6 +180,78 @@ img[loading="lazy"] {
   #combosSection .combo-card img{width:76px!important;min-height:118px!important}
 }
 
+/* Combo refinement: compact featured card + complete secondary card content */
+#combosSection .combo-feature-card{
+  grid-template-columns:minmax(0,1.15fr) minmax(190px,.85fr)!important;
+  min-height:250px!important;
+  max-height:290px!important;
+  border-radius:22px!important;
+}
+#combosSection .combo-feature-copy{padding:22px!important}
+#combosSection .combo-feature-copy>p{margin:7px 0 3px!important;font-size:10px!important}
+#combosSection .combo-feature-copy h3{margin:3px 0!important;font-size:clamp(22px,3vw,30px)!important;line-height:1.05!important}
+#combosSection .combo-feature-copy>strong{
+  display:-webkit-box!important;
+  -webkit-line-clamp:2!important;
+  -webkit-box-orient:vertical!important;
+  overflow:hidden!important;
+  font-size:11px!important;
+  line-height:1.35!important;
+}
+#combosSection .combo-highlights{gap:5px!important;margin:10px 0!important}
+#combosSection .combo-highlights span{padding:5px 7px!important;font-size:8px!important}
+#combosSection .combo-feature-price{margin:8px 0!important}
+#combosSection .combo-feature-price b{font-size:25px!important}
+#combosSection .combo-feature-copy>button{min-height:44px!important;padding:9px 16px!important}
+#combosSection .combo-feature-visual img{height:100%!important;min-height:250px!important;object-fit:cover!important}
+
+#combosSection .combo-card{
+  min-height:0!important;
+  max-height:none!important;
+  height:auto!important;
+  align-self:stretch!important;
+  overflow:visible!important;
+}
+#combosSection .combo-card img{
+  height:150px!important;
+  min-height:150px!important;
+  max-height:150px!important;
+}
+#combosSection .combo-card>div{height:auto!important}
+#combosSection .combo-card p{
+  display:block!important;
+  max-height:none!important;
+  overflow:visible!important;
+  -webkit-line-clamp:unset!important;
+}
+#combosSection .combo-card button{margin-top:8px!important}
+
+@media(max-width:760px){
+  #combosSection .combo-feature-card{
+    grid-template-columns:minmax(0,1fr) 120px!important;
+    min-height:210px!important;
+    max-height:230px!important;
+  }
+  #combosSection .combo-feature-copy{padding:15px!important}
+  #combosSection .combo-feature-copy h3{font-size:20px!important}
+  #combosSection .combo-feature-copy>strong{-webkit-line-clamp:2!important;font-size:9px!important}
+  #combosSection .combo-highlights{display:flex!important;max-height:29px!important;overflow:hidden!important}
+  #combosSection .combo-feature-price b{font-size:22px!important}
+  #combosSection .combo-feature-price em{padding:6px!important;font-size:9px!important}
+  #combosSection .combo-feature-copy>button{min-height:40px!important;padding:7px 12px!important;font-size:11px!important}
+  #combosSection .combo-feature-visual img{min-height:210px!important}
+  #combosSection .combo-card{
+    flex-basis:240px!important;
+    grid-template-columns:82px minmax(0,1fr)!important;
+  }
+  #combosSection .combo-card img{
+    width:82px!important;
+    height:100%!important;
+    min-height:160px!important;
+    max-height:none!important;
+  }
+}
+
 /* CART V2 FINAL CASCADE — intentionally last */
 @media(max-width:760px){
   body .cart-panel{
