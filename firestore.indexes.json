@@ -9,6 +9,7 @@
     ,{"collectionGroup":"riderOrderHistory","queryScope":"COLLECTION","fields":[{"fieldPath":"riderId","order":"ASCENDING"},{"fieldPath":"deliveryTime","order":"DESCENDING"}]}
     ,{"collectionGroup":"riderWithdrawals","queryScope":"COLLECTION","fields":[{"fieldPath":"riderId","order":"ASCENDING"},{"fieldPath":"requestedAt","order":"DESCENDING"}]}
     ,{"collectionGroup":"riderWithdrawals","queryScope":"COLLECTION","fields":[{"fieldPath":"status","order":"ASCENDING"},{"fieldPath":"requestedAt","order":"DESCENDING"}]}
+    ,{"collectionGroup":"riderWithdrawals","queryScope":"COLLECTION","fields":[{"fieldPath":"riderId","order":"ASCENDING"},{"fieldPath":"status","order":"ASCENDING"}]}
   ],
   "fieldOverrides": []
 }

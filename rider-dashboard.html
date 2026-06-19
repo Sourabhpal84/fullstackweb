@@ -1202,8 +1202,9 @@ window.pickupOrder = async function(orderId){
 window.acceptRequest = async function(orderId){
   if(!rider) return;
   const companyDueNow = Number(currentWallet.companySettlementDue || rider.companyDue || rider.pendingCashSubmission || 0);
-  if(companyDueNow > 500){
-    alert(companyDueNow > 1000 ? "Company due exceeds ₹1,000. Settlement is required before accepting deliveries." : "Please settle company balance to continue receiving orders.");
+  const blockLimit = 300;
+  if(companyDueNow > blockLimit){
+    alert(`Orders are paused. Please settle company due of ${formatCurrency(companyDueNow)} first.`);
     return;
   }
   if(rider.currentActiveOrderId){

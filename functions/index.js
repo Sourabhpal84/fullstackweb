@@ -148,21 +148,23 @@ function roundMoney(value) {
   return Math.round((Number(value) || 0) * 100) / 100;
 }
 
-function netWalletState({ totalEarnings = 0, companySettlementDue = 0, totalCashCollected = 0, totalCompanySettlements = 0, totalWithdrawn = 0 } = {}) {
+function netWalletState({ totalEarnings = 0, companySettlementDue = 0, totalCashCollected = 0, totalCompanySettlements = 0, totalWithdrawn = 0, totalEarningsAppliedToSettlement = 0 } = {}) {
   const earnings = Math.max(0, roundMoney(totalEarnings));
   const due = Math.max(0, roundMoney(companySettlementDue));
   const cash = Math.max(0, roundMoney(totalCashCollected));
   const settlements = Math.max(0, roundMoney(totalCompanySettlements));
   const withdrawn = Math.max(0, roundMoney(totalWithdrawn));
-  const netBalance = roundMoney(earnings - due);
+  const earningsApplied = Math.max(0, roundMoney(totalEarningsAppliedToSettlement));
+  const netBalance = roundMoney(earnings - earningsApplied - due);
   return {
     totalEarnings: earnings,
     totalCashCollected: cash,
     totalCompanySettlements: settlements,
     totalWithdrawn: withdrawn,
+    totalEarningsAppliedToSettlement: earningsApplied,
     companySettlementDue: due,
-    walletBalance: Math.max(0, roundMoney(earnings - due - withdrawn)),
-    withdrawableBalance: Math.max(0, roundMoney(earnings - due - withdrawn)),
+    walletBalance: Math.max(0, roundMoney(earnings - earningsApplied - due - withdrawn)),
+    withdrawableBalance: Math.max(0, roundMoney(earnings - earningsApplied - due - withdrawn)),
     netBalance,
     outstandingDue: Math.max(0, -netBalance)
   };
@@ -174,18 +176,29 @@ function mergeWalletState(current = {}, deltas = {}) {
     companySettlementDue: Number(current.companySettlementDue || 0) + Number(deltas.companySettlementDue || 0),
     totalCashCollected: Number(current.totalCashCollected || 0) + Number(deltas.totalCashCollected || 0),
     totalCompanySettlements: Number(current.totalCompanySettlements || 0) + Number(deltas.totalCompanySettlements || 0),
-    totalWithdrawn: Number(current.totalWithdrawn || 0) + Number(deltas.totalWithdrawn || 0)
+    totalWithdrawn: Number(current.totalWithdrawn || 0) + Number(deltas.totalWithdrawn || 0),
+    totalEarningsAppliedToSettlement: Number(current.totalEarningsAppliedToSettlement || 0) + Number(deltas.totalEarningsAppliedToSettlement || 0)
   });
 }
 
 function writeWalletAudit(transaction, { riderId, orderId = "", type, before, after, deltas = {}, metadata = {} }) {
   const walletRef = db.collection("riderWallet").doc(riderId);
-  transaction.set(walletRef, {
+  const canonicalWalletRef = db.collection("riderWallets").doc(riderId);
+  const walletPayload = {
     riderId,
     ...after,
-    lastSettlementAt: FieldValue.serverTimestamp(),
+    cashCollected: Number(after.totalCashCollected || 0),
+    companyDue: Number(after.companySettlementDue || 0),
+    companySettlements: Number(after.totalCompanySettlements || 0),
+    pendingWithdrawalAmount: Number(after.pendingWithdrawal || 0),
+    lastCalculatedAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp()
+  };
+  transaction.set(walletRef, {
+    ...walletPayload,
+    lastSettlementAt: FieldValue.serverTimestamp(),
   }, { merge: true });
+  transaction.set(canonicalWalletRef, walletPayload, { merge: true });
   transaction.set(db.collection("riderSettlementAuditLogs").doc(), {
     riderId,
     orderId,
@@ -2071,7 +2084,6 @@ async function completeDeliveryTransaction({ orderId, rider, mode, codeRef, code
   const riderRef = db.collection("riders").doc(rider.riderId);
   const pricingSnap = await db.collection("settings").doc("pricing").get();
   const pricing = pricingSnap.exists ? pricingSnap.data() : {};
-  const penalty = Math.max(0, Number(pricing.exceptionSettlementPenalty || 3));
 
   return db.runTransaction(async transaction => {
     const reads = [transaction.get(orderRef), transaction.get(riderRef)];
@@ -2138,20 +2150,24 @@ async function completeDeliveryTransaction({ orderId, rider, mode, codeRef, code
     }
 
     const baseEarning = riderBaseEarning(order, pricing);
-    const riderEarning = Math.max(0, exceptionDelivery ? baseEarning - penalty : baseEarning);
+    const riderEarning = Math.max(0, baseEarning);
     const total = Number(order.totalAmount || order.finalAmount || 0);
     const treatedAsCashSettlement = cashOrder && !doorstepOnlineDelivery;
-    const companyDue = treatedAsCashSettlement && exceptionDelivery ? Math.max(0, total - riderEarning) : 0;
+    const grossCompanyDue = treatedAsCashSettlement && exceptionDelivery ? Math.max(0, total - riderEarning) : 0;
     const walletRef = db.collection("riderWallet").doc(rider.riderId);
     const walletSnap = await transaction.get(walletRef);
     const walletBefore = netWalletState(walletSnap.exists ? walletSnap.data() : {
       totalEarnings: riderSnap.exists ? riderSnap.data().totalEarnings : 0,
       companySettlementDue: riderSnap.exists ? (riderSnap.data().companyDue || riderSnap.data().pendingCashSubmission || 0) : 0
     });
+    const earningsAdjustedToCompany = Math.min(grossCompanyDue, Math.max(0, roundMoney(walletBefore.walletBalance + riderEarning)));
+    const companyDue = Math.max(0, roundMoney(grossCompanyDue - earningsAdjustedToCompany));
     const walletAfter = mergeWalletState(walletBefore, {
       totalEarnings: riderEarning,
       companySettlementDue: companyDue,
-      totalCashCollected: treatedAsCashSettlement ? total : 0
+      totalCashCollected: treatedAsCashSettlement ? total : 0,
+      totalCompanySettlements: earningsAdjustedToCompany,
+      totalEarningsAppliedToSettlement: earningsAdjustedToCompany
     });
     const update = {
       status: "Delivered",
@@ -2161,8 +2177,10 @@ async function completeDeliveryTransaction({ orderId, rider, mode, codeRef, code
       deliveryCompletionMode: mode,
       earning: riderEarning,
       normalEarning: baseEarning,
-      exceptionSettlementPenalty: exceptionDelivery ? penalty : 0,
+      exceptionSettlementPenalty: 0,
       companyDue,
+      companySettlementGrossDue: grossCompanyDue,
+      companySettlementPayoutAdjusted: earningsAdjustedToCompany,
       cashSettlementPending: treatedAsCashSettlement ? exceptionDelivery : false,
       settlementState: treatedAsCashSettlement ? (exceptionDelivery ? "SETTLEMENT_PENDING" : "SETTLEMENT_COMPLETED") : "PAID_ONLINE",
       deliveryOtpStatus: codeRef ? "verified" : (order.deliveryOtpStatus || FieldValue.delete()),
@@ -2186,7 +2204,6 @@ async function completeDeliveryTransaction({ orderId, rider, mode, codeRef, code
       pendingCashSubmission: FieldValue.increment(companyDue),
       companyDue: FieldValue.increment(companyDue),
       exceptionSettlementDeliveries: FieldValue.increment(exceptionDelivery ? 1 : 0),
-      payoutPenalties: FieldValue.increment(exceptionDelivery ? penalty : 0),
       currentActiveOrderId: FieldValue.delete(),
       activeOrderId: FieldValue.delete(),
       isAvailable: true,
@@ -2198,8 +2215,10 @@ async function completeDeliveryTransaction({ orderId, rider, mode, codeRef, code
       type: exceptionDelivery ? "delivery_earning_exception_settlement" : "delivery_earning",
       amount: riderEarning,
       normalAmount: baseEarning,
-      penalty: exceptionDelivery ? penalty : 0,
+      penalty: 0,
       companyDue,
+      grossCompanyDue,
+      payoutAdjusted: earningsAdjustedToCompany,
       createdAt: FieldValue.serverTimestamp()
     });
     const historyData = {
@@ -2249,8 +2268,14 @@ async function completeDeliveryTransaction({ orderId, rider, mode, codeRef, code
       type: "delivery_completed_wallet_update",
       before: walletBefore,
       after: walletAfter,
-      deltas: { totalEarnings: riderEarning, companySettlementDue: companyDue, totalCashCollected: treatedAsCashSettlement ? total : 0 },
-      metadata: { mode, exceptionDelivery, treatedAsCashSettlement }
+      deltas: {
+        totalEarnings: riderEarning,
+        companySettlementDue: companyDue,
+        totalCashCollected: treatedAsCashSettlement ? total : 0,
+        totalCompanySettlements: earningsAdjustedToCompany,
+        totalEarningsAppliedToSettlement: earningsAdjustedToCompany
+      },
+      metadata: { mode, exceptionDelivery, treatedAsCashSettlement, penaltyRemoved: true }
     });
     if (codeRef) {
       transaction.update(codeRef, {
@@ -2273,9 +2298,9 @@ async function completeDeliveryTransaction({ orderId, rider, mode, codeRef, code
       mode,
       companyDue,
       riderEarning,
-      penalty: exceptionDelivery ? penalty : 0
+      penalty: 0
     });
-    return { orderId, riderEarning, companyDue, penalty: exceptionDelivery ? penalty : 0 };
+    return { orderId, riderEarning, companyDue, penalty: 0 };
   });
 }
 
@@ -2781,12 +2806,19 @@ exports.acceptRiderRequest = onRequest(
       const orderId = String(req.body?.orderId || "");
       const orderRef = db.collection("orders").doc(orderId);
       const riderRef = db.collection("riders").doc(rider.riderId);
+      const walletRef = db.collection("riderWallet").doc(rider.riderId);
       await reconcileRiderState(rider.riderId, { actor: "before_accept" });
       await db.runTransaction(async transaction => {
-        const [orderSnap, riderSnap] = await Promise.all([transaction.get(orderRef), transaction.get(riderRef)]);
+        const [orderSnap, riderSnap, walletSnap] = await Promise.all([
+          transaction.get(orderRef), transaction.get(riderRef), transaction.get(walletRef)
+        ]);
         if (!orderSnap.exists) throw Object.assign(new Error("Order not found"), { status: 404 });
         const order = orderSnap.data() || {};
         const riderData = riderSnap.data() || {};
+        const remainingCompanyDue = Number(walletSnap.data()?.companySettlementDue ?? riderData.companyDue ?? riderData.pendingCashSubmission ?? 0);
+        if (remainingCompanyDue > 300) {
+          throw Object.assign(new Error(`Orders are paused. Please settle company due of ₹${roundMoney(remainingCompanyDue)} first.`), { status: 409 });
+        }
         if (order.assignedRiderId && order.assignedRiderId !== rider.riderId) throw Object.assign(new Error("Another rider already accepted this order"), { status: 409 });
         const activeOrderId = riderData.currentActiveOrderId || riderData.activeOrderId || "";
         if (activeOrderId && activeOrderId !== orderId) throw Object.assign(new Error("Complete current delivery first"), { status: 409 });
@@ -3051,11 +3083,8 @@ exports.createRiderPaymentSession = onRequest(
         totalEarnings: rider.totalEarnings || 0,
         companySettlementDue: rider.companyDue || rider.pendingCashSubmission || 0
       });
-      const projectedWallet = type === "cod_company_settlement"
-        ? mergeWalletState(currentWallet, { companySettlementDue: grossCompanyDue })
-        : currentWallet;
       const payoutAdjusted = type === "cod_company_settlement" ? Math.min(grossCompanyDue, currentWallet.walletBalance) : 0;
-      const amount = type === "cod_company_settlement" ? projectedWallet.outstandingDue : total;
+      const amount = type === "cod_company_settlement" ? Math.max(0, roundMoney(grossCompanyDue - payoutAdjusted)) : total;
       if (type === "cod_company_settlement" && amount <= 0) {
         await db.runTransaction(async transaction => {
           const lockedOrderRef = db.collection("orders").doc(orderId);
@@ -3071,8 +3100,13 @@ exports.createRiderPaymentSession = onRequest(
             totalEarnings: rider.totalEarnings || 0,
             companySettlementDue: rider.companyDue || rider.pendingCashSubmission || 0
           });
-          const walletAfter = mergeWalletState(walletBefore, { companySettlementDue: grossCompanyDue });
           const adjusted = Math.min(grossCompanyDue, walletBefore.walletBalance);
+          const remainingDue = Math.max(0, roundMoney(grossCompanyDue - adjusted));
+          const walletAfter = mergeWalletState(walletBefore, {
+            companySettlementDue: remainingDue,
+            totalCompanySettlements: adjusted,
+            totalEarningsAppliedToSettlement: adjusted
+          });
           guardedOrderUpdate(transaction, lockedOrderRef, lockedOrder, {
             status: "Payment Settled",
             orderStatus: "Payment Settled",
@@ -3120,7 +3154,7 @@ exports.createRiderPaymentSession = onRequest(
             type: "company_settlement_auto_adjusted",
             before: walletBefore,
             after: walletAfter,
-            deltas: { companySettlementDue: grossCompanyDue },
+            deltas: { companySettlementDue: remainingDue, totalCompanySettlements: adjusted, totalEarningsAppliedToSettlement: adjusted },
             metadata: { grossCompanyDue, payoutAdjusted: adjusted, outstandingDue: 0 }
           });
           addOrderAudit(transaction, orderId, "COMPANY_SETTLEMENT_ADJUSTED_FROM_PAYOUT", {
@@ -3162,10 +3196,15 @@ exports.createRiderPaymentSession = onRequest(
           totalEarnings: rider.totalEarnings || 0,
           companySettlementDue: rider.companyDue || rider.pendingCashSubmission || 0
         });
-        const walletAfter = type === "cod_company_settlement"
-          ? mergeWalletState(walletBefore, { companySettlementDue: grossCompanyDue })
-          : walletBefore;
         const adjusted = type === "cod_company_settlement" ? Math.min(grossCompanyDue, walletBefore.walletBalance) : 0;
+        const remainingDue = type === "cod_company_settlement" ? Math.max(0, roundMoney(grossCompanyDue - adjusted)) : 0;
+        const walletAfter = type === "cod_company_settlement"
+          ? mergeWalletState(walletBefore, {
+              companySettlementDue: remainingDue,
+              totalCompanySettlements: adjusted,
+              totalEarningsAppliedToSettlement: adjusted
+            })
+          : walletBefore;
         transaction.set(sessionRef, {
           orderId,
           riderId: rider.riderId,
@@ -3200,7 +3239,7 @@ exports.createRiderPaymentSession = onRequest(
             type: "company_settlement_due_recorded",
             before: walletBefore,
             after: walletAfter,
-            deltas: { companySettlementDue: grossCompanyDue },
+            deltas: { companySettlementDue: remainingDue, totalCompanySettlements: adjusted, totalEarningsAppliedToSettlement: adjusted },
             metadata: { grossCompanyDue, payoutAdjusted: adjusted, outstandingDue: amount, paymentSessionId: sessionRef.id }
           });
           transaction.set(db.collection("riderSettlements").doc(sessionRef.id), {
@@ -3263,7 +3302,10 @@ exports.verifyRiderPayment = onRequest(
         const autoDeliverCustomerOnline = session.type !== "cod_company_settlement";
         const walletBefore = netWalletState(walletSnap.exists ? walletSnap.data() : session.walletAfterDueAdded || {});
         const walletAfterPayment = session.type === "cod_company_settlement"
-          ? mergeWalletState(walletBefore, { companySettlementDue: -Number(session.amount || 0) })
+          ? mergeWalletState(walletBefore, {
+              companySettlementDue: -Number(session.amount || 0),
+              totalCompanySettlements: Number(session.amount || 0)
+            })
           : walletBefore;
         const update = session.type === "cod_company_settlement" ? {
           status: "Payment Settled",
@@ -3331,13 +3373,33 @@ exports.verifyRiderPayment = onRequest(
           });
         }
         if (session.type === "cod_company_settlement") {
+          transaction.set(db.collection("riderLedger").doc(`settlement_success_${paymentSessionId}`), {
+            ledgerId: `settlement_success_${paymentSessionId}`,
+            riderId: rider.riderId,
+            orderId: session.orderId,
+            settlementId: paymentSessionId,
+            type: "COMPANY_SETTLEMENT_SUCCESS",
+            amount: Number(session.amount || 0),
+            direction: "debit",
+            description: `Company settlement paid through Razorpay`,
+            status: "success",
+            metadata: { razorpayPaymentId: razorpay_payment_id, razorpayOrderId: razorpay_order_id },
+            createdAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+          transaction.set(db.collection("riderNotifications").doc(), {
+            riderId: rider.riderId,
+            type: "COMPANY_SETTLEMENT_SUCCESS",
+            message: `Company settlement of ₹${roundMoney(session.amount)} completed successfully.`,
+            read: false,
+            createdAt: FieldValue.serverTimestamp()
+          });
           writeWalletAudit(transaction, {
             riderId: rider.riderId,
             orderId: session.orderId,
             type: "company_settlement_upi_paid",
             before: walletBefore,
             after: walletAfterPayment,
-            deltas: { companySettlementDue: -Number(session.amount || 0) },
+            deltas: { companySettlementDue: -Number(session.amount || 0), totalCompanySettlements: Number(session.amount || 0) },
             metadata: { razorpayPaymentId: razorpay_payment_id, paymentSessionId, upiPaid: Number(session.amount || 0) }
           });
           transaction.set(db.collection("riderWalletTransactions").doc(), {
@@ -4663,17 +4725,35 @@ exports.requestRiderWithdrawal = onRequest(
       await db.runTransaction(async transaction => {
         const riderRef = db.collection("riders").doc(user.uid);
         const walletRef = db.collection("riderWallet").doc(user.uid);
-        const [riderSnap, walletSnap] = await Promise.all([transaction.get(riderRef), transaction.get(walletRef)]);
+        const settingsRef = db.collection("settings").doc("riderFinance");
+        const pendingQuery = db.collection("riderWithdrawals").where("riderId", "==", user.uid).where("status", "==", "pending").limit(1);
+        const [riderSnap, walletSnap, settingsSnap, pendingSnap] = await Promise.all([
+          transaction.get(riderRef), transaction.get(walletRef), transaction.get(settingsRef), transaction.get(pendingQuery)
+        ]);
         if (!riderSnap.exists) throw Object.assign(new Error("Rider profile not found"), { status: 404 });
+        if (!pendingSnap.empty) throw Object.assign(new Error("A withdrawal request is already pending"), { status: 409 });
         const wallet = netWalletState(walletSnap.exists ? walletSnap.data() : riderSnap.data());
+        const minimumWithdrawalAmount = Number(settingsSnap.data()?.minimumWithdrawalAmount || 1);
+        if (amount < minimumWithdrawalAmount) throw Object.assign(new Error(`Minimum withdrawal is ₹${minimumWithdrawalAmount}`), { status: 400 });
         const pending = Number(walletSnap.data()?.pendingWithdrawal || 0);
         const available = Math.max(0, roundMoney(wallet.withdrawableBalance - pending));
         if (amount > available) throw Object.assign(new Error("Amount exceeds withdrawable balance"), { status: 409 });
         transaction.set(riderRef, { upiId, upiVerifiedStatus: "pending", updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-        transaction.set(walletRef, { pendingWithdrawal: roundMoney(pending + amount), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        const pendingWithdrawalAmount = roundMoney(pending + amount);
+        transaction.set(walletRef, { pendingWithdrawal: pendingWithdrawalAmount, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        transaction.set(db.collection("riderWallets").doc(user.uid), { pendingWithdrawalAmount, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
         transaction.set(withdrawalRef, {
-          riderId: user.uid, riderName: riderSnap.data().name || "Rider", upiId, amount,
+          withdrawalId: withdrawalRef.id, riderId: user.uid, riderName: riderSnap.data().name || "Rider",
+          mobile: riderSnap.data().phone || riderSnap.data().mobileNumber || "", upiId,
+          amount, requestedAmount: amount, withdrawableAtRequest: available,
+          companyDueAtRequest: Number(wallet.companySettlementDue || 0),
           status: "pending", requestedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp()
+        });
+        transaction.set(db.collection("riderLedger").doc(`withdrawal_requested_${withdrawalRef.id}`), {
+          ledgerId: `withdrawal_requested_${withdrawalRef.id}`, riderId: user.uid,
+          withdrawalId: withdrawalRef.id, type: "WITHDRAWAL_REQUESTED", amount,
+          direction: "info", status: "pending", description: `Withdrawal requested to ${upiId}`,
+          createdAt: FieldValue.serverTimestamp()
         });
       });
       sendJson(res, 200, { ok: true, withdrawalId: withdrawalRef.id });
@@ -4701,6 +4781,9 @@ exports.adminProcessRiderWithdrawal = onRequest(
         const pendingWithdrawal = Math.max(0, roundMoney(Number(walletSnap.data()?.pendingWithdrawal || 0) - Number(item.amount || 0)));
         const after = decision === "approved" ? mergeWalletState(before, { totalWithdrawn: item.amount }) : before;
         transaction.set(walletRef, { ...after, pendingWithdrawal, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        transaction.set(db.collection("riderWallets").doc(item.riderId), {
+          ...after, pendingWithdrawalAmount: pendingWithdrawal, updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
         transaction.set(ref, {
           status: decision === "approved" ? "completed" : "rejected",
           transactionId: String(req.body?.transactionId || "").trim(),
@@ -4708,10 +4791,17 @@ exports.adminProcessRiderWithdrawal = onRequest(
           processedBy: adminUser.uid, processedAt: FieldValue.serverTimestamp()
         }, { merge: true });
         if (decision === "approved") {
-          transaction.set(db.collection("riderLedger").doc(`withdrawal_${withdrawalId}`), {
-            riderId: item.riderId, withdrawalId, type: "WITHDRAWAL", amount: Number(item.amount || 0),
+          transaction.set(db.collection("riderLedger").doc(`withdrawal_approved_${withdrawalId}`), {
+            ledgerId: `withdrawal_approved_${withdrawalId}`, riderId: item.riderId, withdrawalId, type: "WITHDRAWAL_APPROVED", amount: Number(item.amount || 0),
             direction: "debit", status: "completed", transactionId: String(req.body?.transactionId || "").trim(),
             description: "Withdrawal approved", createdAt: FieldValue.serverTimestamp()
+          });
+        } else {
+          transaction.set(db.collection("riderLedger").doc(`withdrawal_rejected_${withdrawalId}`), {
+            ledgerId: `withdrawal_rejected_${withdrawalId}`, riderId: item.riderId, withdrawalId,
+            type: "WITHDRAWAL_REJECTED", amount: Number(item.amount || 0), direction: "info",
+            status: "rejected", description: String(req.body?.reason || "Withdrawal rejected"),
+            createdAt: FieldValue.serverTimestamp()
           });
         }
         transaction.set(db.collection("riderNotifications").doc(), {

@@ -449,6 +449,11 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    match /riderWallets/{riderId} {
+      allow read: if isOwner(riderId) || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
     match /riderSettlementPayments/{paymentId} {
       allow read: if isAdmin() || (signedIn() && resource.data.riderId == request.auth.uid);
       allow create, update, delete: if isAdmin();
