@@ -5,6 +5,10 @@
     {"collectionGroup":"orders","queryScope":"COLLECTION","fields":[{"fieldPath":"userId","order":"ASCENDING"},{"fieldPath":"status","order":"ASCENDING"}]},
     {"collectionGroup":"ambassadors","queryScope":"COLLECTION","fields":[{"fieldPath":"status","order":"ASCENDING"},{"fieldPath":"deliveredOrders","order":"DESCENDING"}]},
     {"collectionGroup":"ambassadorWithdrawals","queryScope":"COLLECTION","fields":[{"fieldPath":"status","order":"ASCENDING"},{"fieldPath":"requestedAt","order":"DESCENDING"}]}
+    ,{"collectionGroup":"riderLedger","queryScope":"COLLECTION","fields":[{"fieldPath":"riderId","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}]}
+    ,{"collectionGroup":"riderOrderHistory","queryScope":"COLLECTION","fields":[{"fieldPath":"riderId","order":"ASCENDING"},{"fieldPath":"deliveryTime","order":"DESCENDING"}]}
+    ,{"collectionGroup":"riderWithdrawals","queryScope":"COLLECTION","fields":[{"fieldPath":"riderId","order":"ASCENDING"},{"fieldPath":"requestedAt","order":"DESCENDING"}]}
+    ,{"collectionGroup":"riderWithdrawals","queryScope":"COLLECTION","fields":[{"fieldPath":"status","order":"ASCENDING"},{"fieldPath":"requestedAt","order":"DESCENDING"}]}
   ],
   "fieldOverrides": []
 }

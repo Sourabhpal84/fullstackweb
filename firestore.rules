@@ -470,6 +470,26 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    match /riderLedger/{entryId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.riderId == request.auth.uid);
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /riderWithdrawals/{withdrawalId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.riderId == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    match /riderOrderHistory/{historyId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.riderId == request.auth.uid);
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /riderNotifications/{notificationId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.riderId == request.auth.uid);
+      allow create, update, delete: if isAdmin();
+    }
+
     match /riderNotificationQueue/{queueId} {
       allow create: if isAdmin() || signedIn();
       allow read, update, delete: if isAdmin();

@@ -148,14 +148,21 @@ function roundMoney(value) {
   return Math.round((Number(value) || 0) * 100) / 100;
 }
 
-function netWalletState({ totalEarnings = 0, companySettlementDue = 0 } = {}) {
+function netWalletState({ totalEarnings = 0, companySettlementDue = 0, totalCashCollected = 0, totalCompanySettlements = 0, totalWithdrawn = 0 } = {}) {
   const earnings = Math.max(0, roundMoney(totalEarnings));
   const due = Math.max(0, roundMoney(companySettlementDue));
+  const cash = Math.max(0, roundMoney(totalCashCollected));
+  const settlements = Math.max(0, roundMoney(totalCompanySettlements));
+  const withdrawn = Math.max(0, roundMoney(totalWithdrawn));
   const netBalance = roundMoney(earnings - due);
   return {
     totalEarnings: earnings,
+    totalCashCollected: cash,
+    totalCompanySettlements: settlements,
+    totalWithdrawn: withdrawn,
     companySettlementDue: due,
-    walletBalance: Math.max(0, netBalance),
+    walletBalance: Math.max(0, roundMoney(earnings - due - withdrawn)),
+    withdrawableBalance: Math.max(0, roundMoney(earnings - due - withdrawn)),
     netBalance,
     outstandingDue: Math.max(0, -netBalance)
   };
@@ -164,7 +171,10 @@ function netWalletState({ totalEarnings = 0, companySettlementDue = 0 } = {}) {
 function mergeWalletState(current = {}, deltas = {}) {
   return netWalletState({
     totalEarnings: Number(current.totalEarnings || 0) + Number(deltas.totalEarnings || 0),
-    companySettlementDue: Number(current.companySettlementDue || 0) + Number(deltas.companySettlementDue || 0)
+    companySettlementDue: Number(current.companySettlementDue || 0) + Number(deltas.companySettlementDue || 0),
+    totalCashCollected: Number(current.totalCashCollected || 0) + Number(deltas.totalCashCollected || 0),
+    totalCompanySettlements: Number(current.totalCompanySettlements || 0) + Number(deltas.totalCompanySettlements || 0),
+    totalWithdrawn: Number(current.totalWithdrawn || 0) + Number(deltas.totalWithdrawn || 0)
   });
 }
 
@@ -2140,7 +2150,8 @@ async function completeDeliveryTransaction({ orderId, rider, mode, codeRef, code
     });
     const walletAfter = mergeWalletState(walletBefore, {
       totalEarnings: riderEarning,
-      companySettlementDue: companyDue
+      companySettlementDue: companyDue,
+      totalCashCollected: treatedAsCashSettlement ? total : 0
     });
     const update = {
       status: "Delivered",
@@ -2191,13 +2202,54 @@ async function completeDeliveryTransaction({ orderId, rider, mode, codeRef, code
       companyDue,
       createdAt: FieldValue.serverTimestamp()
     });
+    const historyData = {
+      riderId: rider.riderId,
+      orderId,
+      orderNumber: order.orderNumber || order.orderId || orderId,
+      customerName: order.customerName || order.name || "Customer",
+      distance: Number(order.actualRoadDistance || order.deliveryDistance || order.distance || 0),
+      orderAmount: total,
+      paymentMethod: cashOrder ? "COD" : "ONLINE",
+      riderEarning,
+      cashCollected: treatedAsCashSettlement ? total : 0,
+      onlineAmount: treatedAsCashSettlement ? 0 : total,
+      deliveryTime: FieldValue.serverTimestamp(),
+      status: "Delivered",
+      companyShare: treatedAsCashSettlement ? Math.max(0, total - riderEarning) : 0,
+      settlementStatus: companyDue > 0 ? "Pending" : "Settled",
+      createdAt: FieldValue.serverTimestamp()
+    };
+    transaction.set(db.collection("riderOrderHistory").doc(orderId), historyData, { merge: true });
+    transaction.set(db.collection("riderLedger").doc(`earning_${orderId}`), {
+      riderId: rider.riderId, orderId, type: "DELIVERY_EARNING", amount: riderEarning,
+      direction: "credit", description: `Delivery earnings for Order #${historyData.orderNumber}`,
+      createdAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    if (treatedAsCashSettlement) {
+      transaction.set(db.collection("riderLedger").doc(`cod_${orderId}`), {
+        riderId: rider.riderId, orderId, type: "COD_COLLECTION", amount: total,
+        direction: "credit", description: `COD collected for Order #${historyData.orderNumber}`,
+        createdAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    } else {
+      transaction.set(db.collection("riderLedger").doc(`online_${orderId}`), {
+        riderId: rider.riderId, orderId, type: "ONLINE_ORDER", amount: total,
+        direction: "info", description: `Online payment for Order #${historyData.orderNumber}`,
+        createdAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
+    transaction.set(db.collection("riderNotifications").doc(), {
+      riderId: rider.riderId, type: "DELIVERY_EARNING",
+      message: `You earned ₹${roundMoney(riderEarning)} from Order #${historyData.orderNumber}`,
+      read: false, createdAt: FieldValue.serverTimestamp()
+    });
     writeWalletAudit(transaction, {
       riderId: rider.riderId,
       orderId,
       type: "delivery_completed_wallet_update",
       before: walletBefore,
       after: walletAfter,
-      deltas: { totalEarnings: riderEarning, companySettlementDue: companyDue },
+      deltas: { totalEarnings: riderEarning, companySettlementDue: companyDue, totalCashCollected: treatedAsCashSettlement ? total : 0 },
       metadata: { mode, exceptionDelivery, treatedAsCashSettlement }
     });
     if (codeRef) {
@@ -4595,5 +4647,80 @@ exports.adminProcessAmbassadorWithdrawal = onRequest(
     } catch (error) {
       sendJson(res, error.status || 500, { error: error.message });
     }
+  }
+);
+
+exports.requestRiderWithdrawal = onRequest(
+  { region: "asia-south1", cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") return sendJson(res, 204, {});
+    try {
+      const user = await requireAuth(req);
+      const amount = normalizeAmount(req.body?.amount);
+      const upiId = String(req.body?.upiId || "").trim().toLowerCase();
+      if (!/^[a-z0-9._-]{2,}@[a-z0-9._-]{2,}$/i.test(upiId)) throw Object.assign(new Error("Enter a valid UPI ID"), { status: 400 });
+      const withdrawalRef = db.collection("riderWithdrawals").doc();
+      await db.runTransaction(async transaction => {
+        const riderRef = db.collection("riders").doc(user.uid);
+        const walletRef = db.collection("riderWallet").doc(user.uid);
+        const [riderSnap, walletSnap] = await Promise.all([transaction.get(riderRef), transaction.get(walletRef)]);
+        if (!riderSnap.exists) throw Object.assign(new Error("Rider profile not found"), { status: 404 });
+        const wallet = netWalletState(walletSnap.exists ? walletSnap.data() : riderSnap.data());
+        const pending = Number(walletSnap.data()?.pendingWithdrawal || 0);
+        const available = Math.max(0, roundMoney(wallet.withdrawableBalance - pending));
+        if (amount > available) throw Object.assign(new Error("Amount exceeds withdrawable balance"), { status: 409 });
+        transaction.set(riderRef, { upiId, upiVerifiedStatus: "pending", updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        transaction.set(walletRef, { pendingWithdrawal: roundMoney(pending + amount), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        transaction.set(withdrawalRef, {
+          riderId: user.uid, riderName: riderSnap.data().name || "Rider", upiId, amount,
+          status: "pending", requestedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp()
+        });
+      });
+      sendJson(res, 200, { ok: true, withdrawalId: withdrawalRef.id });
+    } catch (error) { sendJson(res, error.status || 500, { error: error.message }); }
+  }
+);
+
+exports.adminProcessRiderWithdrawal = onRequest(
+  { region: "asia-south1", cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") return sendJson(res, 204, {});
+    try {
+      const adminUser = await requireAdmin(req);
+      const withdrawalId = String(req.body?.withdrawalId || "");
+      const decision = String(req.body?.decision || "").toLowerCase();
+      if (!["approved", "rejected"].includes(decision)) throw Object.assign(new Error("Invalid decision"), { status: 400 });
+      await db.runTransaction(async transaction => {
+        const ref = db.collection("riderWithdrawals").doc(withdrawalId);
+        const snap = await transaction.get(ref);
+        if (!snap.exists || snap.data().status !== "pending") throw Object.assign(new Error("Pending request not found"), { status: 404 });
+        const item = snap.data();
+        const walletRef = db.collection("riderWallet").doc(item.riderId);
+        const walletSnap = await transaction.get(walletRef);
+        const before = netWalletState(walletSnap.exists ? walletSnap.data() : {});
+        const pendingWithdrawal = Math.max(0, roundMoney(Number(walletSnap.data()?.pendingWithdrawal || 0) - Number(item.amount || 0)));
+        const after = decision === "approved" ? mergeWalletState(before, { totalWithdrawn: item.amount }) : before;
+        transaction.set(walletRef, { ...after, pendingWithdrawal, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        transaction.set(ref, {
+          status: decision === "approved" ? "completed" : "rejected",
+          transactionId: String(req.body?.transactionId || "").trim(),
+          notes: String(req.body?.notes || "").trim(), rejectionReason: String(req.body?.reason || "").trim(),
+          processedBy: adminUser.uid, processedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        if (decision === "approved") {
+          transaction.set(db.collection("riderLedger").doc(`withdrawal_${withdrawalId}`), {
+            riderId: item.riderId, withdrawalId, type: "WITHDRAWAL", amount: Number(item.amount || 0),
+            direction: "debit", status: "completed", transactionId: String(req.body?.transactionId || "").trim(),
+            description: "Withdrawal approved", createdAt: FieldValue.serverTimestamp()
+          });
+        }
+        transaction.set(db.collection("riderNotifications").doc(), {
+          riderId: item.riderId, type: decision === "approved" ? "WITHDRAWAL_APPROVED" : "WITHDRAWAL_REJECTED",
+          message: decision === "approved" ? `₹${roundMoney(item.amount)} withdrawal approved and transferred to your UPI.` : `Withdrawal rejected. ${String(req.body?.reason || "")}`,
+          read: false, createdAt: FieldValue.serverTimestamp()
+        });
+      });
+      sendJson(res, 200, { ok: true });
+    } catch (error) { sendJson(res, error.status || 500, { error: error.message }); }
   }
 );

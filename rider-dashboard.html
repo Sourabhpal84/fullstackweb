@@ -278,7 +278,7 @@ body{
       </div>
       <div class="glass metric">
         <b id="pendingCash">₹0</b>
-        <span>Pending Company Deposit</span>
+        <span>Company Due</span>
       </div>
       <div class="glass metric">
         <b id="onlineCollected">₹0</b>
@@ -305,11 +305,11 @@ body{
     <div class="glass wallet-card"><span>Today earnings</span><b id="todayEarnings">₹0</b></div>
     <div class="glass wallet-card"><span>Weekly earnings</span><b id="weeklyEarnings">₹0</b></div>
     <div class="glass wallet-card"><span>Monthly earnings</span><b id="monthlyEarnings">₹0</b></div>
-    <div class="glass wallet-card"><span>Pending payout</span><b id="pendingSettlement">₹0</b></div>
+    <div class="glass wallet-card"><span>Withdrawable Balance</span><b id="pendingSettlement">₹0</b></div>
     <div class="glass wallet-card"><span>Total Earnings</span><b id="walletTotalEarnings">₹0</b></div>
     <div class="glass wallet-card"><span>COD Collected</span><b id="walletCodCollected">₹0</b></div>
-    <div class="glass wallet-card"><span>COD due to company</span><b id="companyDue">₹0</b></div>
-    <div class="glass wallet-card"><span>Wallet Balance</span><b id="walletBalance">₹0</b></div>
+    <div class="glass wallet-card"><span>Company Due</span><b id="companyDue">₹0</b></div>
+    <div class="glass wallet-card"><span>Withdrawable Balance</span><b id="walletBalance">₹0</b></div>
     <div class="glass wallet-card"><span>Net Settlement</span><b id="netSettlement">₹0</b></div>
     <div class="glass wallet-card"><span>Outstanding Due</span><b id="outstandingDue">₹0</b></div>
     <div class="glass wallet-card"><span>Completed payouts</span><b id="completedSettlements">₹0</b></div>
@@ -328,25 +328,21 @@ body{
 
   <section class="glass partner-panel">
     <div class="panel-head">
-      <div><h3>Payment Methods</h3><p>UPI and bank details are visible only inside your rider session and admin settlement review.</p></div>
+      <div><h3>Withdrawal UPI</h3><p>Withdrawals are sent to your UPI after admin approval.</p></div>
       <button class="primary-action" id="savePayoutMethod">Save</button>
     </div>
     <div class="form-grid">
       <input id="upiId" placeholder="UPI ID">
-      <input id="accountHolderName" placeholder="Account holder name">
-      <input id="bankAccount" placeholder="Bank account number">
-      <input id="ifscCode" placeholder="IFSC code">
-      <input id="panNumber" placeholder="PAN (future ready)">
-      <input id="aadhaarNumber" placeholder="Aadhaar (future ready)">
     </div>
   </section>
 
   <section class="glass partner-panel">
     <div class="panel-head">
-      <div><h3>Settlements & Payout History</h3><p>RazorpayX-ready records for weekly, manual, or instant payout approval.</p></div>
+      <div><h3>Withdrawals & Financial Records</h3><p>Request a UPI withdrawal or inspect every rupee.</p></div>
       <button class="primary-action" id="requestWithdrawal">Request Withdrawal</button>
     </div>
     <div class="history-list" id="payoutHistory"></div>
+    <div class="actions" style="margin-top:12px"><button class="primary-action" onclick="location.href='rider-passbook.html'">Passbook</button><button class="primary-action" onclick="location.href='rider-order-history.html'">Order History</button><button class="primary-action" onclick="location.href='rider-settlement-history.html'">Settlement History</button></div>
   </section>
 
   
@@ -386,6 +382,7 @@ let requestOrdersUnsub = null;
 let directRequestsUnsub = null;
 let payoutUnsub = null;
 let walletUnsub = null;
+let currentWallet = {};
 let riderAuthNullTimer = null;
 let riderHeartbeatTimer = null;
 let allOrders = [];
@@ -768,7 +765,7 @@ function renderRider(){
     netBalance:Number(rider.pendingSettlement || 0) - Number(rider.companyDue || rider.pendingCashSubmission || 0),
     outstandingDue:Math.max(0, Number(rider.companyDue || rider.pendingCashSubmission || 0) - Number(rider.pendingSettlement || 0))
   });
-  ["upiId","accountHolderName","bankAccount","ifscCode","panNumber","aadhaarNumber"].forEach(id => {
+  ["upiId"].forEach(id => {
     const el = document.getElementById(id);
     if(el && !el.value) el.value = rider[id] || "";
   });
@@ -871,6 +868,7 @@ function renderOrders(){
 }
 
 function renderWallet(wallet = {}){
+  currentWallet = wallet;
   const totalEarnings = Number(wallet.totalEarnings || 0);
   const companyDue = Number(wallet.companySettlementDue || 0);
   const netBalance = Number(wallet.netBalance ?? (totalEarnings - companyDue));
@@ -878,6 +876,7 @@ function renderWallet(wallet = {}){
   els.walletCodCollected.textContent = formatCurrency(rider?.totalCashCollected || 0);
   els.companyDue.textContent = formatCurrency(companyDue);
   els.walletBalance.textContent = formatCurrency(Math.max(0, Number(wallet.walletBalance ?? netBalance)));
+  els.pendingSettlement.textContent = formatCurrency(Math.max(0, Number(wallet.withdrawableBalance ?? wallet.walletBalance ?? netBalance)));
   els.netSettlement.textContent = formatCurrency(netBalance);
   els.outstandingDue.textContent = formatCurrency(Math.max(0, Number(wallet.outstandingDue ?? -netBalance)));
 }
@@ -1202,6 +1201,11 @@ window.pickupOrder = async function(orderId){
 
 window.acceptRequest = async function(orderId){
   if(!rider) return;
+  const companyDueNow = Number(currentWallet.companySettlementDue || rider.companyDue || rider.pendingCashSubmission || 0);
+  if(companyDueNow > 500){
+    alert(companyDueNow > 1000 ? "Company due exceeds ₹1,000. Settlement is required before accepting deliveries." : "Please settle company balance to continue receiving orders.");
+    return;
+  }
   if(rider.currentActiveOrderId){
     alert("Complete current delivery first");
     return;
@@ -1502,11 +1506,7 @@ document.getElementById("savePayoutMethod").addEventListener("click", async () =
   if(!riderRef) return;
   await updateDoc(riderRef, {
     upiId:document.getElementById("upiId").value.trim(),
-    accountHolderName:document.getElementById("accountHolderName").value.trim(),
-    bankAccount:document.getElementById("bankAccount").value.trim(),
-    ifscCode:document.getElementById("ifscCode").value.trim().toUpperCase(),
-    panNumber:document.getElementById("panNumber").value.trim().toUpperCase(),
-    aadhaarNumber:document.getElementById("aadhaarNumber").value.trim(),
+    upiVerifiedStatus:"pending",
     payoutEnabled:false,
     payoutMethodUpdatedAt:serverTimestamp()
   });
@@ -1515,20 +1515,17 @@ document.getElementById("savePayoutMethod").addEventListener("click", async () =
 
 document.getElementById("requestWithdrawal").addEventListener("click", async () => {
   if(!rider?.riderId) return;
-  const amount = Number(rider.pendingSettlement || 0);
+  const available = Math.max(0, Number(currentWallet.withdrawableBalance ?? currentWallet.walletBalance ?? 0) - Number(currentWallet.pendingWithdrawal || 0));
+  const amount = Number(prompt(`Available balance: ${formatCurrency(available)}\nEnter withdrawal amount:`));
+  const upiId = document.getElementById("upiId").value.trim();
   if(amount <= 0){
     alert("No pending payout available.");
     return;
   }
-  await addDoc(collection(db,"riderSettlements"), {
-    riderId:rider.riderId,
-    riderName:rider.name || "Magneetoz Rider",
-    amount,
-    payoutMethod:rider.upiId ? "UPI" : "BANK",
-    payoutStatus:"requested",
-    createdAt:serverTimestamp()
-  });
-  alert("Withdrawal request sent to admin.");
+  try{
+    await callRiderFunction("requestRiderWithdrawal", { amount, upiId }, 20000);
+    alert("Withdrawal request sent to admin.");
+  }catch(error){ alert(error?.message || "Unable to request withdrawal."); }
 });
 
 window.openCustomer = function(lat,lng){
