@@ -5094,33 +5094,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
 });
 
-let categoryControlsLastScrollY = window.scrollY;
 window.addEventListener("scroll", ()=>{
   const categoryControls = document.querySelector(".sticky-area");
   const bottomNavigation = document.querySelector(".bottom-nav");
-  const currentScrollY = Math.max(0, window.scrollY);
-  const scrollDelta = currentScrollY - categoryControlsLastScrollY;
-  const overlayOpen = document.body.classList.contains("cart-open")
-    || document.querySelector(".popup-overlay.show,.location-selector-popup[style*='flex'],.delivery-feedback-popup.show");
-  if(!overlayOpen){
-    if(currentScrollY < 120){
-      categoryControls?.classList.remove("category-controls-hidden");
-      categoryControls?.classList.add("category-controls-visible");
-      bottomNavigation?.classList.remove("scroll-controls-hidden");
-      bottomNavigation?.classList.add("scroll-controls-visible");
-    }else if(scrollDelta > 7){
-      categoryControls?.classList.add("category-controls-hidden");
-      categoryControls?.classList.remove("category-controls-visible");
-      bottomNavigation?.classList.add("scroll-controls-hidden");
-      bottomNavigation?.classList.remove("scroll-controls-visible");
-    }else if(scrollDelta < -7){
-      categoryControls?.classList.remove("category-controls-hidden");
-      categoryControls?.classList.add("category-controls-visible");
-      bottomNavigation?.classList.remove("scroll-controls-hidden");
-      bottomNavigation?.classList.add("scroll-controls-visible");
-    }
-  }
-  if(Math.abs(scrollDelta) > 7 || currentScrollY < 120) categoryControlsLastScrollY = currentScrollY;
+  categoryControls?.classList.remove("category-controls-hidden");
+  categoryControls?.classList.add("category-controls-visible");
+  bottomNavigation?.classList.remove("scroll-controls-hidden");
+  bottomNavigation?.classList.add("scroll-controls-visible");
   if(menuBrowserHideOnNextScroll){
     hideMenuCategoryPicker();
     return;

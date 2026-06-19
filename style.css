@@ -8037,8 +8037,25 @@ body .cart-backdrop{display:none!important}
   visibility:visible!important;
 }
 @media(max-width:760px){
-  body .sticky-area.category-controls-hidden{transform:translate3d(0,-120%,0)!important}
-  body .sticky-area.category-controls-visible{transform:translate3d(0,0,0)!important}
+  body .sticky-area.category-controls-hidden,
+  body .sticky-area.category-controls-visible{transform:none!important}
+}
+
+/* Address, category buttons and bottom navigation stay visible while scrolling. */
+.sticky-area.category-controls-hidden,
+.sticky-area.category-controls-visible{
+  transform:none!important;
+  opacity:1!important;
+  visibility:visible!important;
+  pointer-events:auto!important;
+}
+
+.bottom-nav.scroll-controls-hidden,
+.bottom-nav.scroll-controls-visible{
+  transform:none!important;
+  opacity:1!important;
+  visibility:visible!important;
+  pointer-events:auto!important;
 }
 
 body{
