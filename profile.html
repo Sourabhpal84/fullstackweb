@@ -54,7 +54,7 @@ async function load(){
   ]);
   if(txResult.status==="fulfilled"){
     const txs=txResult.value;
-    walletHistory.innerHTML=txs.empty?'<p class="muted">No transactions yet.</p>':txs.docs.map(x=>{const d=x.data();return `<div class="item"><b>${d.points>0?"+":""}${d.points} points</b><br><span class="muted">${esc(d.description||d.type)}</span></div>`}).join("");
+    walletHistory.innerHTML=txs.empty?'<p class="muted">No transactions yet.</p>':txs.docs.map(x=>{const d=x.data(),orderLabel=d.orderNumber||d.orderId||"";return `<div class="item"><b>${d.points>0?"+":""}${d.points} points</b>${orderLabel?` <span class="muted">· Order #${esc(orderLabel)}</span>`:""}<br><span class="muted">${esc(d.description||d.type)}</span>${d.orderAmount?`<br><span class="muted">Order value: ₹${Number(d.orderAmount).toFixed(0)}</span>`:""}</div>`}).join("");
   }else walletHistory.innerHTML='<p class="muted">Wallet history is temporarily unavailable.</p>';
   if(orderResult.status==="fulfilled"){
     const ords=orderResult.value;

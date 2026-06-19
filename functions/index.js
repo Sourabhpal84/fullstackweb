@@ -1742,11 +1742,9 @@ function isOnlineMethod(method = "") {
   return ["online", "upi"].includes(String(method || "").toLowerCase());
 }
 
-function riderBaseEarning(order = {}, settings = {}) {
+function riderBaseEarning(order = {}) {
   const distance = Math.max(1, Math.ceil(Number(order.actualRoadDistance || order.deliveryDistance || order.distance || 1)));
-  const base = Number(settings.BASE_FARE || settings.baseFare || 25);
-  const paidPerKm = Number(settings.PAID_PER_KM || settings.paidPerKm || 5);
-  return Math.max(0, base + Math.max(0, distance - 3) * paidPerKm);
+  return roundMoney(20 + Math.max(0, distance - 3) * 5);
 }
 
 async function riderProfileForUser(uid) {
@@ -4359,8 +4357,14 @@ exports.reconcilePendingReferralRewards = onSchedule(
   }
 );
 
-function feedbackRewardPoints() {
-  return 5;
+function feedbackRewardPoints(orderAmount) {
+  const amount = Number(orderAmount || 0);
+  if (amount >= 500) return 50;
+  if (amount >= 400) return 40;
+  if (amount >= 300) return 25;
+  if (amount >= 200) return 10;
+  if (amount >= 100) return 5;
+  return 0;
 }
 
 exports.creditFeedbackPizzaPoints = onDocumentCreated(
@@ -4389,7 +4393,15 @@ exports.creditFeedbackPizzaPoints = onDocumentCreated(
         transaction.set(feedbackSnap.ref, { rewardStatus: "ineligible", rewardReason: delivered ? "order_owner_mismatch" : "order_not_delivered" }, { merge: true });
         return;
       }
-      const points = feedbackRewardPoints();
+      const eligibleOrderAmount = Number(order.subtotalAmount || order.subtotal || order.grandTotal || order.totalAmount || 0);
+      const points = feedbackRewardPoints(eligibleOrderAmount);
+      if (!points) {
+        transaction.set(feedbackSnap.ref, {
+          rewardStatus: "ineligible", rewardReason: "order_below_100",
+          rewardPoints: 0, eligibleOrderAmount
+        }, { merge: true });
+        return;
+      }
       transaction.set(userRef, {
         walletPoints: Number(user.walletPoints || 0) + points,
         lifetimePointsEarned: Number(user.lifetimePointsEarned || 0) + points,
@@ -4397,8 +4409,11 @@ exports.creditFeedbackPizzaPoints = onDocumentCreated(
       }, { merge: true });
       transaction.set(ledgerRef, {
         userId: feedback.userId, type: "loyalty_bonus", points, amountEquivalent: points,
-        source: "delivered_order_feedback", orderId: feedback.orderId, feedbackId: event.params.feedbackId,
-        status: "credited", description: "Pizza Points earned for order feedback",
+        source: "delivered_order_feedback", orderId: feedback.orderId,
+        orderNumber: order.orderNumber || order.orderId || feedback.orderId,
+        orderAmount: eligibleOrderAmount, feedbackId: event.params.feedbackId,
+        status: "credited",
+        description: `${points} Pizza Points earned from feedback for Order #${order.orderNumber || order.orderId || feedback.orderId}`,
         createdAt: FieldValue.serverTimestamp()
       });
       transaction.set(feedbackSnap.ref, { rewardStatus: "credited", rewardPoints: points, rewardCreditedAt: FieldValue.serverTimestamp() }, { merge: true });

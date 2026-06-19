@@ -6048,9 +6048,17 @@ async function analyzeFeedbackWithAI(feedbackId, payload){
 function showDeliveryFeedbackPopup(order){
   const popup = ensureFeedbackPopup();
   popup.dataset.orderId = order.id;
-  const rewardPoints = 5;
+  const eligibleAmount = Number(order.subtotalAmount || order.subtotal || order.grandTotal || order.totalAmount || 0);
+  const rewardPoints = eligibleAmount >= 500 ? 50
+    : eligibleAmount >= 400 ? 40
+    : eligibleAmount >= 300 ? 25
+    : eligibleAmount >= 200 ? 10
+    : eligibleAmount >= 100 ? 5
+    : 0;
   const rewardBanner = popup.querySelector("#feedbackRewardBanner");
-  if(rewardBanner) rewardBanner.textContent = "Submit feedback and get 5 Pizza Points";
+  if(rewardBanner) rewardBanner.textContent = rewardPoints
+    ? `Submit feedback and get ${rewardPoints} Pizza Points`
+    : "Orders below ₹100 are not eligible for Pizza Points";
   ["overall","foodQuality","taste","freshness","delivery","service","valueForMoney"].forEach(key => resetFeedbackStarValue(popup, key));
   const text = popup.querySelector("#deliveryFeedbackText");
   if(text) text.value = "";

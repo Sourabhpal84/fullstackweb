@@ -406,10 +406,10 @@ let riderLocationWatchId = null;
 let lastRiderLocationWriteAt = 0;
 let riderRazorpayInFlight = false;
 let PRICING = {
-  BASE_FARE:25,
+  BASE_FARE:20,
   PAID_PER_KM:5,
   PER_KM_RATE:5,
-  MIN_PAYOUT:25,
+  MIN_PAYOUT:20,
   PLATFORM_FEE:0,
   NIGHT_BONUS_ENABLED:false,
   NIGHT_BONUS_AMOUNT:0,
@@ -701,33 +701,11 @@ messagingReady.then(messaging => {
 
 function calcFinancials(order, distance){
   const km = Math.max(1, Math.ceil(Number(distance) || 1));
-  const baseFare = Number(PRICING.BASE_FARE ?? PRICING.baseFare ?? 25);
-  const paidPerKm = Number(PRICING.PAID_PER_KM ?? PRICING.paidPerKm ?? 5);
-  const perKmRate = Number(PRICING.PER_KM_RATE ?? PRICING.perKmRate ?? 5);
-  const minPayout = Number(PRICING.MIN_PAYOUT ?? PRICING.minPayout ?? baseFare);
-  let riderEarning = 0;
-  let companyProfit = 0;
-  let bonus = 0;
-  if(order.deliveryCharge && order.deliveryCharge > 0){
-    const base = baseFare;
-    const variable = Math.max(0, km - 3) * paidPerKm;
-    riderEarning = base + variable;
-    companyProfit = order.deliveryCharge - riderEarning;
-  }else{
-    riderEarning = km * perKmRate;
-    companyProfit = -riderEarning;
-  }
-  const hour = new Date().getHours();
-  if(PRICING.NIGHT_BONUS_ENABLED && (hour >= 22 || hour < 6)) bonus += Number(PRICING.NIGHT_BONUS_AMOUNT) || 0;
-  if(PRICING.PEAK_BONUS_ENABLED && ((hour >= 12 && hour <= 14) || (hour >= 19 && hour <= 22))) bonus += Number(PRICING.PEAK_BONUS_AMOUNT) || 0;
-  if(PRICING.RAIN_BONUS_ENABLED) bonus += Number(PRICING.RAIN_BONUS_AMOUNT) || 0;
-  if(km > (Number(PRICING.DISTANCE_BONUS_AFTER_KM) || 8)){
-    bonus += (km - (Number(PRICING.DISTANCE_BONUS_AFTER_KM) || 8)) * (Number(PRICING.DISTANCE_BONUS_PER_KM) || 0);
-  }
-  riderEarning = Math.max(riderEarning, minPayout);
-  riderEarning += bonus;
-  companyProfit -= PRICING.PLATFORM_FEE || 0;
-  companyProfit -= bonus;
+  const baseFare = 20;
+  const minPayout = 20;
+  const bonus = 0;
+  const riderEarning = baseFare + Math.max(0, km - 3) * 5;
+  const companyProfit = Number(order.deliveryCharge || 0) - riderEarning;
   return { riderEarning, companyProfit, distance:km, bonus, baseFare, minPayout };
 }
 

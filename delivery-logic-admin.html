@@ -26,30 +26,21 @@ button{border:0;border-radius:13px;min-height:44px;padding:0 14px;font:900 12px 
   <header class="head">
     <div>
       <h1>Delivery Logic Engine</h1>
-      <p style="margin:4px 0 0;color:#aeb8c7">Configure payouts, incentives, loyalty rewards, and delivery operations.</p>
+      <p style="margin:4px 0 0;color:#aeb8c7">Rider payout is fixed: up to 3 km ₹20, then ₹5 for every additional km.</p>
     </div>
   </header>
   <section class="grid">
     <form class="panel" id="pricingForm">
       <h2>Rider Payout Rules</h2>
+      <div class="panel" style="margin-bottom:12px;background:#0b0f14">
+        <strong style="color:#86efac">Fixed Rider Earning Rule</strong>
+        <p style="color:#aeb8c7;margin:8px 0 0">0–3 km = ₹20<br>4 km = ₹25<br>5 km = ₹30<br>Each additional started km = ₹5</p>
+      </div>
       <div class="fields">
-        <label>Base Fare<input id="BASE_FARE" type="number"></label>
-        <label>Paid Per KM<input id="PAID_PER_KM" type="number"></label>
-        <label>Per KM Rate<input id="PER_KM_RATE" type="number"></label>
-        <label>Minimum Payout<input id="MIN_PAYOUT" type="number"></label>
-        <label>Exception Settlement Penalty<input id="exceptionSettlementPenalty" type="number" min="0" step="1"></label>
         <label>GST Percentage<input id="gstPercent" type="number" min="0" step="0.01"></label>
         <label>Handling Charge<input id="handlingCharge" type="number" min="0" step="1"></label>
-        <label>Distance Bonus After KM<input id="DISTANCE_BONUS_AFTER_KM" type="number"></label>
-        <label>Distance Bonus Per KM<input id="DISTANCE_BONUS_PER_KM" type="number"></label>
       </div>
-      <label class="check"><input id="NIGHT_BONUS_ENABLED" type="checkbox"> Night bonus</label>
-      <label>Night Bonus Amount<input id="NIGHT_BONUS_AMOUNT" type="number"></label>
-      <label class="check"><input id="PEAK_BONUS_ENABLED" type="checkbox"> Peak hour bonus</label>
-      <label>Peak Bonus Amount<input id="PEAK_BONUS_AMOUNT" type="number"></label>
-      <label class="check"><input id="RAIN_BONUS_ENABLED" type="checkbox"> Rain bonus</label>
-      <label>Rain Bonus Amount<input id="RAIN_BONUS_AMOUNT" type="number"></label>
-      <button type="submit">Save Payout Logic</button>
+      <button type="submit">Save Charges</button>
     </form>
     <form class="panel" id="rewardForm">
       <h2>Loyalty Reward Rules</h2>
@@ -85,8 +76,8 @@ import { collection, doc, onSnapshot, setDoc } from "https://www.gstatic.com/fir
 protectAdminPage();
 mountAdminLogout(document.querySelector(".head"));
 
-const pricingKeys = ["BASE_FARE","PAID_PER_KM","PER_KM_RATE","MIN_PAYOUT","exceptionSettlementPenalty","DISTANCE_BONUS_AFTER_KM","DISTANCE_BONUS_PER_KM","NIGHT_BONUS_AMOUNT","PEAK_BONUS_AMOUNT","RAIN_BONUS_AMOUNT"];
-const pricingChecks = ["NIGHT_BONUS_ENABLED","PEAK_BONUS_ENABLED","RAIN_BONUS_ENABLED"];
+const pricingKeys = [];
+const pricingChecks = [];
 const money = amount => new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0}).format(Number(amount)||0);
 
 onSnapshot(doc(db,"settings","pricing"), snap => {
@@ -122,6 +113,12 @@ pricingForm.addEventListener("submit", async event => {
   pricingChecks.forEach(key => data[key] = document.getElementById(key).checked);
   data.gstPercent = Number(gstPercent.value) || 0;
   data.handlingCharge = Number(handlingCharge.value) || 0;
+  Object.assign(data, {
+    BASE_FARE:20, PAID_PER_KM:5, PER_KM_RATE:5, MIN_PAYOUT:20,
+    exceptionSettlementPenalty:0, NIGHT_BONUS_ENABLED:false,
+    PEAK_BONUS_ENABLED:false, RAIN_BONUS_ENABLED:false,
+    DISTANCE_BONUS_PER_KM:0
+  });
   await setDoc(doc(db,"settings","pricing"), data, { merge:true });
   alert("Payout logic saved.");
 });
