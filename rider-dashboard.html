@@ -906,9 +906,11 @@ function renderWallet(wallet = {}){
 function listenFinanceHistory(){
   if(!rider?.riderId) return;
   ledgerUnsub?.();
-  const q = query(collection(db,"riderLedger"), where("riderId","==",rider.riderId), orderBy("createdAt","desc"));
+  const q = query(collection(db,"riderLedger"), where("riderId","==",rider.riderId));
   ledgerUnsub = onSnapshot(q, snap => {
-    const rows = snap.docs.map(d => ({id:d.id,...d.data()}));
+    const rows = snap.docs
+      .map(d => ({id:d.id,...d.data()}))
+      .sort((a,b) => Number(b.createdAt?.toMillis?.() || 0) - Number(a.createdAt?.toMillis?.() || 0));
     const todayKey = new Date().toDateString();
     const todayTotal = rows.filter(x => x.type === "DELIVERY_EARNING" && x.createdAt?.toDate?.().toDateString() === todayKey).reduce((sum,x)=>sum+Number(x.amount||0),0);
     els.todayEarnings.textContent = formatCurrency(todayTotal);
