@@ -530,6 +530,16 @@ function logStructured(scope, detail = {}){
   if(localStorage.getItem("magneetozDebug") === "1") console.info(`[${scope}]`, detail);
 }
 
+function isCashCollectedOrder(order = {}){
+  return isCashPayment(order.paymentMethod || order.paymentMode)
+    && (
+      String(order.paymentStatus || "").toLowerCase() === "collected"
+      || !!order.cashCollectedAt
+      || String(order.settlementState || "").toUpperCase() === "CASH_COLLECTED"
+      || ["Cash Collected","Delivery Code Pending"].includes(normalizeStatus(order.status || order.orderStatus))
+    );
+}
+
 async function callRiderFunction(name, payload = {}, timeoutMs = 25000){
   const user = auth.currentUser;
   if(!user) throw new Error("Please login again.");
@@ -862,7 +872,7 @@ function renderOrders(){
           ${(order.status === "Reached Nearby" || order.status === "Collect Payment") && !prepaidOnline && !unpaidOnline ? `<button class="btn-green" onclick="markCashReceived('${order.id}')">Cash Received & Get Code</button><button class="btn-blue" onclick="collectOnline('${order.id}')">Online Payment</button>` : ""}
           ${(["Out For Delivery","Reached Nearby","Collect Payment"].includes(order.status)) && prepaidOnline && !convertedCodPaid && !prepaidOtpActive && !prepaidOtpDone ? `<button class="btn-blue" onclick="requestPrepaidDeliveryOtp('${order.id}')">Request Delivery OTP</button>` : ""}
           ${prepaidOtpActive ? `<button class="btn-green" onclick="completeWithCustomerCode('${order.id}')">Enter Delivery OTP</button>` : ""}
-          ${(["Cash Collected","Delivery Code Pending"].includes(order.status)) ? `<button class="btn-green" onclick="completeWithCustomerCode('${order.id}')">Delivered — Enter Customer Code</button>` : ""}
+          ${isCashCollectedOrder(order) ? `<button class="btn-green" onclick="deliverCashOrder('${order.id}')">Delivered — Get/Enter Customer Code</button>` : ""}
           ${canDeliver && order.status !== "Out For Delivery" && !isDelivered ? `<button class="btn-green" onclick="deliver('${order.id}', ${dist || 1})">Delivered</button>` : ""}
           ${isDelivered ? `<button class="btn-green" disabled>Delivered</button>` : ""}
         </div>
@@ -1575,6 +1585,25 @@ window.deliver = async function(orderId){
     stopRiderLocationSharing();
   }catch(error){
     alert(error?.message || "Unable to mark delivered.");
+  }
+};
+
+window.deliverCashOrder = async function(orderId){
+  try{
+    let order = findOrderById(orderId) || {};
+    if(!isCashCollectedOrder(order)){
+      alert("Cash must be collected before completing delivery.");
+      return;
+    }
+    if(!order.activeDeliveryCodeId || order.deliveryOtpStatus !== "active"){
+      await callRiderFunction("requestDeliveryExceptionCode", { orderId }, 20000);
+      alert("Customer code generated. Ask the customer to check their order tracking screen.");
+      const fresh = await getDoc(doc(db,"orders",orderId));
+      if(fresh.exists()) order = { id:fresh.id, ...fresh.data() };
+    }
+    await completeWithCustomerCode(orderId);
+  }catch(error){
+    alert(error?.message || "Unable to generate or verify the customer delivery code.");
   }
 };
 
