@@ -2440,6 +2440,7 @@ async function findCandidateRiders(order = {}) {
   const onlineRiders = ridersSnap.docs
     .map(item => ({ id: item.id, ...item.data() }))
     .filter(rider => rider.approved === true && rider.active !== false)
+    .filter(rider => Number(rider.companyDue || rider.pendingCashSubmission || 0) <= 300)
     .filter(rider => riderPresence(rider).available);
 
   if (!hasOrderLocation) return onlineRiders.map(rider => ({
@@ -3145,9 +3146,24 @@ exports.riderMarkCashReceived = onRequest(
           paymentStage: "Cash Collected",
           lastStatusUpdatedAt: FieldValue.serverTimestamp()
         }, { actor: rider.riderId, source: "riderMarkCashReceived" });
+        createCustomerDeliveryCode({
+          transaction,
+          orderRef,
+          order: {
+            ...order,
+            paymentStatus: "collected",
+            paymentMethod: "cod",
+            amountToCollect: 0,
+            cashSettlementPending: true,
+            settlementState: "CASH_COLLECTED"
+          },
+          orderId,
+          rider,
+          purpose: "cod_exception"
+        });
         addOrderAudit(transaction, orderId, "CASH_COLLECTED", { riderId: rider.riderId, amount: Number(order.totalAmount || order.finalAmount || 0) });
       });
-      return sendJson(res, 200, { ok: true });
+      return sendJson(res, 200, { ok: true, codeGenerated: true });
     } catch (error) {
       return sendJson(res, error.status || 500, { ok: false, error: error.message || "Cash collection failed" });
     }
@@ -4945,7 +4961,7 @@ exports.verifyRiderWalletSettlement = onRequest(
         const after = mergeWalletState(before, { companySettlementDue: -paid, totalCompanySettlements: paid });
         writeWalletAudit(transaction, { riderId:rider.riderId, type:"wallet_company_settlement_success", before, after, deltas:{companySettlementDue:-paid,totalCompanySettlements:paid}, metadata:{paymentSessionId,razorpayPaymentId:razorpay_payment_id} });
         transaction.set(db.collection("riders").doc(rider.riderId), {
-          companyDue: FieldValue.increment(-paid), pendingCashSubmission: FieldValue.increment(-paid),
+          companyDue: after.companySettlementDue, pendingCashSubmission: after.companySettlementDue,
           lastCodSettlementAt: FieldValue.serverTimestamp()
         }, { merge:true });
         transaction.set(db.collection("riderLedger").doc(`settlement_success_${paymentSessionId}`), {

@@ -1,6 +1,12 @@
 {
-  "/robots.txt/route": "/robots.txt",
-  "/sitemap.xml/route": "/sitemap.xml",
   "/_not-found/page": "/_not-found",
-  "/page": "/"
+  "/sitemap.xml/route": "/sitemap.xml",
+  "/robots.txt/route": "/robots.txt",
+  "/page": "/",
+  "/faq/page": "/faq",
+  "/delivery/[slug]/page": "/delivery/[slug]",
+  "/reviews/page": "/reviews",
+  "/menu/page": "/menu",
+  "/about/page": "/about",
+  "/pizza/[slug]/page": "/pizza/[slug]"
 }

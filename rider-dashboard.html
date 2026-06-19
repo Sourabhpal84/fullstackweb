@@ -726,6 +726,7 @@ function assignedToMe(order){
 
 function requestedForMe(order){
   if(["Delivered","Cancelled","Rejected","Failed"].includes(normalizeStatus(order.status || order.orderStatus))) return false;
+  if(Number(currentWallet.companySettlementDue || rider?.companyDue || rider?.pendingCashSubmission || 0) > 300) return false;
   const request = order.riderRequest || {};
   const candidates = request.candidateRiderIds || [];
   const declined = request.declinedRiderIds || [];
@@ -858,10 +859,9 @@ function renderOrders(){
           ${group === "Assigned" ? `<button class="btn-blue" onclick="pickupOrder('${order.id}')">Picked Up</button>` : ""}
           ${order.status === "Picked Up" ? `<button class="btn-blue" onclick="startDelivery('${order.id}')">Out For Delivery</button>` : ""}
           ${order.status === "Out For Delivery" ? `<button class="btn-green" onclick="reachNearby('${order.id}')">Reached Nearby</button>` : ""}
-          ${(order.status === "Reached Nearby" || order.status === "Collect Payment") && !prepaidOnline && !unpaidOnline ? `<button class="btn-soft" onclick="markCashReceived('${order.id}')">Cash Received</button><button class="btn-blue" onclick="collectOnline('${order.id}')">Online Payment</button>` : ""}
+          ${(order.status === "Reached Nearby" || order.status === "Collect Payment") && !prepaidOnline && !unpaidOnline ? `<button class="btn-green" onclick="markCashReceived('${order.id}')">Cash Received & Get Code</button><button class="btn-blue" onclick="collectOnline('${order.id}')">Online Payment</button>` : ""}
           ${(["Out For Delivery","Reached Nearby","Collect Payment"].includes(order.status)) && prepaidOnline && !convertedCodPaid && !prepaidOtpActive && !prepaidOtpDone ? `<button class="btn-blue" onclick="requestPrepaidDeliveryOtp('${order.id}')">Request Delivery OTP</button>` : ""}
           ${prepaidOtpActive ? `<button class="btn-green" onclick="completeWithCustomerCode('${order.id}')">Enter Delivery OTP</button>` : ""}
-          ${isCashOrder && String(order.paymentStatus || "").toLowerCase() === "collected" && !cashSettlementDone ? `<button class="btn-blue" onclick="payCompanyAndDeliver('${order.id}', ${dist || 1}, this)">Settle Company</button><button class="btn-soft" onclick="requestExceptionCode('${order.id}')">Use Customer Code</button>` : ""}
           ${order.status === "Delivery Code Pending" ? `<button class="btn-green" onclick="completeWithCustomerCode('${order.id}')">Enter Customer Code</button>` : ""}
           ${canDeliver && order.status !== "Out For Delivery" && !isDelivered ? `<button class="btn-green" onclick="deliver('${order.id}', ${dist || 1})">Delivered</button>` : ""}
           ${isDelivered ? `<button class="btn-green" disabled>Delivered</button>` : ""}
@@ -887,6 +887,7 @@ function renderWallet(wallet = {}){
   const settleButton = document.getElementById("settleCompanyWallet");
   settleButton.disabled = companyDue <= 0;
   settleButton.textContent = companyDue > 0 ? `Settle ${formatCurrency(companyDue)}` : "No Company Due";
+  renderOrders();
 }
 
 function listenFinanceHistory(){
@@ -1317,7 +1318,8 @@ window.reachNearby = async function(orderId){
 
 window.markCashReceived = async function(orderId){
   try{
-    await callRiderFunction("riderMarkCashReceived", { orderId });
+    const result = await callRiderFunction("riderMarkCashReceived", { orderId });
+    if(result.codeGenerated) alert("Cash recorded. Ask customer for the 4 digit delivery code, then complete delivery.");
   }catch(error){
     alert(error?.message || "Unable to record cash collection.");
   }

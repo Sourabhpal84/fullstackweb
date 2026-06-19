@@ -16,6 +16,7 @@ import { AuthModal } from "@/components/auth/auth-modal";
 import { CheckoutPersistence } from "@/components/home/checkout-persistence";
 import { calculateRouteDistance, DEFAULT_MAX_DISTANCE_KM, getBrowserLocation } from "@/lib/delivery";
 import { useCartStore } from "@/lib/cart-store";
+import { GeoSections } from "@/components/home/geo-sections";
 
 export function HomeExperience() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -133,6 +134,7 @@ export function HomeExperience() {
         />
         <SmartMenuTools query={searchQuery} onQueryChange={setSearchQuery} intent={smartIntent} onIntentChange={setSmartIntent} />
         <MenuGrid dishes={filteredDishes} />
+        <GeoSections />
         <section className="grid gap-3 py-8 md:grid-cols-3" aria-labelledby="faq-title">
           <article className="rounded-3xl border border-white/10 bg-white/[.06] p-5">
             <span className="text-xs font-black uppercase text-cyan-100">FAQ</span>

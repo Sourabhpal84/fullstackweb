@@ -25,7 +25,7 @@ export const business = {
     "https://www.instagram.com/magneetoz",
     "https://www.facebook.com/magneetoz"
   ],
-  cuisines: ["Pizza", "Fast Food", "Burgers", "Combos"],
+  cuisines: ["Pizza", "Vegetarian Food", "Fast Food"],
   openingHours: ["Mo-Su 10:00-23:00"]
 };
 
@@ -74,7 +74,15 @@ export const publicRoutes = [
   }
 ];
 
-export function pageMetadata(route = publicRoutes[0]): Metadata {
+type SeoRoute = {
+  path: string;
+  title: string;
+  description: string;
+  priority: number;
+  changeFrequency: "always" | "hourly" | "daily" | "weekly" | "monthly" | "yearly" | "never";
+};
+
+export function pageMetadata(route: SeoRoute = publicRoutes[0]): Metadata {
   const canonical = new URL(route.path, siteUrl).toString();
   return {
     metadataBase: new URL(siteUrl),
@@ -154,12 +162,7 @@ export function structuredDataGraph(route = publicRoutes[0]) {
         geo: { "@type": "GeoCoordinates", ...business.geo },
         openingHours: business.openingHours,
         areaServed: { "@type": "City", name: "Greater Noida" },
-        sameAs: business.sameAs,
-        aggregateRating: {
-          "@type": "AggregateRating",
-          ratingValue: "4.8",
-          reviewCount: "120"
-        }
+        sameAs: business.sameAs
       },
       {
         "@type": "WebSite",
@@ -212,26 +215,6 @@ export function structuredDataGraph(route = publicRoutes[0]) {
             acceptedAnswer: { "@type": "Answer", text: "Yes. MAGNEETOZ supports Cash on Delivery and secure online payments where available." }
           }
         ]
-      },
-      {
-        "@type": "Product",
-        "@id": `${siteUrl}/#pizza-delivery`,
-        name: "MAGNEETOZ Pizza Delivery",
-        image: business.logo,
-        description: "Fresh pizza and fast food delivery service in Greater Noida.",
-        brand: { "@type": "Brand", name: business.name },
-        aggregateRating: {
-          "@type": "AggregateRating",
-          ratingValue: "4.8",
-          reviewCount: "120"
-        },
-        offers: {
-          "@type": "AggregateOffer",
-          priceCurrency: "INR",
-          lowPrice: "49",
-          highPrice: "999",
-          availability: "https://schema.org/InStock"
-        }
       }
     ]
   };
