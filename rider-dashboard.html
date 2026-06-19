@@ -303,6 +303,7 @@ body{
 
   <section class="wallet-grid">
     <div class="glass wallet-card"><span>Today earnings</span><b id="todayEarnings">₹0</b></div>
+    <div class="glass wallet-card"><span>Last Earning</span><b id="lastEarning">₹0</b><small id="lastEarningOrder" style="color:var(--muted)">No delivery yet</small></div>
     <div class="glass wallet-card"><span>Weekly earnings</span><b id="weeklyEarnings">₹0</b></div>
     <div class="glass wallet-card"><span>Monthly earnings</span><b id="monthlyEarnings">₹0</b></div>
     <div class="glass wallet-card"><span>Withdrawable Balance</span><b id="pendingSettlement">₹0</b></div>
@@ -313,6 +314,14 @@ body{
     <div class="glass wallet-card"><span>Net Settlement</span><b id="netSettlement">₹0</b></div>
     <div class="glass wallet-card"><span>Outstanding Due</span><b id="outstandingDue">₹0</b></div>
     <div class="glass wallet-card"><span>Completed payouts</span><b id="completedSettlements">₹0</b></div>
+  </section>
+
+  <section class="glass partner-panel">
+    <div class="panel-head">
+      <div><h3>Company Settlement</h3><p><b id="settlementDueText">₹0</b> company ko dena hai. Earnings adjustment ke baad bacha hua amount Razorpay se pay karein.</p></div>
+      <button class="primary-action" id="settleCompanyWallet">Settle Company</button>
+    </div>
+    <div class="history-list" id="recentFinanceHistory"></div>
   </section>
 
   <section class="glass partner-panel">
@@ -382,6 +391,8 @@ let requestOrdersUnsub = null;
 let directRequestsUnsub = null;
 let payoutUnsub = null;
 let walletUnsub = null;
+let ledgerUnsub = null;
+let settlementUnsub = null;
 let currentWallet = {};
 let riderAuthNullTimer = null;
 let riderHeartbeatTimer = null;
@@ -455,6 +466,7 @@ const els = {
   outstandingDue:document.getElementById("outstandingDue"),
   completedSettlements:document.getElementById("completedSettlements"),
   payoutHistory:document.getElementById("payoutHistory"),
+  lastEarning:document.getElementById("lastEarning"),
   count:document.getElementById("orderCount"),
   title:document.getElementById("listTitle")
 };
@@ -879,6 +891,28 @@ function renderWallet(wallet = {}){
   els.pendingSettlement.textContent = formatCurrency(Math.max(0, Number(wallet.withdrawableBalance ?? wallet.walletBalance ?? netBalance)));
   els.netSettlement.textContent = formatCurrency(netBalance);
   els.outstandingDue.textContent = formatCurrency(Math.max(0, Number(wallet.outstandingDue ?? -netBalance)));
+  document.getElementById("settlementDueText").textContent = formatCurrency(companyDue);
+  const settleButton = document.getElementById("settleCompanyWallet");
+  settleButton.disabled = companyDue <= 0;
+  settleButton.textContent = companyDue > 0 ? `Settle ${formatCurrency(companyDue)}` : "No Company Due";
+}
+
+function listenFinanceHistory(){
+  if(!rider?.riderId) return;
+  ledgerUnsub?.();
+  const q = query(collection(db,"riderLedger"), where("riderId","==",rider.riderId), orderBy("createdAt","desc"));
+  ledgerUnsub = onSnapshot(q, snap => {
+    const rows = snap.docs.map(d => ({id:d.id,...d.data()}));
+    const todayKey = new Date().toDateString();
+    const todayTotal = rows.filter(x => x.type === "DELIVERY_EARNING" && x.createdAt?.toDate?.().toDateString() === todayKey).reduce((sum,x)=>sum+Number(x.amount||0),0);
+    els.todayEarnings.textContent = formatCurrency(todayTotal);
+    const last = rows.find(x => x.type === "DELIVERY_EARNING");
+    els.lastEarning.textContent = formatCurrency(last?.amount || 0);
+    document.getElementById("lastEarningOrder").textContent = last ? `Order #${last.orderId || ""}` : "No delivery yet";
+    document.getElementById("recentFinanceHistory").innerHTML = rows.slice(0,5).map(x => `
+      <div class="history-item"><div><b>${String(x.type||"Transaction").replaceAll("_"," ")}</b><br><span>${x.description||""}</span></div><div><b>${x.direction==="debit"?"-":x.direction==="credit"?"+":""}${formatCurrency(x.amount)}</b><br><span>${x.status||""}</span></div></div>
+    `).join("") || `<div class="empty">No financial history yet.</div>`;
+  });
 }
 
 function listenWallet(){
@@ -986,6 +1020,7 @@ function enterDashboard(){
   listenOrders();
   listenPayoutHistory();
   listenWallet();
+  listenFinanceHistory();
   if(rider.online || rider.isOnline){
     startRiderHeartbeat();
     startRiderLocationSharing();
@@ -1010,6 +1045,45 @@ async function getRiderLocation(){
     );
   });
 }
+
+document.getElementById("settleCompanyWallet").addEventListener("click", async function(){
+  const due = Number(currentWallet.companySettlementDue || 0);
+  if(due <= 0) return alert("No company due remaining.");
+  if(typeof Razorpay === "undefined") return alert("Razorpay is loading. Please try again.");
+  if(riderRazorpayInFlight) return;
+  riderRazorpayInFlight = true;
+  this.disabled = true;
+  this.textContent = "Opening Razorpay...";
+  try{
+    const session = await callRiderFunction("createRiderWalletSettlement", {}, 20000);
+    const rzp = new Razorpay({
+      key:session.keyId || RAZORPAY_KEY_ID,
+      amount:Math.round(Number(session.amount)*100), currency:"INR",
+      name:"Magneetoz", description:"Company wallet settlement",
+      order_id:session.razorpayOrderId,
+      method:{upi:true,card:true,netbanking:true,wallet:true},
+      prefill:{name:rider.name||"",contact:String(rider.phone||"").replace(/\D/g,"").slice(-10)},
+      handler:async response=>{
+        try{
+          await callRiderFunction("verifyRiderWalletSettlement", {
+            paymentSessionId:session.paymentSessionId,
+            razorpay_order_id:response.razorpay_order_id,
+            razorpay_payment_id:response.razorpay_payment_id,
+            razorpay_signature:response.razorpay_signature
+          },25000);
+          alert("Company settlement successful. Wallet and history updated.");
+        }catch(error){alert(error?.message||"Payment received but verification failed.");}
+        finally{riderRazorpayInFlight=false;this.disabled=false;}
+      },
+      modal:{ondismiss:()=>{riderRazorpayInFlight=false;this.disabled=false;renderWallet(currentWallet);}}
+    });
+    rzp.on("payment.failed",response=>{riderRazorpayInFlight=false;this.disabled=false;renderWallet(currentWallet);alert(response?.error?.description||"Settlement failed. Please retry.");});
+    rzp.open();
+  }catch(error){
+    riderRazorpayInFlight=false;this.disabled=false;renderWallet(currentWallet);
+    alert(error?.message||"Unable to start settlement.");
+  }
+});
 
 function activeDeliveryOrder(){
   const activeStatuses = ["Rider Accepted","Picked Up","Out For Delivery","Reached Nearby","Collect Payment","Cash Collected","Payment Settled","Delivery Code Pending","Payment Completed"];
@@ -1571,6 +1645,7 @@ window.addEventListener("pagehide", () => {
   directRequestsUnsub?.();
   payoutUnsub?.();
   walletUnsub?.();
+  ledgerUnsub?.();
 });
 
 await loadPricing();
@@ -1588,6 +1663,7 @@ onAuthStateChanged(auth, (user) => {
       directRequestsUnsub?.();
       payoutUnsub?.();
       walletUnsub?.();
+      ledgerUnsub?.();
       redirectLogin();
     }, 2500);
     return;

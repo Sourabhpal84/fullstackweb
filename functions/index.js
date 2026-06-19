@@ -4761,6 +4761,85 @@ exports.requestRiderWithdrawal = onRequest(
   }
 );
 
+exports.createRiderWalletSettlement = onRequest(
+  { region: "asia-south1", cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") return sendJson(res, 204, {});
+    try {
+      const user = await requireAuth(req);
+      const rider = await riderProfileForUser(user.uid);
+      const walletSnap = await db.collection("riderWallet").doc(rider.riderId).get();
+      const wallet = netWalletState(walletSnap.exists ? walletSnap.data() : rider);
+      const amount = roundMoney(wallet.companySettlementDue);
+      if (amount <= 0) throw Object.assign(new Error("No company due remaining"), { status: 409 });
+      const sessionRef = db.collection("riderPaymentSessions").doc();
+      const razorpayOrder = await getRazorpay().orders.create({
+        amount: Math.round(amount * 100), currency: "INR", receipt: sessionRef.id.slice(0, 40),
+        notes: { riderId: rider.riderId, type: "wallet_company_settlement" }
+      });
+      await sessionRef.set({
+        riderId: rider.riderId, type: "wallet_company_settlement", amount,
+        amountPaise: Math.round(amount * 100), razorpayOrderId: razorpayOrder.id,
+        status: "created", createdAt: FieldValue.serverTimestamp()
+      });
+      await db.collection("riderSettlements").doc(sessionRef.id).set({
+        settlementId: sessionRef.id, riderId: rider.riderId, amount,
+        razorpayOrderId: razorpayOrder.id, status: "payment_pending",
+        type: "wallet_company_settlement", createdAt: FieldValue.serverTimestamp()
+      });
+      sendJson(res, 200, { ok: true, paymentSessionId: sessionRef.id, razorpayOrderId: razorpayOrder.id, amount, keyId: env("RAZORPAY_KEY_ID") });
+    } catch (error) { sendJson(res, error.status || 500, { error: error.message }); }
+  }
+);
+
+exports.verifyRiderWalletSettlement = onRequest(
+  { region: "asia-south1", cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") return sendJson(res, 204, {});
+    try {
+      const user = await requireAuth(req);
+      const rider = await riderProfileForUser(user.uid);
+      const { paymentSessionId, razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body || {};
+      if (!verifyCheckoutSignature({ razorpayOrderId: razorpay_order_id, razorpayPaymentId: razorpay_payment_id, razorpaySignature: razorpay_signature })) {
+        throw Object.assign(new Error("Invalid Razorpay signature"), { status: 401 });
+      }
+      const sessionRef = db.collection("riderPaymentSessions").doc(String(paymentSessionId || ""));
+      const payment = await getRazorpay().payments.fetch(razorpay_payment_id);
+      if (payment.status === "authorized") await getRazorpay().payments.capture(razorpay_payment_id, Number(payment.amount), "INR");
+      await db.runTransaction(async transaction => {
+        const sessionSnap = await transaction.get(sessionRef);
+        if (!sessionSnap.exists) throw Object.assign(new Error("Settlement session not found"), { status: 404 });
+        const session = sessionSnap.data();
+        if (session.status === "verified") return;
+        if (session.riderId !== rider.riderId || session.type !== "wallet_company_settlement" || session.razorpayOrderId !== razorpay_order_id) throw Object.assign(new Error("Settlement session mismatch"), { status: 403 });
+        if (payment.order_id !== razorpay_order_id || Number(payment.amount) !== Number(session.amountPaise) || !["captured","authorized"].includes(payment.status)) throw Object.assign(new Error("Payment is not verified"), { status: 402 });
+        const walletRef = db.collection("riderWallet").doc(rider.riderId);
+        const walletSnap = await transaction.get(walletRef);
+        const before = netWalletState(walletSnap.exists ? walletSnap.data() : {});
+        const paid = Math.min(Number(session.amount || 0), before.companySettlementDue);
+        const after = mergeWalletState(before, { companySettlementDue: -paid, totalCompanySettlements: paid });
+        writeWalletAudit(transaction, { riderId:rider.riderId, type:"wallet_company_settlement_success", before, after, deltas:{companySettlementDue:-paid,totalCompanySettlements:paid}, metadata:{paymentSessionId,razorpayPaymentId:razorpay_payment_id} });
+        transaction.set(db.collection("riders").doc(rider.riderId), {
+          companyDue: FieldValue.increment(-paid), pendingCashSubmission: FieldValue.increment(-paid),
+          lastCodSettlementAt: FieldValue.serverTimestamp()
+        }, { merge:true });
+        transaction.set(db.collection("riderLedger").doc(`settlement_success_${paymentSessionId}`), {
+          ledgerId:`settlement_success_${paymentSessionId}`, riderId:rider.riderId,
+          settlementId:paymentSessionId, type:"COMPANY_SETTLEMENT_SUCCESS", amount:paid,
+          direction:"debit", status:"success", description:"Company settlement paid through Razorpay",
+          metadata:{razorpayPaymentId:razorpay_payment_id,razorpayOrderId:razorpay_order_id}, createdAt:FieldValue.serverTimestamp()
+        }, { merge:true });
+        transaction.set(db.collection("riderSettlements").doc(String(paymentSessionId)), {
+          status:"complete", amount:paid, razorpayPaymentId:razorpay_payment_id,
+          paidAt:FieldValue.serverTimestamp(), updatedAt:FieldValue.serverTimestamp()
+        }, { merge:true });
+        transaction.set(sessionRef, { status:"verified", razorpayPaymentId:razorpay_payment_id, verifiedAt:FieldValue.serverTimestamp() }, { merge:true });
+      });
+      sendJson(res, 200, { ok:true });
+    } catch (error) { sendJson(res, error.status || 500, { error:error.message }); }
+  }
+);
+
 exports.adminProcessRiderWithdrawal = onRequest(
   { region: "asia-south1", cors: true },
   async (req, res) => {
