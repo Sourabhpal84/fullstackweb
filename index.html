@@ -754,58 +754,6 @@ Verify OTP
       </section>
 
       <section class="checkout-details-column" aria-label="Delivery and checkout details">
-      <section class="coupon-box" aria-label="Coupons">
-        <div class="coupon-entry">
-          <input
-            type="text"
-            id="couponInput"
-            placeholder="Enter Coupon"
-            autocomplete="off" />
-          <button type="button" onclick="applyCoupon()">Apply</button>
-        </div>
-        <div id="appliedCoupon" class="applied-coupon"></div>
-        <div id="availableCoupons" class="available-coupons"></div>
-        <div id="cartPriceBreakdown" class="cart-price-breakdown"></div>
-        <section class="wallet-redeem-box" id="walletRedeemBox" hidden>
-          <div><strong>🍕 Pizza Points</strong><span id="walletBalanceText">0 points available</span></div>
-          <button type="button" id="walletToggleBtn">Use points</button>
-          <small id="walletRedeemHint">Use up to 20% on Cash on Delivery orders.</small>
-        </section>
-      </section>
-      </section>
-      </div>
-
-      <!-- ORDER -->
-
-      <button
-        type="button"
-        aria-label="Place order"
-        onclick="placeOrder()">
-
-        Continue to delivery details
-      </button>
-
-    </aside>
-
-    <!-- DELIVERY DETAILS -->
-
-    <div
-      id="deliveryDetailsPopup"
-      class="checkout-step-popup"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="deliveryDetailsTitle"
-      style="display:none;">
-
-      <div class="checkout-step-card">
-      <div class="checkout-step-head">
-        <div>
-          <small>Step 2 of 3</small>
-          <h3 id="deliveryDetailsTitle">Delivery details</h3>
-        </div>
-        <button type="button" onclick="closeDeliveryDetails()">×</button>
-      </div>
-
       <!-- CUSTOMER DETAILS -->
 
       <section class="saved-address-box" aria-label="Saved delivery address">
@@ -852,11 +800,39 @@ Verify OTP
 
       <input type="hidden" id="customerLat">
       <input type="hidden" id="customerLng">
-      <button type="button" class="checkout-step-continue" onclick="continueFromDeliveryDetails()">
-        Continue to payment
-      </button>
+
+      <section class="coupon-box" aria-label="Coupons">
+        <div class="coupon-entry">
+          <input
+            type="text"
+            id="couponInput"
+            placeholder="Enter Coupon"
+            autocomplete="off" />
+          <button type="button" onclick="applyCoupon()">Apply</button>
+        </div>
+        <div id="appliedCoupon" class="applied-coupon"></div>
+        <div id="availableCoupons" class="available-coupons"></div>
+        <div id="cartPriceBreakdown" class="cart-price-breakdown"></div>
+        <section class="wallet-redeem-box" id="walletRedeemBox" hidden>
+          <div><strong>🍕 Pizza Points</strong><span id="walletBalanceText">0 points available</span></div>
+          <button type="button" id="walletToggleBtn">Use points</button>
+          <small id="walletRedeemHint">Use up to 20% on Cash on Delivery orders.</small>
+        </section>
+      </section>
+      </section>
       </div>
-    </div>
+
+      <!-- ORDER -->
+
+      <button
+        type="button"
+        aria-label="Place order"
+        onclick="placeOrder()">
+
+        Place Order 🍕
+      </button>
+
+    </aside>
 
     <!-- ORDER SUCCESS -->
 

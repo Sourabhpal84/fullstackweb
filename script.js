@@ -3976,22 +3976,6 @@ function promptGuestLoginAfterCartAction(){
   }, 280);
 }
 
-function openDeliveryDetails(){
-  toggleCart(false);
-  const popup = document.getElementById("deliveryDetailsPopup");
-  if(popup) popup.style.display = "flex";
-}
-
-function closeDeliveryDetails(){
-  const popup = document.getElementById("deliveryDetailsPopup");
-  if(popup) popup.style.display = "none";
-}
-
-window.closeDeliveryDetails = closeDeliveryDetails;
-window.continueFromDeliveryDetails = function(){
-  placeOrder({ deliveryDetailsConfirmed:true });
-};
-
 function addToCartFull(btn, name){
   if(restaurantUnavailable()){
     alert(restaurantState.unavailableMessage || "Restaurant currently closed");
@@ -4144,7 +4128,7 @@ summaryHint.style.color = "#ff4d00";
 
 /* ================= ORDER ================= */
 
-async function placeOrder(options = {}){
+async function placeOrder(){
 console.time("PLACE_ORDER_TOTAL");
 perfStart("placeOrder");
 const placeBtn = document.querySelector('[aria-label="Place order"]');
@@ -4162,11 +4146,6 @@ return;
 if (cart.length === 0) {
 alert("Cart empty");
 return;
-}
-
-if(options.deliveryDetailsConfirmed !== true){
-  openDeliveryDetails();
-  return;
 }
 
 persistGuestState();
@@ -4229,7 +4208,6 @@ return;
 
 await timedStep("placeOrder:prepareOrderSummary", () => prepareOrderSummary({ skipDistanceRefresh:true }));
 
-closeDeliveryDetails();
 toggleCart(false);
 
 const paymentPopup = document.getElementById("paymentMethodPopup");
