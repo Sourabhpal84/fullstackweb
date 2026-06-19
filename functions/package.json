@@ -6,7 +6,7 @@
   },
   "main": "index.js",
   "scripts": {
-    "test": "node test/order-state-machine.test.js"
+    "test": "node test/order-state-machine.test.js && node test/delivery-pricing.test.js"
   },
   "dependencies": {
     "dotenv": "^17.4.2",

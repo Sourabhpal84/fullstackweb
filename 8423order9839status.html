@@ -521,6 +521,14 @@ window.loadOrders = function(filter) {
           <div class="info-row">🏠 ${d.address}</div>
           <div class="items-list">${d.items.map(i => `• ${i.name} (x${i.qty})`).join('<br>')}</div>
           <div style="font-weight:700; color:var(--accent);">Total: ${formatCurrency(d.totalAmount)}</div>
+          <div class="assigned-rider">
+            Order value: ${formatCurrency(d.subtotalAmount || d.subtotal || 0)}<br>
+            Distance: ${Number(d.distanceKm || d.deliveryDistance || 0).toFixed(1)} KM<br>
+            Delivery fee: ${Number(d.deliveryFee ?? d.deliveryCharge ?? 0) > 0 ? formatCurrency(d.deliveryFee ?? d.deliveryCharge) : "FREE"}<br>
+            Free delivery: ${(d.freeDeliveryApplied ?? d.freeDelivery) ? "Yes" : "No"}<br>
+            Threshold used: ${formatCurrency(d.freeDeliveryThreshold || 0)}<br>
+            Serviceable: ${d.deliveryServiceable === false ? "No" : "Yes"}
+          </div>
           <div class="assigned-rider">Payment: ${d.paymentStatus || "pending"} ${d.paymentMethod ? `(${d.paymentMethod})` : ""}<br>Amount to collect: ${formatCurrency(d.amountToCollect ?? d.totalAmount ?? 0)}<br>Coupon: ${d.couponCode || "None"} ${d.couponDiscount ? `- ${formatCurrency(d.couponDiscount)}` : ""}</div>
           ${d.riderName || d.assignedRider?.name ? `<div class="assigned-rider">Rider: ${d.riderName || d.assignedRider.name}<br>${d.riderPhone || d.assignedRider?.phone || ""}</div>` : ""}
           <div class="btn-group status-grid">

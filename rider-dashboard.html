@@ -845,6 +845,9 @@ function renderOrders(){
           <div class="detail"><span>Payment Status</span><b>${prepaidOnline ? "Payment Received ✅" : unpaidOnline ? "Online Payment Pending" : (order.paymentStatus || "Pending")}</b></div>
           <div class="detail"><span>Amount To Collect</span><b>${formatCurrency(amountToCollect)}</b></div>
           <div class="detail"><span>Total</span><b>${formatCurrency(order.totalAmount || order.total)}</b></div>
+          <div class="detail"><span>Order Value</span><b>${formatCurrency(order.subtotalAmount || order.subtotal || 0)}</b></div>
+          <div class="detail"><span>Delivery Fee</span><b>${Number(order.deliveryFee ?? order.deliveryCharge ?? 0) > 0 ? formatCurrency(order.deliveryFee ?? order.deliveryCharge) : "FREE"}</b></div>
+          <div class="detail"><span>Distance</span><b>${Number(order.distanceKm || order.deliveryDistance || 0).toFixed(1)} KM</b></div>
           ${isCashOrder && (cashSettlementDone || settlementAdjusted) ? `<div class="detail"><span>Payout Adjusted</span><b>${formatCurrency(settlementAdjusted)}</b></div><div class="detail"><span>Company Paid</span><b>${formatCurrency(settlementNetPaid)}</b></div>` : ""}
         </div>
         <div class="actions">

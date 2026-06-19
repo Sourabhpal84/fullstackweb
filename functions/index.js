@@ -20,6 +20,10 @@ const {
   buildPaymentUpdate
 } = require("./services/paymentService");
 const growth = require("./services/growthService");
+const {
+  normalizeDeliverySettings,
+  calculateDeliveryPricing
+} = require("./services/deliveryPricing");
 
 admin.initializeApp();
 
@@ -462,38 +466,6 @@ function cartSubtotalFromSnapshot(items = []) {
   return roundMoney((Array.isArray(items) ? items : []).reduce((sum, item) => sum + Number(item.price || 0), 0));
 }
 
-function normalizedDeliverySettings(data = {}) {
-  const maxDistance = Math.max(0.1, Number(data.maxDeliveryDistanceKm || data.maxDistance || 6));
-  return {
-    enabled: data.freeDeliveryEnabled !== false,
-    perKmCharge: Math.max(0, Number(data.perKmCharge ?? data.deliveryChargePerKm ?? 6)),
-    maxDistance,
-    zones: [
-      { maxKm: 2, threshold: Math.max(0, Number(data.zone1Threshold ?? 149)) },
-      { maxKm: 3, threshold: Math.max(0, Number(data.zone2Threshold ?? 199)) },
-      { maxKm: 4, threshold: Math.max(0, Number(data.zone3Threshold ?? 249)) },
-      { maxKm: maxDistance, threshold: Math.max(0, Number(data.zone4Threshold ?? 299)) }
-    ]
-  };
-}
-
-function calculateDeliveryPricing({ distanceKm, subtotal, settings }) {
-  const distance = Math.max(0, Number(distanceKm) || 0);
-  if (!distance || distance > settings.maxDistance) {
-    throw Object.assign(new Error("Sorry, we currently deliver only within 6 KM of our outlet."), { status: 409 });
-  }
-  const zone = settings.zones.find(item => distance <= item.maxKm) || settings.zones.at(-1);
-  const baseCharge = roundMoney(distance * settings.perKmCharge);
-  const freeDelivery = settings.enabled && subtotal >= zone.threshold;
-  return {
-    threshold: zone.threshold,
-    baseCharge,
-    deliveryCharge: freeDelivery ? 0 : baseCharge,
-    freeDeliveryDiscount: freeDelivery ? baseCharge : 0,
-    freeDelivery
-  };
-}
-
 async function secureDeliveryDraft(draft, cartSnapshot) {
   const subtotal = cartSubtotalFromSnapshot(cartSnapshot);
   if (Math.abs(subtotal - Number(draft.subtotalAmount || draft.subtotal || 0)) > 0.01) {
@@ -507,24 +479,40 @@ async function secureDeliveryDraft(draft, cartSnapshot) {
     db.collection("settings").doc("pricing").get(),
     calculateGoogleRouteDistance({ origin: draft.restaurantLocation, destination: draft.location })
   ]);
-  const settings = normalizedDeliverySettings(settingsSnap.exists ? settingsSnap.data() : {});
+  const settings = normalizeDeliverySettings(settingsSnap.exists ? settingsSnap.data() : {});
   const delivery = calculateDeliveryPricing({ distanceKm: route.distanceKm, subtotal, settings });
+  if (!delivery.minimumOrderMet) {
+    throw Object.assign(new Error("Minimum order value is ₹99."), { status: 409 });
+  }
+  if (!delivery.deliveryServiceable) {
+    throw Object.assign(new Error("Sorry, we are not available at your location yet."), { status: 409 });
+  }
   const pricing = pricingSnap.exists ? pricingSnap.data() : {};
   const gstPercent = Math.max(0, Number(pricing.gstPercent || 0));
   const handlingCharge = Math.max(0, roundMoney(pricing.handlingCharge || 0));
   const couponDiscount = Math.max(0, Math.min(subtotal, Number(draft.couponDiscount || 0)));
   const taxableAmount = Math.max(0, subtotal - couponDiscount);
   const gstAmount = Math.round(taxableAmount * gstPercent / 100);
-  const total = Math.max(0, roundMoney(taxableAmount + gstAmount + handlingCharge + delivery.deliveryCharge));
+  const total = Math.max(0, roundMoney(taxableAmount + gstAmount + handlingCharge + delivery.deliveryFee));
   return {
     ...draft, subtotalAmount: subtotal, subtotal,
     deliveryDistance: route.distanceKm, actualRoadDistance: route.distanceKm,
     distanceSource: route.source || "google_routes_backend",
-    deliveryCharge: delivery.deliveryCharge, originalDeliveryCharge: delivery.baseCharge,
-    freeDeliveryDiscount: delivery.freeDeliveryDiscount, freeDelivery: delivery.freeDelivery,
-    freeDeliveryThreshold: delivery.threshold, gstPercent, gstAmount, handlingCharge,
+    distanceKm: route.distanceKm,
+    deliveryFee: delivery.deliveryFee,
+    deliveryCharge: delivery.deliveryFee,
+    originalDeliveryCharge: settings.flatDeliveryFee,
+    freeDeliveryDiscount: delivery.freeDeliveryApplied ? settings.flatDeliveryFee : 0,
+    freeDelivery: delivery.freeDeliveryApplied,
+    freeDeliveryApplied: delivery.freeDeliveryApplied,
+    freeDeliveryThreshold: delivery.freeDeliveryThreshold,
+    amountNeededForFreeDelivery: delivery.amountNeededForFreeDelivery,
+    deliveryServiceable: delivery.deliveryServiceable,
+    minimumOrderValue: delivery.minimumOrderValue,
+    deliveryRuleVersion: delivery.deliveryRuleVersion,
+    gstPercent, gstAmount, handlingCharge,
     totalAmount: total, grandTotal: total, finalAmount: total,
-    maxDeliveryDistance: settings.maxDistance
+    maxDeliveryDistance: settings.maxDistanceKm
   };
 }
 
@@ -550,6 +538,7 @@ function compactOrderDraft(draft = {}, cartSnapshot = []) {
     estimatedTravelTime: compactText(draft.estimatedTravelTime, 80),
     distanceSource: compactText(draft.distanceSource, 80),
     deliveryCharge: Number(draft.deliveryCharge || 0),
+    deliveryFee: Number(draft.deliveryFee ?? draft.deliveryCharge ?? 0),
     originalDeliveryCharge: Number(draft.originalDeliveryCharge || 0),
     couponId: compactText(draft.couponId, 120),
     couponCode: compactText(draft.couponCode, 80),
@@ -558,6 +547,13 @@ function compactOrderDraft(draft = {}, cartSnapshot = []) {
     couponDiscount: Number(draft.couponDiscount || 0),
     freeDeliveryDiscount: Number(draft.freeDeliveryDiscount || 0),
     freeDelivery: Boolean(draft.freeDelivery),
+    freeDeliveryApplied: Boolean(draft.freeDeliveryApplied ?? draft.freeDelivery),
+    freeDeliveryThreshold: Number(draft.freeDeliveryThreshold || 0),
+    amountNeededForFreeDelivery: Number(draft.amountNeededForFreeDelivery || 0),
+    deliveryServiceable: draft.deliveryServiceable !== false,
+    minimumOrderValue: Number(draft.minimumOrderValue || 99),
+    deliveryRuleVersion: compactText(draft.deliveryRuleVersion, 80),
+    distanceKm: Number(draft.distanceKm || draft.deliveryDistance || 0),
     gstPercent: Number(draft.gstPercent || 0),
     gstAmount: Number(draft.gstAmount || 0),
     handlingCharge: Number(draft.handlingCharge || 0),
@@ -657,10 +653,16 @@ exports.validateDeliveryPricing = onRequest(
         subtotal: secured.subtotal,
         deliveryDistance: secured.deliveryDistance,
         deliveryCharge: secured.deliveryCharge,
+        deliveryFee: secured.deliveryFee,
         originalDeliveryCharge: secured.originalDeliveryCharge,
         freeDeliveryDiscount: secured.freeDeliveryDiscount,
         freeDelivery: secured.freeDelivery,
+        freeDeliveryApplied: secured.freeDeliveryApplied,
         freeDeliveryThreshold: secured.freeDeliveryThreshold,
+        amountNeededForFreeDelivery: secured.amountNeededForFreeDelivery,
+        deliveryServiceable: secured.deliveryServiceable,
+        minimumOrderValue: secured.minimumOrderValue,
+        deliveryRuleVersion: secured.deliveryRuleVersion,
         maxDeliveryDistance: secured.maxDeliveryDistance
       });
     } catch (error) {

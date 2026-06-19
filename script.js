@@ -167,16 +167,19 @@ let appPricing = {
 };
 let deliveryPricingSettings = {
   freeDeliveryEnabled:true,
-  perKmCharge:6,
+  minimumOrderValue:99,
+  flatDeliveryFee:24,
   maxDeliveryDistanceKm:6,
   whatsappNumber:"918303614331",
   zones:[
+    { maxKm:1, threshold:99 },
     { maxKm:2, threshold:149 },
     { maxKm:3, threshold:199 },
     { maxKm:4, threshold:249 },
     { maxKm:6, threshold:299 }
   ]
 };
+const DELIVERY_RULE_VERSION = "flat-24-zones-v1";
 let isOrderProcessing = false;
 let lastOrderSignature = null;
 let razorpayInFlight = false;
@@ -2682,24 +2685,24 @@ registerGlobalSnapshot(onSnapshot(
     MAX_DELIVERY_DISTANCE =
       data.maxDeliveryDistanceKm || data.maxDistance || 6;
 
-    ALL_INDIA_DELIVERY =
-      data.allIndia || false;
-    VIP_DELIVERY_ENABLED =
-      data.vipDeliveryEnabled === true;
+    ALL_INDIA_DELIVERY = false;
+    VIP_DELIVERY_ENABLED = false;
 
     googleMapsApiKey =
       data.googleMapsApiKey || data.mapsApiKey || "";
     deliveryPricingSettings = {
       ...deliveryPricingSettings,
       freeDeliveryEnabled:data.freeDeliveryEnabled !== false,
-      perKmCharge:Math.max(0, Number(data.perKmCharge ?? data.deliveryChargePerKm ?? 6)),
+      minimumOrderValue:Math.max(0, Number(data.minimumOrderValue ?? 99)),
+      flatDeliveryFee:Math.max(0, Number(data.flatDeliveryFee ?? 24)),
       maxDeliveryDistanceKm:MAX_DELIVERY_DISTANCE,
       whatsappNumber:String(data.whatsappNumber || deliveryPricingSettings.whatsappNumber).replace(/\D/g,""),
       zones:[
-        { maxKm:2, threshold:Math.max(0, Number(data.zone1Threshold ?? 149)) },
-        { maxKm:3, threshold:Math.max(0, Number(data.zone2Threshold ?? 199)) },
-        { maxKm:4, threshold:Math.max(0, Number(data.zone3Threshold ?? 249)) },
-        { maxKm:MAX_DELIVERY_DISTANCE, threshold:Math.max(0, Number(data.zone4Threshold ?? 299)) }
+        { maxKm:1, threshold:Math.max(0, Number(data.zone1Threshold ?? 99)) },
+        { maxKm:2, threshold:Math.max(0, Number(data.zone2Threshold ?? 149)) },
+        { maxKm:3, threshold:Math.max(0, Number(data.zone3Threshold ?? 199)) },
+        { maxKm:4, threshold:Math.max(0, Number(data.zone4Threshold ?? 249)) },
+        { maxKm:MAX_DELIVERY_DISTANCE, threshold:Math.max(0, Number(data.zone5Threshold ?? 299)) }
       ]
     };
     updateCart();
@@ -3005,7 +3008,7 @@ async function ensureDeliveryEligible(){
     return false;
   }
   if(!ALL_INDIA_DELIVERY && !VIP_DELIVERY_ENABLED && deliveryDistance > MAX_DELIVERY_DISTANCE){
-    showServiceAreaPopup("Sorry, we currently deliver only within 6 KM of our outlet.");
+    showServiceAreaPopup("Sorry, we are not available at your location yet.");
     return false;
   }
   return true;
@@ -3103,19 +3106,18 @@ function calculateDistance(){
 /* ================= DELIVERY LOGIC ================= */
 function calculateDeliveryCharge(subtotal){
 
-if(subtotal < 2){
+const pricing = calculateDistanceDeliveryPricing(deliveryDistance, subtotal);
 
-const remaining = 2 - subtotal;
+if(!pricing.minimumOrderMet){
 
-showMinOrderPopup(remaining);
+showMinOrderPopup(pricing.minimumRemaining);
 
 return false;
 
 }
 
-const pricing = calculateDistanceDeliveryPricing(deliveryDistance, subtotal);
 if(!pricing.serviceable){
-  showServiceAreaPopup("Sorry, we currently deliver only within 6 KM of our outlet.");
+  showServiceAreaPopup("Sorry, we are not available at your location yet.");
   return false;
 }
 deliveryCharge = pricing.deliveryCharge;
@@ -3127,19 +3129,28 @@ return true;
 function calculateDistanceDeliveryPricing(distanceKm = deliveryDistance, subtotal = getCartSubtotal()){
   const distance = Math.max(0, Number(distanceKm) || 0);
   const maxDistance = Math.max(0, Number(deliveryPricingSettings.maxDeliveryDistanceKm) || 6);
-  const zone = deliveryPricingSettings.zones.find(item => distance <= item.maxKm) || deliveryPricingSettings.zones.at(-1);
+  const locationAvailable = distance > 0;
+  const serviceable = locationAvailable && distance <= maxDistance;
+  const zone = locationAvailable ? deliveryPricingSettings.zones.find(item => distance <= item.maxKm) : null;
   const threshold = Math.max(0, Number(zone?.threshold) || 0);
-  const baseCharge = Math.round(distance * Math.max(0, Number(deliveryPricingSettings.perKmCharge) || 0));
-  const campaignFree = deliveryPricingSettings.freeDeliveryEnabled && subtotal >= threshold;
+  const minimumOrderValue = Math.max(0, Number(deliveryPricingSettings.minimumOrderValue) || 99);
+  const minimumOrderMet = subtotal >= minimumOrderValue;
+  const baseCharge = Math.max(0, Number(deliveryPricingSettings.flatDeliveryFee) || 24);
+  const campaignFree = serviceable && minimumOrderMet && deliveryPricingSettings.freeDeliveryEnabled && subtotal >= threshold;
   return {
-    serviceable:distance > 0 && distance <= maxDistance,
+    serviceable,
+    locationAvailable,
     threshold,
     baseCharge,
-    deliveryCharge:campaignFree ? 0 : baseCharge,
+    deliveryCharge:serviceable && minimumOrderMet && !campaignFree ? baseCharge : 0,
     freeDeliveryDiscount:campaignFree ? baseCharge : 0,
     remaining:Math.max(0, threshold - subtotal),
-    progress:threshold ? Math.min(100, Math.round(subtotal / threshold * 100)) : 100,
-    freeDelivery:campaignFree
+    minimumOrderValue,
+    minimumOrderMet,
+    minimumRemaining:Math.max(0, minimumOrderValue - subtotal),
+    progress:threshold ? Math.min(100, Math.round(subtotal / threshold * 100)) : 0,
+    freeDelivery:campaignFree,
+    deliveryRuleVersion:DELIVERY_RULE_VERSION
   };
 }
 
@@ -3503,27 +3514,40 @@ function validateActiveCoupon(){
 function renderDeliveryCampaign(subtotal = getCartSubtotal()){
   const pricing = calculateDistanceDeliveryPricing(deliveryDistance, subtotal);
   const hosts = [document.getElementById("freeDeliveryHint")].filter(Boolean);
-  const message = !deliveryDistance
-    ? "🚚 Enable location to check delivery charges"
-    : !pricing.serviceable
-      ? "Sorry, we currently deliver only within 6 KM of our outlet."
-      : pricing.freeDelivery
-        ? "🎉 Congratulations! FREE delivery unlocked."
-        : `🚚 Add ${formatCurrency(pricing.remaining)} more to unlock FREE delivery`;
+  const message = !pricing.minimumOrderMet
+    ? `Add ${formatCurrency(pricing.minimumRemaining)} more to reach minimum order value.`
+    : !deliveryDistance
+      ? "Enable location to check delivery availability."
+      : !pricing.serviceable
+        ? "Sorry, we are not available at your location yet."
+        : pricing.freeDelivery
+          ? "Free delivery unlocked 🎉"
+          : `Delivery charge ${formatCurrency(pricing.baseCharge)} applied. Add ${formatCurrency(pricing.remaining)} more for FREE delivery 🚚`;
   const markup = `<div class="delivery-campaign ${pricing.freeDelivery ? "unlocked" : ""} ${!pricing.serviceable && deliveryDistance ? "blocked" : ""}">
     <strong>${message}</strong>
-    ${pricing.serviceable && !pricing.freeDelivery ? `<div class="delivery-progress-meta"><span>${formatCurrency(subtotal)} / ${formatCurrency(pricing.threshold)}</span><span>${pricing.progress}%</span></div><div class="delivery-progress"><i style="width:${pricing.progress}%"></i></div><small>Add ${formatCurrency(pricing.remaining)} more for FREE delivery</small>` : ""}
+    ${pricing.minimumOrderMet && pricing.serviceable && !pricing.freeDelivery ? `<div class="delivery-progress-meta"><span>${formatCurrency(subtotal)} / ${formatCurrency(pricing.threshold)}</span><span>${pricing.progress}%</span></div><div class="delivery-progress"><i style="width:${pricing.progress}%"></i></div>` : ""}
   </div>`;
   hosts.forEach(host => host.innerHTML = markup);
   const largeOrder = document.getElementById("largeOrderAssistance");
   if(largeOrder){
     largeOrder.hidden = subtotal <= 299;
-    largeOrder.querySelector("a")?.setAttribute("href", `https://wa.me/${deliveryPricingSettings.whatsappNumber}?text=${encodeURIComponent("Hello MAGNEETOZ, I need assistance with a large order.")}`);
+    const fields = getCheckoutFields();
+    const items = cart.map(item => `${item.name} x${item.qty || 1}`).join(", ");
+    const message = [
+      "Hello MAGNEETOZ, I need assistance with a large order.",
+      `Name: ${fields.name || "Not provided"}`,
+      `Mobile: ${fields.phone || "Not provided"}`,
+      `Cart value: ${formatCurrency(subtotal)}`,
+      `Location: ${fields.address || userLocation?.address || "Not provided"}`,
+      `Distance: ${deliveryDistance ? `${Number(deliveryDistance).toFixed(1)} KM` : "Not available"}`,
+      `Items: ${items || "Not available"}`
+    ].join("\n");
+    largeOrder.querySelector("a")?.setAttribute("href", `https://wa.me/${deliveryPricingSettings.whatsappNumber}?text=${encodeURIComponent(message)}`);
   }
   const blocked = deliveryDistance > 0 && !pricing.serviceable;
   document.querySelectorAll("[aria-label='Place order'], #codBtn, #upiBtn").forEach(button => {
-    button.disabled = blocked;
-    button.title = blocked ? "Sorry, we currently deliver only within 6 KM of our outlet." : "";
+    button.disabled = blocked || !pricing.minimumOrderMet;
+    button.title = blocked ? "Sorry, we are not available at your location yet." : !pricing.minimumOrderMet ? "Minimum order value is ₹99." : "";
   });
 }
 
@@ -3629,7 +3653,7 @@ async function createOrderSafely({ paymentMethod, paymentStatus, paymentId = "",
   if(!["cod", "online", "upi"].includes(normalizedPaymentMethod)) throw new Error("Invalid payment method");
 
   const subtotal = getCartSubtotal();
-  if(subtotal < 2) throw new Error(`Add ${formatCurrency(2 - subtotal)} more to place order`);
+  if(subtotal < 99) throw new Error("Minimum order value is ₹99.");
 
   if(!(await timedStep("createOrderSafely:ensureDeliveryEligible", () => ensureDeliveryEligible()))) throw new Error("Delivery is not available for this location.");
   if(!calculateDeliveryCharge(subtotal)) throw new Error("Delivery is not available for this location.");
@@ -3657,6 +3681,7 @@ async function createOrderSafely({ paymentMethod, paymentStatus, paymentId = "",
   if(!inventory.ok) throw new Error(inventory.message);
 
   const pricing = calculateInvoicePricing(subtotal);
+  const deliveryRule = calculateDistanceDeliveryPricing(deliveryDistance, subtotal);
   const orderTotalBeforeWallet = pricing.beforeWallet;
   const restaurantAssignment = {
   restaurantId: "primary",
@@ -3698,7 +3723,15 @@ async function createOrderSafely({ paymentMethod, paymentStatus, paymentId = "",
         deliveryDistance,
         ...deliveryMetrics(),
         deliveryCharge:pricing.deliveryCharge,
+        deliveryFee:pricing.deliveryCharge,
         originalDeliveryCharge:deliveryCharge,
+        distanceKm:deliveryDistance,
+        freeDeliveryApplied:securedDelivery.freeDeliveryApplied === true,
+        freeDeliveryThreshold:Number(securedDelivery.freeDeliveryThreshold || 0),
+        amountNeededForFreeDelivery:Number(securedDelivery.amountNeededForFreeDelivery || 0),
+        deliveryServiceable:securedDelivery.deliveryServiceable !== false,
+        minimumOrderValue:Number(securedDelivery.minimumOrderValue || 99),
+        deliveryRuleVersion:securedDelivery.deliveryRuleVersion || DELIVERY_RULE_VERSION,
         couponId:activeCoupon?.id || "",
         couponCode:activeCoupon?.code || "",
         couponPgName:activeCoupon?.pgName || activeCoupon?.pg || "",
@@ -3706,7 +3739,7 @@ async function createOrderSafely({ paymentMethod, paymentStatus, paymentId = "",
         couponDiscount:pricing.couponDiscount,
         walletPointsRequested:pricing.walletDiscount,
         walletPointsUsed:0,
-        freeDelivery:!!activeCoupon?.freeDelivery,
+        freeDelivery:securedDelivery.freeDeliveryApplied === true || !!activeCoupon?.freeDelivery,
         gstPercent:pricing.gstPercent,
         gstAmount:pricing.gstAmount,
         handlingCharge:pricing.handlingCharge,
@@ -3795,7 +3828,7 @@ async function buildPaidOnlineOrderDraft(){
   if(!fields.name || !fields.address) throw new Error("Fill name & address");
 
   const subtotal = getCartSubtotal();
-  if(subtotal < 2) throw new Error(`Add ${formatCurrency(2 - subtotal)} more to place order`);
+  if(subtotal < 99) throw new Error("Minimum order value is ₹99.");
   if(!(await ensureDeliveryEligible())) throw new Error("Delivery is not available for this location.");
   if(!calculateDeliveryCharge(subtotal)) throw new Error("Delivery is not available for this location.");
 
@@ -3808,6 +3841,7 @@ async function buildPaidOnlineOrderDraft(){
   if(!inventory.ok) throw new Error(inventory.message);
 
   const pricing = calculateInvoicePricing(subtotal);
+  const deliveryRulePaid = calculateDistanceDeliveryPricing(deliveryDistance, subtotal);
   const checkoutId = checkoutInFlightId || `co_${user.uid}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   checkoutInFlightId = checkoutId;
   const safeCartImage = value => {
@@ -3844,13 +3878,21 @@ async function buildPaidOnlineOrderDraft(){
       deliveryDistance,
       ...deliveryMetrics(),
       deliveryCharge:pricing.deliveryCharge,
+      deliveryFee:pricing.deliveryCharge,
       originalDeliveryCharge:deliveryCharge,
+      distanceKm:deliveryDistance,
+      freeDeliveryApplied:deliveryRulePaid.freeDelivery,
+      freeDeliveryThreshold:deliveryRulePaid.threshold,
+      amountNeededForFreeDelivery:deliveryRulePaid.remaining,
+      deliveryServiceable:deliveryRulePaid.serviceable,
+      minimumOrderValue:deliveryRulePaid.minimumOrderValue,
+      deliveryRuleVersion:DELIVERY_RULE_VERSION,
       couponId:activeCoupon?.id || "",
       couponCode:activeCoupon?.code || "",
       couponPgName:activeCoupon?.pgName || activeCoupon?.pg || "",
       couponPgCode:activeCoupon?.pgCode || "",
       couponDiscount:pricing.couponDiscount,
-      freeDelivery:!!activeCoupon?.freeDelivery,
+      freeDelivery:deliveryRulePaid.freeDelivery || !!activeCoupon?.freeDelivery,
       gstPercent:pricing.gstPercent,
       gstAmount:pricing.gstAmount,
       handlingCharge:pricing.handlingCharge,
@@ -4310,11 +4352,9 @@ await timedStep("placeOrder:saveAddressBook", () => saveCurrentAddressToBook().c
 const subtotal = cart.reduce((sum,item)=>sum+item.price,0);
 
 // ⭐ Minimum order check
-if(subtotal < 2){
+if(subtotal < deliveryPricingSettings.minimumOrderValue){
 
-const remaining = 2 - subtotal;
-
-showMinOrderPopup(remaining);
+showMinOrderPopup(deliveryPricingSettings.minimumOrderValue - subtotal);
 
 return false;
 
@@ -4940,7 +4980,7 @@ alert("Add "+formatCurrency(amount)+" more to place order");
 return;
 }
 
-text.innerText = "Add "+formatCurrency(amount)+" more to place order";
+text.innerText = `Minimum order value is ₹99. Add ${formatCurrency(amount)} more.`;
 
 popup.style.display = "flex";
 
