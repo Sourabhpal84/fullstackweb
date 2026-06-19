@@ -916,6 +916,19 @@ function closeLocationSelector(){
   if(popup) popup.style.display = "none";
 }
 
+function showLocationAddressForm(){
+  const form = document.getElementById("locationAddressForm");
+  if(form){
+    form.hidden = false;
+    setTimeout(() => document.getElementById("customerAddress")?.focus(), 50);
+  }
+}
+
+function hideLocationAddressForm(){
+  const form = document.getElementById("locationAddressForm");
+  if(form) form.hidden = true;
+}
+
 async function saveLocationSelection(){
   const address = normalizeUnicodeText(document.getElementById("customerAddress")?.value || "");
   if(!address){ alert("Please enter a complete delivery address."); return; }
@@ -927,6 +940,8 @@ async function saveLocationSelection(){
 
 window.openLocationSelector = openLocationSelector;
 window.closeLocationSelector = closeLocationSelector;
+window.showLocationAddressForm = showLocationAddressForm;
+window.hideLocationAddressForm = hideLocationAddressForm;
 window.saveLocationSelection = saveLocationSelection;
 
 async function getLocationPermissionState(){
@@ -1809,6 +1824,7 @@ async function searchAddressForCheckout(){
     }, "address_geocode_search");
     setCheckoutFieldsCollapsed(false);
     updateSelectedLocationUi(selectedAddress);
+    showLocationAddressForm();
     refreshDeliveryDistance().catch(() => updateCustomerDistanceBanner());
     persistGuestState();
   }catch(error){
