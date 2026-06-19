@@ -16,33 +16,53 @@
     }
 
     body{
-      display:flex;
+      display:block;
       background:#0f172a;
       color:white;
+      min-height:100vh;
     }
 
-    /* 🔹 SIDEBAR */
+    /* 🔹 RESPONSIVE MENU */
     .sidebar{
-      width:220px;
-      height:100vh;
-      background:#020617;
-      padding:20px;
+      position:sticky;
+      top:0;
+      z-index:40;
+      width:100%;
+      height:auto;
+      padding:12px 18px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+      background:rgba(2,6,23,.96);
+      border-bottom:1px solid #1e293b;
+      backdrop-filter:blur(14px);
     }
 
     .sidebar h2{
       color:#22c55e;
-      margin-bottom:30px;
+      margin:0;
     }
 
+    .admin-menu-links{display:flex;align-items:center;gap:8px}
     .sidebar p{
-      margin:15px 0;
+      margin:0;
+      min-height:44px;
+      padding:0 16px;
+      display:flex;
+      align-items:center;
+      border:1px solid #263449;
+      border-radius:12px;
       color:#94a3b8;
       cursor:pointer;
+      font-weight:800;
     }
+    .sidebar p.active,.sidebar p:hover{background:linear-gradient(135deg,#22c55e,#00ffcc);border-color:transparent;color:#03120c}
 
     /* 🔹 MAIN */
     .main{
-      flex:1;
+      width:min(1200px,100%);
+      margin:auto;
       padding:20px;
     }
 
@@ -187,6 +207,16 @@
 .dish-edit-image-copy strong,.dish-edit-image-copy small{display:block}.dish-edit-image-copy small{margin:5px 0;color:#94a3b8}
 .dish-edit-image-copy button{margin-left:0}.dish-edit-upload-status{min-height:18px;color:#22c55e;font-size:11px;font-weight:700}
 @media(max-width:560px){.dish-edit-image{grid-template-columns:78px minmax(0,1fr)}.dish-edit-image img{width:78px;height:72px}}
+@media(max-width:640px){
+  .sidebar{padding:10px 12px;align-items:flex-start;flex-direction:column;gap:9px}
+  .sidebar h2{font-size:18px}
+  .admin-menu-links{display:grid;grid-template-columns:1fr 1fr;width:100%;gap:7px}
+  .sidebar p{justify-content:center;padding:0 10px;font-size:12px}
+  .main{padding:12px}
+  input,select{width:100%;margin:5px 0}
+  .dish-actions{width:100%}
+  .dish-actions button{flex:1;min-height:42px;margin:0}
+}
 
   </style>
 </head>
@@ -196,10 +226,10 @@
 <!-- 🔹 SIDEBAR -->
 <div class="sidebar">
   <h2>🍕 MAGNEETOZ</h2>
-<p onclick="showSection('dashboard')">Dashboard</p>
-<p onclick="showSection('category')">Categories</p>
-<p onclick="showSection('dish')">Dishes</p>
-<p onclick="showSection('orders')">Orders</p>
+  <nav class="admin-menu-links" aria-label="Menu management">
+    <p id="categoryMenuTab" class="active" onclick="showSection('category')">Categories</p>
+    <p id="dishMenuTab" onclick="showSection('dish')">Dishes</p>
+  </nav>
 </div>
 
 <!-- 🔹 MAIN -->
@@ -208,11 +238,9 @@
 <!-- 🍕 PANEL -->
 <div id="adminPanel" style="display:block;">
 
-  <div id="dashboardSection">
-    <h2>🍕 Dashboard</h2>
-  </div>
+  <div id="dashboardSection" style="display:none;"></div>
 
-  <div id="categorySection" style="display:none;">
+  <div id="categorySection">
     <h3>Add Category</h3>
     <input id="mainTypeName" placeholder="Food Button Name e.g. Pizza, Burger, Sandwich">
     <input id="mainTypeImage" placeholder="Food Button Image URL (optional)">
@@ -1262,10 +1290,6 @@ window.showSection = function(name){
   document.getElementById("dishSection").style.display = "none";
   document.getElementById("ordersSection").style.display = "none";
 
-  if(name === "dashboard"){
-    document.getElementById("dashboardSection").style.display = "block";
-  }
-
   if(name === "category"){
     document.getElementById("categorySection").style.display = "block";
   }
@@ -1274,11 +1298,12 @@ window.showSection = function(name){
     document.getElementById("dishSection").style.display = "block";
   }
 
-  if(name === "orders"){
-    document.getElementById("ordersSection").style.display = "block";
-  }
+  document.getElementById("categoryMenuTab")?.classList.toggle("active", name === "category");
+  document.getElementById("dishMenuTab")?.classList.toggle("active", name === "dish");
 
 }
+
+showSection("category");
 
 
 
