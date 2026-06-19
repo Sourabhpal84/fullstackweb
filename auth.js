@@ -27,6 +27,7 @@ const OTP_RE = /^\d{6}$/;
 let confirmationResult = null;
 let recaptchaVerifier = null;
 let recaptchaRenderPromise = null;
+let recaptchaInitPromise = null;
 let otpCooldownUntil = 0;
 let otpInFlight = false;
 let otpVerifyInFlight = false;
@@ -240,38 +241,51 @@ function cleanPhone(){
 }
 
 async function ensureRecaptcha(){
-  if(recaptchaVerifier && recaptchaRenderPromise){
+  if(recaptchaInitPromise) return recaptchaInitPromise;
+  recaptchaInitPromise = (async () => {
+    if(recaptchaVerifier && recaptchaRenderPromise){
+      await recaptchaRenderPromise;
+      return recaptchaVerifier;
+    }
+    if(recaptchaVerifier) return recaptchaVerifier;
+    const container = $("recaptcha-container");
+    if(!container) throw new Error("Login security container missing");
+    recaptchaVerifier = new RecaptchaVerifier(auth, container, {
+      size:"invisible",
+      callback:() => setAuthStatus("Security verified. Sending OTP...", "info"),
+      "expired-callback":() => {
+        setAuthStatus("Security check expired. Please try again.", "error");
+        resetRecaptcha({ recreateContainer:true });
+      }
+    });
+    recaptchaRenderPromise = recaptchaVerifier.render();
     await recaptchaRenderPromise;
     return recaptchaVerifier;
-  }
-  if(recaptchaVerifier) return recaptchaVerifier;
-  const container = $("recaptcha-container");
-  if(!container) throw new Error("Login security container missing");
-  container.innerHTML = "";
-  recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
-    size: "invisible",
-    callback: () => {
-      setAuthStatus("Security verified. Sending OTP...", "info");
-    },
-    "expired-callback": () => {
-      setAuthStatus("Security check expired. Please try again.", "error");
-      resetRecaptcha();
-    }
-  });
-  recaptchaRenderPromise = recaptchaVerifier.render().catch(error => {
-    resetRecaptcha();
+  })();
+  try{
+    return await recaptchaInitPromise;
+  }catch(error){
+    resetRecaptcha({ recreateContainer:true });
     throw error;
-  });
-  await recaptchaRenderPromise;
-  return recaptchaVerifier;
+  }finally{
+    recaptchaInitPromise = null;
+  }
 }
 
-function resetRecaptcha(){
+function resetRecaptcha({ recreateContainer = false } = {}){
   try{ recaptchaVerifier?.clear(); }catch(_){}
   recaptchaVerifier = null;
   recaptchaRenderPromise = null;
+  recaptchaInitPromise = null;
   const container = $("recaptcha-container");
-  if(container) container.innerHTML = "";
+  if(!container) return;
+  if(recreateContainer){
+    const replacement = container.cloneNode(false);
+    replacement.id = "recaptcha-container";
+    container.replaceWith(replacement);
+  }else{
+    container.replaceChildren();
+  }
 }
 
 function maskPhone(phone){
@@ -426,7 +440,7 @@ async function sendOTP(options = {}){
     devLog("sendOTP error:", error);
     const rawMessage = String(error?.message || error?.code || "");
     if(!retryAfterRecaptchaReset && /already.*rendered|reCAPTCHA has already been rendered/i.test(rawMessage)){
-      resetRecaptcha();
+      resetRecaptcha({ recreateContainer:true });
       otpInFlight = false;
       setButton(button, false);
       setAuthStatus("Refreshing security check. Sending OTP again...", "info");

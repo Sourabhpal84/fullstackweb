@@ -563,5 +563,17 @@ service cloud.firestore {
       allow create: if signedIn();
       allow update, delete: if false;
     }
+
+    match /costIngredients/{ingredientId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /itemCostRecipes/{recipeId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /ingredientPriceHistory/{historyId} {
+      allow read, write: if isAdmin();
+    }
   }
 }

@@ -1578,11 +1578,37 @@ function getCheckoutFields(){
 }
 
 function syncAuthenticatedCheckoutPhone(user = auth.currentUser || cachedAuthUser){
-  const phone = normalizeUnicodeText(user?.phoneNumber || "");
+  const phone = normalizeUnicodeText(user?.phoneNumber || document.getElementById("customerPhone")?.value || "");
   const hidden = document.getElementById("customerPhone");
   const label = document.getElementById("checkoutAuthPhoneValue");
   if(hidden) hidden.value = phone;
-  if(label) label.textContent = phone || "Update your profile to add a verified mobile";
+  if(label) label.textContent = phone || "Checking your verified mobile…";
+  return phone;
+}
+
+async function resolveAuthenticatedCheckoutPhone(user = auth.currentUser || cachedAuthUser){
+  if(!user?.uid) return "";
+  let phone = normalizeUnicodeText(user.phoneNumber || "");
+  if(!phone){
+    try{
+      await user.reload();
+      phone = normalizeUnicodeText((auth.currentUser || user).phoneNumber || "");
+    }catch(error){
+      console.warn("Auth mobile refresh skipped:", error);
+    }
+  }
+  if(!phone){
+    try{
+      const profile = await getDoc(doc(db,"users",user.uid));
+      phone = normalizeUnicodeText(profile.data()?.phone || profile.data()?.customerPhone || "");
+    }catch(error){
+      console.warn("Saved mobile lookup skipped:", error);
+    }
+  }
+  const hidden = document.getElementById("customerPhone");
+  const label = document.getElementById("checkoutAuthPhoneValue");
+  if(hidden) hidden.value = phone;
+  if(label) label.textContent = phone || "Please sign in again to verify your mobile";
   return phone;
 }
 
@@ -1808,8 +1834,8 @@ function readAddressBook(){
 
 async function saveCurrentAddressToBook(){
   const fields = getCheckoutFields();
-  fields.phone = syncAuthenticatedCheckoutPhone();
-  if(!fields.phone) throw new Error("Your verified mobile is missing. Please update your profile once.");
+  fields.phone = await resolveAuthenticatedCheckoutPhone();
+  if(!fields.phone) throw new Error("We could not verify your mobile. Please sign out and sign in again.");
   if(!fields.name || !fields.address) throw new Error("Fill name & address first.");
   const existing = readAddressBook();
   const nextAddress = {
@@ -3645,8 +3671,8 @@ async function createOrderSafely({ paymentMethod, paymentStatus, paymentId = "",
   if(!cart.length) throw new Error("Cart empty");
 
   const fields = getCheckoutFields();
-  fields.phone = syncAuthenticatedCheckoutPhone(user);
-  if(!fields.phone) throw new Error("Your verified mobile is missing. Please update your profile once.");
+  fields.phone = await resolveAuthenticatedCheckoutPhone(user);
+  if(!fields.phone) throw new Error("We could not verify your mobile. Please sign out and sign in again.");
   if(!fields.name || !fields.address) throw new Error("Fill name & address");
   const normalizedPaymentMethod = String(paymentMethod || "").toLowerCase();
   const normalizedPaymentStatus = String(paymentStatus || "pending").toLowerCase();
@@ -3823,8 +3849,8 @@ async function buildPaidOnlineOrderDraft(){
   if(walletPointsRequested > 0) throw new Error("Pizza Points are currently available with Cash on Delivery. Remove points to pay online.");
 
   const fields = getCheckoutFields();
-  fields.phone = syncAuthenticatedCheckoutPhone(user);
-  if(!fields.phone) throw new Error("Your verified mobile is missing. Please update your profile once.");
+  fields.phone = await resolveAuthenticatedCheckoutPhone(user);
+  if(!fields.phone) throw new Error("We could not verify your mobile. Please sign out and sign in again.");
   if(!fields.name || !fields.address) throw new Error("Fill name & address");
 
   const subtotal = getCartSubtotal();
@@ -4333,11 +4359,11 @@ if(!isFreshCustomerLocation(CHECKOUT_LOCATION_REUSE_MAX_AGE_MS)){
 }
 
 const name = normalizeUnicodeText(document.getElementById("customerName").value);
-const phone = syncAuthenticatedCheckoutPhone();
+const phone = await resolveAuthenticatedCheckoutPhone(auth.currentUser || cachedAuthUser);
 const address = normalizeUnicodeText(document.getElementById("customerAddress").value);
 
 if(!phone){
-  alert("Your verified mobile is missing. Please update your profile once.");
+  alert("We could not verify your mobile. Please sign out and sign in again.");
   return;
 }
 
