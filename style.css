@@ -7092,6 +7092,49 @@ body .cart-backdrop{display:none!important}
   body .checkout-details-column .saved-address-box{margin-top:0!important}
 }
 
+/* Cart shell: only the content scrolls; header and CTA never move. */
+@media(max-width:760px){
+  body .cart-panel{
+    display:grid!important;
+    grid-template-rows:54px minmax(0,1fr) 66px!important;
+    gap:0!important;
+    height:100dvh!important;
+    max-height:100dvh!important;
+    overflow:hidden!important;
+    padding:0 10px calc(6px + env(safe-area-inset-bottom))!important;
+  }
+  body .cart-header{
+    position:relative!important;
+    top:auto!important;
+    z-index:5!important;
+    margin:0 -10px!important;
+  }
+  body .checkout-page-grid{
+    display:block!important;
+    height:auto!important;
+    min-height:0!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    padding:10px 0 16px!important;
+    overscroll-behavior:contain!important;
+    scrollbar-width:thin!important;
+  }
+  body .cart-panel>button[aria-label="Place order"]{
+    position:relative!important;
+    z-index:8!important;
+    left:auto!important;
+    right:auto!important;
+    bottom:auto!important;
+    width:100%!important;
+    height:56px!important;
+    min-height:56px!important;
+    margin:5px 0!important;
+    transform:none!important;
+    align-self:end!important;
+    box-shadow:0 10px 28px rgba(239,68,68,.32)!important;
+  }
+}
+
 /* Final one-screen mobile cart: compact, readable, no page scrolling. */
 @media(max-width:760px){
   body .cart-panel{

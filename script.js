@@ -989,7 +989,7 @@ function showLastSavedLocation(reason = "fresh_location_failed"){
   userLocation = saved;
   userLocationUpdatedAt = saved.updatedAt || 0;
   updateCustomerDistanceGlobals();
-  setLocationUiState("lastSaved", `${saved.lat.toFixed(5)}, ${saved.lng.toFixed(5)}`);
+  setLocationUiState("lastSaved", saved.address || "Saved delivery location");
   return saved;
 }
 
@@ -1481,6 +1481,7 @@ function normalizeCustomerLocation(location, source = "unknown"){
     lat:Number(location.lat),
     lng:Number(location.lng),
     mapLink:location.mapLink || `https://www.google.com/maps?q=${Number(location.lat)},${Number(location.lng)}`,
+    address:normalizeUnicodeText(location.address || location.formattedAddress || ""),
     accuracy:Number(location.accuracy || 0),
     updatedAt,
     source
@@ -1710,7 +1711,7 @@ function renderSavedAddresses(addresses = []){
         mapLink:`https://www.google.com/maps?q=${valid[0].lat},${valid[0].lng}`
       }, "last_saved_address_default");
       userLocationUpdatedAt = userLocation?.updatedAt || 0;
-      setLocationUiState("lastSaved", `${Number(valid[0].lat).toFixed(5)}, ${Number(valid[0].lng).toFixed(5)}`);
+      setLocationUiState("lastSaved", valid[0].address || valid[0].label || "Saved delivery location");
     }
     setCheckoutFieldsCollapsed(true);
   }else{
@@ -1742,10 +1743,11 @@ function applySavedAddress(index){
       lat:Number(item.lat),
       lng:Number(item.lng),
       accuracy:item.accuracy || null,
+      address:item.address || item.label || "",
       updatedAt:Number(item.updatedAt || Date.now()),
       mapLink:`https://www.google.com/maps?q=${item.lat},${item.lng}`
     }, "last_saved_address_selected");
-    setLocationUiState("lastSaved", `${Number(item.lat).toFixed(5)}, ${Number(item.lng).toFixed(5)}`);
+    setLocationUiState("lastSaved", item.address || item.label || "Saved delivery location");
     refreshDeliveryDistance({ force:true, maxAgeMs:0, routeTimeoutMs:12000 }).catch(() => updateCustomerDistanceBanner());
   }
   setCheckoutFieldsCollapsed(true);
@@ -3059,7 +3061,7 @@ window.addEventListener("load", ()=>{
     userLocation = saved;
     userLocationUpdatedAt = saved.updatedAt || 0;
     updateCustomerDistanceGlobals();
-    setLocationUiState("lastSaved", `${saved.lat.toFixed(5)}, ${saved.lng.toFixed(5)}`);
+    setLocationUiState("lastSaved", saved.address || readJSON(CHECKOUT_STATE_KEY, {})?.address || "Saved delivery location");
   }else{
     setLocationUiState("idle");
   }
