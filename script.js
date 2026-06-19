@@ -2088,7 +2088,7 @@ messagingReady.then(messaging => {
   onMessage(messaging, payload => {
     const data = payload.data || {};
     if(!["offer_broadcast", "order_status"].includes(data.type)) return;
-    try{ new Audio("ring2.mp3").play().catch(() => {}); }catch(_){}
+    try{ new Audio("order-alert.mpeg").play().catch(() => {}); }catch(_){}
     if(Notification.permission === "granted"){
       new Notification(payload.notification?.title || data.title || (data.type === "order_status" ? "Order Update" : "MAGNEETOZ Offer"), {
         body:payload.notification?.body || data.body || "A fresh MAGNEETOZ update is live.",

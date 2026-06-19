@@ -356,6 +356,31 @@ body{
 
   
 
+<script>
+window.__legacySwCleanup = (async () => {
+  if(!("serviceWorker" in navigator)) return;
+  const registrations = await navigator.serviceWorker.getRegistrations().catch(() => []);
+  let removedLegacyWorker = false;
+  for(const registration of registrations){
+    const workerUrl = registration.active?.scriptURL
+      || registration.waiting?.scriptURL
+      || registration.installing?.scriptURL
+      || "";
+    if(/\/sw\.js(?:\?|$)/.test(workerUrl)){
+      removedLegacyWorker = (await registration.unregister().catch(() => false)) || removedLegacyWorker;
+    }
+  }
+  const keys = await caches.keys().catch(() => []);
+  await Promise.all(keys
+    .filter(key => key.startsWith("magneetoz-premium-") || key.startsWith("magneetoz-runtime-"))
+    .map(key => caches.delete(key).catch(() => false)));
+  if(removedLegacyWorker && !sessionStorage.getItem("magneetoz-sw-cleaned")){
+    sessionStorage.setItem("magneetoz-sw-cleaned","1");
+    location.reload();
+    await new Promise(() => {});
+  }
+})();
+</script>
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script type="module">
 import { auth, db, messagingReady } from "./firebase-config.js";
@@ -378,6 +403,8 @@ import {
   serverTimestamp,
   deleteField
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+await window.__legacySwCleanup;
 
 const shop = { lat:28.465283, lng:77.502608 };
 const RAZORPAY_KEY_ID = "rzp_live_SVyEXhZPb4HTJf";
@@ -405,7 +432,7 @@ let currentFilter = "Requests";
 let riderLocationWatchId = null;
 let lastRiderLocationWriteAt = 0;
 let riderRazorpayInFlight = false;
-const deliveryRequestAlarm = new Audio("ring2.mp3");
+const deliveryRequestAlarm = new Audio("order-alert.mpeg");
 deliveryRequestAlarm.loop = true;
 deliveryRequestAlarm.preload = "auto";
 let deliveryRequestAlarmIds = new Set();
@@ -729,7 +756,7 @@ messagingReady.then(messaging => {
   if(!messaging) return;
   onMessage(messaging, payload => {
     const data = payload.data || {};
-    const audio = new Audio("ring2.mp3");
+    const audio = new Audio("order-alert.mpeg");
     audio.play().catch(() => {});
     if(Notification.permission === "granted"){
       const notification = new Notification(payload.notification?.title || "New Delivery Request", {
@@ -1003,10 +1030,6 @@ function listenOrders(){
     collection(db,"orders"),
     where("riderRequest.candidateRiderIds","array-contains",rider.riderId)
   );
-  const directRequestQuery = query(
-    collection(db,"riderRequests"),
-    where("riderId","==",rider.riderId)
-  );
 
   const rebuildOrders = () => {
     const byId = new Map();
@@ -1037,46 +1060,9 @@ function listenOrders(){
     logStructured("FIRESTORE LISTENER", { name:"rider-request-orders", count:snap.size });
   }, error => console.warn("[FIRESTORE LISTENER] Rider request orders failed", error));
 
-  const activeRequestStatuses = new Set(["pending", "accepted"]);
-  directRequestsUnsub = onSnapshot(directRequestQuery, async (snap)=>{
-      const requestDocs = snap.docs
-        .map(item => ({ id:item.id, ...item.data() }))
-        .filter(item => activeRequestStatuses.has(String(item.status || "").toLowerCase()));
-      const orderResults = await Promise.allSettled(
-        requestDocs.map(item => getDoc(doc(db,"orders",item.orderId)))
-      );
-      directRequestOrderDocs = orderResults
-        .map((result, index) => {
-          if(result.status !== "fulfilled") return null;
-          const orderSnap = result.value;
-          if(!orderSnap.exists()) return null;
-          const terminalStatus = normalizeStatus(orderSnap.data().status || orderSnap.data().orderStatus);
-          if(["Delivered","Cancelled","Rejected","Failed"].includes(terminalStatus)) return null;
-          const request = requestDocs[index];
-          return {
-            id:orderSnap.id,
-            data:() => ({
-              ...orderSnap.data(),
-              riderRequest:{
-                ...(orderSnap.data().riderRequest || {}),
-                status:String(request.status || "").toLowerCase() === "pending" ? "searching" : request.status,
-                requestId:request.id,
-                candidateRiderIds:[
-                  ...new Set([...(orderSnap.data().riderRequest?.candidateRiderIds || []), rider.riderId])
-                ],
-                directRequestStatus:request.status
-              }
-            })
-          };
-        })
-        .filter(Boolean);
-      rebuildOrders();
-      logStructured("FIRESTORE LISTENER", { name:"riderRequests-direct", count:requestDocs.length });
-    }, error => {
-      directRequestOrderDocs = [];
-      rebuildOrders();
-      console.warn("[FIRESTORE LISTENER] Direct rider requests unavailable; using order assignment listener.", error?.code || error?.message || error);
-    });
+  // Candidate orders are already delivered by requestQuery above. A second
+  // riderRequests listener was redundant and could fail under stricter rules.
+  directRequestOrderDocs = [];
 }
 
 function enterDashboard(){
