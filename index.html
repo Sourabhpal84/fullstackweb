@@ -772,6 +772,39 @@ Verify OTP
           <small id="walletRedeemHint">Use up to 20% on Cash on Delivery orders.</small>
         </section>
       </section>
+      </section>
+      </div>
+
+      <!-- ORDER -->
+
+      <button
+        type="button"
+        aria-label="Place order"
+        onclick="placeOrder()">
+
+        Continue to delivery details
+      </button>
+
+    </aside>
+
+    <!-- DELIVERY DETAILS -->
+
+    <div
+      id="deliveryDetailsPopup"
+      class="checkout-step-popup"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="deliveryDetailsTitle"
+      style="display:none;">
+
+      <div class="checkout-step-card">
+      <div class="checkout-step-head">
+        <div>
+          <small>Step 2 of 3</small>
+          <h3 id="deliveryDetailsTitle">Delivery details</h3>
+        </div>
+        <button type="button" onclick="closeDeliveryDetails()">×</button>
+      </div>
 
       <!-- CUSTOMER DETAILS -->
 
@@ -819,20 +852,11 @@ Verify OTP
 
       <input type="hidden" id="customerLat">
       <input type="hidden" id="customerLng">
-      </section>
-      </div>
-
-      <!-- ORDER -->
-
-      <button
-        type="button"
-        aria-label="Place order"
-        onclick="placeOrder()">
-
-        Place Order 🍕
+      <button type="button" class="checkout-step-continue" onclick="continueFromDeliveryDetails()">
+        Continue to payment
       </button>
-
-    </aside>
+      </div>
+    </div>
 
     <!-- ORDER SUCCESS -->
 
