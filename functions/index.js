@@ -4359,14 +4359,8 @@ exports.reconcilePendingReferralRewards = onSchedule(
   }
 );
 
-function feedbackRewardPoints(orderAmount) {
-  const amount = Number(orderAmount || 0);
-  if (amount >= 500) return 50;
-  if (amount >= 400) return 40;
-  if (amount >= 300) return 25;
-  if (amount >= 200) return 10;
-  if (amount >= 100) return 5;
-  return 0;
+function feedbackRewardPoints() {
+  return 5;
 }
 
 exports.creditFeedbackPizzaPoints = onDocumentCreated(
@@ -4395,11 +4389,7 @@ exports.creditFeedbackPizzaPoints = onDocumentCreated(
         transaction.set(feedbackSnap.ref, { rewardStatus: "ineligible", rewardReason: delivered ? "order_owner_mismatch" : "order_not_delivered" }, { merge: true });
         return;
       }
-      const points = feedbackRewardPoints(order.subtotalAmount || order.subtotal || order.grandTotal || order.totalAmount);
-      if (!points) {
-        transaction.set(feedbackSnap.ref, { rewardStatus: "ineligible", rewardReason: "order_below_100", rewardPoints: 0 }, { merge: true });
-        return;
-      }
+      const points = feedbackRewardPoints();
       transaction.set(userRef, {
         walletPoints: Number(user.walletPoints || 0) + points,
         lifetimePointsEarned: Number(user.lifetimePointsEarned || 0) + points,

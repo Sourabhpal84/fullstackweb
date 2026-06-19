@@ -5450,7 +5450,9 @@ body.dark-theme{
 .delivery-feedback-card{
   width:min(460px,100%);
   max-height:calc(100dvh - 24px);
-  overflow:hidden;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  scrollbar-width:thin;
   padding:18px;
   border-radius:24px;
   background:linear-gradient(145deg,#101827,#182235);
@@ -5568,21 +5570,34 @@ body.dark-theme{
     max-height:calc(100dvh - 16px);
     border-radius:22px;
     padding:15px;
+    padding-bottom:max(18px,env(safe-area-inset-bottom));
   }
   .feedback-rating-row{
-    align-items:center;
-    flex-direction:row;
-    gap:6px;
+    align-items:flex-start;
+    flex-direction:column;
+    gap:5px;
+    padding:8px 0;
   }
   .feedback-stars{
-    width:auto;
-    justify-content:flex-end;
+    width:100%;
+    justify-content:space-between;
   }
   .feedback-stars button{
-    width:40px;
-    height:40px;
-    min-width:40px;
+    width:42px;
+    height:42px;
+    min-width:42px;
   }
+  .feedback-overall-stars{justify-content:space-between}
+  .delivery-feedback-card textarea{min-height:92px}
+}
+
+@media (max-width:380px){
+  .delivery-feedback-popup{padding:6px}
+  .delivery-feedback-card{padding:13px;border-radius:18px}
+  .delivery-feedback-card h2{font-size:18px}
+  .feedback-stars button{width:38px;height:38px;min-width:38px;font-size:21px}
+  .feedback-chips{gap:6px}
+  .feedback-chips button{padding:0 9px;font-size:11px}
 }
 
 .saved-address-box{

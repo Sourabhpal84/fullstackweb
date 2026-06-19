@@ -537,7 +537,13 @@ async function callRiderFunction(name, payload = {}, timeoutMs = 25000){
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try{
-    const response = await fetch(`${FUNCTIONS_BASE_URL}/${name}`, {
+    const sameOriginFunctions = new Set([
+      "requestRiderWithdrawal",
+      "createRiderWalletSettlement",
+      "verifyRiderWalletSettlement"
+    ]);
+    const endpoint = sameOriginFunctions.has(name) ? `/api/${name}` : `${FUNCTIONS_BASE_URL}/${name}`;
+    const response = await fetch(endpoint, {
       method:"POST",
       headers:{
         "Content-Type":"application/json",
@@ -912,6 +918,9 @@ function listenFinanceHistory(){
     document.getElementById("recentFinanceHistory").innerHTML = rows.slice(0,5).map(x => `
       <div class="history-item"><div><b>${String(x.type||"Transaction").replaceAll("_"," ")}</b><br><span>${x.description||""}</span></div><div><b>${x.direction==="debit"?"-":x.direction==="credit"?"+":""}${formatCurrency(x.amount)}</b><br><span>${x.status||""}</span></div></div>
     `).join("") || `<div class="empty">No financial history yet.</div>`;
+  }, error => {
+    console.warn("[FIRESTORE LISTENER] Rider ledger unavailable", error);
+    document.getElementById("recentFinanceHistory").innerHTML = `<div class="empty">Financial history is temporarily unavailable. Wallet balance is still visible above.</div>`;
   });
 }
 

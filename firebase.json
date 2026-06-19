@@ -8,6 +8,11 @@
   },
   "hosting": {
     "public": ".",
+    "rewrites": [
+      { "source": "/api/requestRiderWithdrawal", "function": { "functionId": "requestRiderWithdrawal", "region": "asia-south1" } },
+      { "source": "/api/createRiderWalletSettlement", "function": { "functionId": "createRiderWalletSettlement", "region": "asia-south1" } },
+      { "source": "/api/verifyRiderWalletSettlement", "function": { "functionId": "verifyRiderWalletSettlement", "region": "asia-south1" } }
+    ],
     "headers": [
       {
         "source": "/robots.txt",
