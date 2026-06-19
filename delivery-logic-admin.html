@@ -52,12 +52,21 @@ button{border:0;border-radius:13px;min-height:44px;padding:0 14px;font:900 12px 
       <button type="submit">Save Reward Rules</button>
     </form>
     <form class="panel" id="deliveryForm">
-      <h2>Road Distance Settings</h2>
+      <h2>Customer Delivery Settings</h2>
       <label>Google Maps API Key<input id="googleMapsApiKey" placeholder="Maps JavaScript API key"></label>
       <label>Max Delivery Distance KM<input id="maxDistance" type="number"></label>
       <label>Delivery Radius KM<input id="maxDeliveryDistanceKm" type="number"></label>
       <label class="check"><input id="allIndia" type="checkbox"> Allow all-distance delivery</label>
       <label class="check"><input id="vipDeliveryEnabled" type="checkbox"> VIP delivery override</label>
+      <label class="check"><input id="freeDeliveryEnabled" type="checkbox"> Enable free delivery campaign</label>
+      <div class="fields">
+        <label>Zone 1 threshold (0–2 KM)<input id="zone1Threshold" type="number" min="0"></label>
+        <label>Zone 2 threshold (>2–3 KM)<input id="zone2Threshold" type="number" min="0"></label>
+        <label>Zone 3 threshold (>3–4 KM)<input id="zone3Threshold" type="number" min="0"></label>
+        <label>Zone 4 threshold (>4–6 KM)<input id="zone4Threshold" type="number" min="0"></label>
+        <label>Delivery charge per KM<input id="perKmCharge" type="number" min="0" step="0.5"></label>
+        <label>WhatsApp number<input id="whatsappNumber" inputmode="tel"></label>
+      </div>
       <button type="submit">Save Distance Settings</button>
     </form>
   </section>
@@ -104,6 +113,13 @@ onSnapshot(doc(db,"settings","delivery"), snap => {
   maxDeliveryDistanceKm.value = data.maxDeliveryDistanceKm || data.maxDistance || 6;
   allIndia.checked = data.allIndia === true;
   vipDeliveryEnabled.checked = data.vipDeliveryEnabled === true;
+  freeDeliveryEnabled.checked = data.freeDeliveryEnabled !== false;
+  zone1Threshold.value = data.zone1Threshold ?? 149;
+  zone2Threshold.value = data.zone2Threshold ?? 199;
+  zone3Threshold.value = data.zone3Threshold ?? 249;
+  zone4Threshold.value = data.zone4Threshold ?? 299;
+  perKmCharge.value = data.perKmCharge ?? 6;
+  whatsappNumber.value = data.whatsappNumber || "918303614331";
 });
 
 pricingForm.addEventListener("submit", async event => {
@@ -144,6 +160,13 @@ deliveryForm.addEventListener("submit", async event => {
     maxDeliveryDistanceKm:Number(maxDeliveryDistanceKm.value || maxDistance.value) || 6,
     allIndia:allIndia.checked,
     vipDeliveryEnabled:vipDeliveryEnabled.checked
+    ,freeDeliveryEnabled:freeDeliveryEnabled.checked
+    ,zone1Threshold:Number(zone1Threshold.value) || 0
+    ,zone2Threshold:Number(zone2Threshold.value) || 0
+    ,zone3Threshold:Number(zone3Threshold.value) || 0
+    ,zone4Threshold:Number(zone4Threshold.value) || 0
+    ,perKmCharge:Number(perKmCharge.value) || 0
+    ,whatsappNumber:whatsappNumber.value.replace(/\D/g,"")
   }, { merge:true });
   alert("Distance settings saved.");
 });

@@ -165,6 +165,18 @@ let appPricing = {
   gstPercent:0,
   handlingCharge:0
 };
+let deliveryPricingSettings = {
+  freeDeliveryEnabled:true,
+  perKmCharge:6,
+  maxDeliveryDistanceKm:6,
+  whatsappNumber:"918303614331",
+  zones:[
+    { maxKm:2, threshold:149 },
+    { maxKm:3, threshold:199 },
+    { maxKm:4, threshold:249 },
+    { maxKm:6, threshold:299 }
+  ]
+};
 let isOrderProcessing = false;
 let lastOrderSignature = null;
 let razorpayInFlight = false;
@@ -2577,6 +2589,20 @@ registerGlobalSnapshot(onSnapshot(
 
     googleMapsApiKey =
       data.googleMapsApiKey || data.mapsApiKey || "";
+    deliveryPricingSettings = {
+      ...deliveryPricingSettings,
+      freeDeliveryEnabled:data.freeDeliveryEnabled !== false,
+      perKmCharge:Math.max(0, Number(data.perKmCharge ?? data.deliveryChargePerKm ?? 6)),
+      maxDeliveryDistanceKm:MAX_DELIVERY_DISTANCE,
+      whatsappNumber:String(data.whatsappNumber || deliveryPricingSettings.whatsappNumber).replace(/\D/g,""),
+      zones:[
+        { maxKm:2, threshold:Math.max(0, Number(data.zone1Threshold ?? 149)) },
+        { maxKm:3, threshold:Math.max(0, Number(data.zone2Threshold ?? 199)) },
+        { maxKm:4, threshold:Math.max(0, Number(data.zone3Threshold ?? 249)) },
+        { maxKm:MAX_DELIVERY_DISTANCE, threshold:Math.max(0, Number(data.zone4Threshold ?? 299)) }
+      ]
+    };
+    updateCart();
 
     console.log(
       "Delivery Settings Updated:",
@@ -2815,7 +2841,7 @@ function contactOutsideDeliveryArea(){
     `My location: ${address}`,
     `Distance: ${deliveryDistance ? `${deliveryDistance} km` : "Not available"}`
   ].join("\n");
-  window.open(`https://wa.me/918303614331?text=${encodeURIComponent(message)}`, "_blank");
+  window.open(`https://wa.me/${deliveryPricingSettings.whatsappNumber}?text=${encodeURIComponent(message)}`, "_blank");
 }
 
 window.contactOutsideDeliveryArea = contactOutsideDeliveryArea;
@@ -2879,7 +2905,7 @@ async function ensureDeliveryEligible(){
     return false;
   }
   if(!ALL_INDIA_DELIVERY && !VIP_DELIVERY_ENABLED && deliveryDistance > MAX_DELIVERY_DISTANCE){
-    showServiceAreaPopup(`Sorry, we currently deliver only within ${MAX_DELIVERY_DISTANCE} KM of our pizza kitchen.<br><br>For large orders please contact us directly on WhatsApp.<br>📞 8303614331`);
+    showServiceAreaPopup("Sorry, we currently deliver only within 6 KM of our outlet.");
     return false;
   }
   return true;
@@ -2987,10 +3013,34 @@ return false;
 
 }
 
-deliveryCharge = 0;
+const pricing = calculateDistanceDeliveryPricing(deliveryDistance, subtotal);
+if(!pricing.serviceable){
+  showServiceAreaPopup("Sorry, we currently deliver only within 6 KM of our outlet.");
+  return false;
+}
+deliveryCharge = pricing.deliveryCharge;
 
 return true;
 
+}
+
+function calculateDistanceDeliveryPricing(distanceKm = deliveryDistance, subtotal = getCartSubtotal()){
+  const distance = Math.max(0, Number(distanceKm) || 0);
+  const maxDistance = Math.max(0, Number(deliveryPricingSettings.maxDeliveryDistanceKm) || 6);
+  const zone = deliveryPricingSettings.zones.find(item => distance <= item.maxKm) || deliveryPricingSettings.zones.at(-1);
+  const threshold = Math.max(0, Number(zone?.threshold) || 0);
+  const baseCharge = Math.round(distance * Math.max(0, Number(deliveryPricingSettings.perKmCharge) || 0));
+  const campaignFree = deliveryPricingSettings.freeDeliveryEnabled && subtotal >= threshold;
+  return {
+    serviceable:distance > 0 && distance <= maxDistance,
+    threshold,
+    baseCharge,
+    deliveryCharge:campaignFree ? 0 : baseCharge,
+    freeDeliveryDiscount:campaignFree ? baseCharge : 0,
+    remaining:Math.max(0, threshold - subtotal),
+    progress:threshold ? Math.min(100, Math.round(subtotal / threshold * 100)) : 100,
+    freeDelivery:campaignFree
+  };
 }
 
 // function calculateDeliveryCharge(subtotal){
@@ -3260,8 +3310,10 @@ function validateCoupon(coupon, subtotal = getCartSubtotal()){
 }
 
 function calculateCouponPricing(subtotal = getCartSubtotal()){
+  const distancePricing = calculateDistanceDeliveryPricing(deliveryDistance, subtotal);
+  deliveryCharge = distancePricing.deliveryCharge;
   let couponDiscount = 0;
-  let freeDeliveryDiscount = 0;
+  let freeDeliveryDiscount = distancePricing.freeDeliveryDiscount;
   let finalDeliveryCharge = deliveryCharge;
   if(activeCoupon){
     const validation = validateCoupon(activeCoupon, subtotal);
@@ -3295,10 +3347,11 @@ function renderCouponPanel(result = calculateInvoicePricing(getCartSubtotal())){
   if(breakdown){
     breakdown.innerHTML = `
       <div><span>Subtotal</span><b>${formatCurrency(result.subtotal)}</b></div>
+      <div><span>Delivery Distance</span><b>${deliveryDistance ? `${Number(deliveryDistance).toFixed(1)} KM` : "Checking…"}</b></div>
       <div><span>Coupon Savings</span><b>-${formatCurrency(result.couponDiscount)}</b></div>
       <div><span>GST (${result.gstPercent || 0}%)</span><b>${formatCurrency(result.gstAmount || 0)}</b></div>
       <div><span>Handling Charges</span><b>${formatCurrency(result.handlingCharge || 0)}</b></div>
-      <div><span>Delivery Fee</span><b>${formatCurrency(result.deliveryCharge)}</b></div>
+      <div><span>Delivery Charges</span><b>${result.deliveryCharge ? formatCurrency(result.deliveryCharge) : "FREE"}</b></div>
       ${result.freeDeliveryDiscount ? `<div><span>Free Delivery</span><b>-${formatCurrency(result.freeDeliveryDiscount)}</b></div>` : ""}
       ${result.walletDiscount ? `<div><span>Pizza Points</span><b>-${formatCurrency(result.walletDiscount)}</b></div>` : ""}
       <div class="grand"><span>Grand Total</span><b>${formatCurrency(result.finalTotal)}</b></div>
@@ -3345,6 +3398,33 @@ function validateActiveCoupon(){
     if(input) input.value = "";
     persistGuestState();
   }
+}
+
+function renderDeliveryCampaign(subtotal = getCartSubtotal()){
+  const pricing = calculateDistanceDeliveryPricing(deliveryDistance, subtotal);
+  const hosts = [document.getElementById("freeDeliveryHint"), document.getElementById("productDeliveryAlert")].filter(Boolean);
+  const message = !deliveryDistance
+    ? "🚚 Enable location to check delivery charges"
+    : !pricing.serviceable
+      ? "Sorry, we currently deliver only within 6 KM of our outlet."
+      : pricing.freeDelivery
+        ? "🎉 Congratulations! FREE delivery unlocked."
+        : `🚚 Add ${formatCurrency(pricing.remaining)} more to unlock FREE delivery`;
+  const markup = `<div class="delivery-campaign ${pricing.freeDelivery ? "unlocked" : ""} ${!pricing.serviceable && deliveryDistance ? "blocked" : ""}">
+    <strong>${message}</strong>
+    ${pricing.serviceable && !pricing.freeDelivery ? `<div class="delivery-progress-meta"><span>${formatCurrency(subtotal)} / ${formatCurrency(pricing.threshold)}</span><span>${pricing.progress}%</span></div><div class="delivery-progress"><i style="width:${pricing.progress}%"></i></div><small>Add ${formatCurrency(pricing.remaining)} more for FREE delivery</small>` : ""}
+  </div>`;
+  hosts.forEach(host => host.innerHTML = markup);
+  const largeOrder = document.getElementById("largeOrderAssistance");
+  if(largeOrder){
+    largeOrder.hidden = subtotal <= 299;
+    largeOrder.querySelector("a")?.setAttribute("href", `https://wa.me/${deliveryPricingSettings.whatsappNumber}?text=${encodeURIComponent("Hello MAGNEETOZ, I need assistance with a large order.")}`);
+  }
+  const blocked = deliveryDistance > 0 && !pricing.serviceable;
+  document.querySelectorAll("[aria-label='Place order'], #codBtn, #upiBtn").forEach(button => {
+    button.disabled = blocked;
+    button.title = blocked ? "Sorry, we currently deliver only within 6 KM of our outlet." : "";
+  });
 }
 
 async function validateCouponUsage(coupon){
@@ -3453,6 +3533,20 @@ async function createOrderSafely({ paymentMethod, paymentStatus, paymentId = "",
 
   if(!(await timedStep("createOrderSafely:ensureDeliveryEligible", () => ensureDeliveryEligible()))) throw new Error("Delivery is not available for this location.");
   if(!calculateDeliveryCharge(subtotal)) throw new Error("Delivery is not available for this location.");
+  const securedDelivery = await timedStep("createOrderSafely:validateDeliveryPricing", () => callPaymentFunction("validateDeliveryPricing", {
+    cart:compactCartForStorage(cart),
+    orderDraft:{
+      userId:user.uid,
+      subtotalAmount:subtotal,
+      subtotal,
+      couponDiscount:calculateCouponPricing(subtotal).couponDiscount,
+      restaurantLocation:getRestaurantLocation(),
+      location:userLocation
+    }
+  }, 18000));
+  deliveryDistance = Number(securedDelivery.deliveryDistance || deliveryDistance);
+  actualRoadDistance = deliveryDistance;
+  deliveryCharge = Number(securedDelivery.deliveryCharge || 0);
 
   validateActiveCoupon();
   const [usageValidation, inventory] = await timedStep("createOrderSafely:couponAndInventory", () => Promise.all([
@@ -3750,7 +3844,7 @@ function updateCart() {
   if(countEl) countEl.innerText = totalQty;
   if(headerTitle) headerTitle.textContent = `Your Cart (${totalQty} ${totalQty === 1 ? "item" : "items"})`;
   renderCouponPanel(couponResult);
-  showFreeDeliveryHint(total);
+  renderDeliveryCampaign(total);
   persistGuestState();
   notifyPremiumUI("magneetoz:cart-updated", {
     count: totalQty,

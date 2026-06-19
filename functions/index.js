@@ -458,6 +458,76 @@ function compactCart(items) {
   return Array.isArray(items) ? items.slice(0, 80).map(compactCartItem) : [];
 }
 
+function cartSubtotalFromSnapshot(items = []) {
+  return roundMoney((Array.isArray(items) ? items : []).reduce((sum, item) => sum + Number(item.price || 0), 0));
+}
+
+function normalizedDeliverySettings(data = {}) {
+  const maxDistance = Math.max(0.1, Number(data.maxDeliveryDistanceKm || data.maxDistance || 6));
+  return {
+    enabled: data.freeDeliveryEnabled !== false,
+    perKmCharge: Math.max(0, Number(data.perKmCharge ?? data.deliveryChargePerKm ?? 6)),
+    maxDistance,
+    zones: [
+      { maxKm: 2, threshold: Math.max(0, Number(data.zone1Threshold ?? 149)) },
+      { maxKm: 3, threshold: Math.max(0, Number(data.zone2Threshold ?? 199)) },
+      { maxKm: 4, threshold: Math.max(0, Number(data.zone3Threshold ?? 249)) },
+      { maxKm: maxDistance, threshold: Math.max(0, Number(data.zone4Threshold ?? 299)) }
+    ]
+  };
+}
+
+function calculateDeliveryPricing({ distanceKm, subtotal, settings }) {
+  const distance = Math.max(0, Number(distanceKm) || 0);
+  if (!distance || distance > settings.maxDistance) {
+    throw Object.assign(new Error("Sorry, we currently deliver only within 6 KM of our outlet."), { status: 409 });
+  }
+  const zone = settings.zones.find(item => distance <= item.maxKm) || settings.zones.at(-1);
+  const baseCharge = roundMoney(distance * settings.perKmCharge);
+  const freeDelivery = settings.enabled && subtotal >= zone.threshold;
+  return {
+    threshold: zone.threshold,
+    baseCharge,
+    deliveryCharge: freeDelivery ? 0 : baseCharge,
+    freeDeliveryDiscount: freeDelivery ? baseCharge : 0,
+    freeDelivery
+  };
+}
+
+async function secureDeliveryDraft(draft, cartSnapshot) {
+  const subtotal = cartSubtotalFromSnapshot(cartSnapshot);
+  if (Math.abs(subtotal - Number(draft.subtotalAmount || draft.subtotal || 0)) > 0.01) {
+    throw Object.assign(new Error("Cart subtotal changed. Please refresh checkout."), { status: 409 });
+  }
+  if (!draft.restaurantLocation || !draft.location) {
+    throw Object.assign(new Error("Exact delivery location is required."), { status: 400 });
+  }
+  const [settingsSnap, pricingSnap, route] = await Promise.all([
+    db.collection("settings").doc("delivery").get(),
+    db.collection("settings").doc("pricing").get(),
+    calculateGoogleRouteDistance({ origin: draft.restaurantLocation, destination: draft.location })
+  ]);
+  const settings = normalizedDeliverySettings(settingsSnap.exists ? settingsSnap.data() : {});
+  const delivery = calculateDeliveryPricing({ distanceKm: route.distanceKm, subtotal, settings });
+  const pricing = pricingSnap.exists ? pricingSnap.data() : {};
+  const gstPercent = Math.max(0, Number(pricing.gstPercent || 0));
+  const handlingCharge = Math.max(0, roundMoney(pricing.handlingCharge || 0));
+  const couponDiscount = Math.max(0, Math.min(subtotal, Number(draft.couponDiscount || 0)));
+  const taxableAmount = Math.max(0, subtotal - couponDiscount);
+  const gstAmount = Math.round(taxableAmount * gstPercent / 100);
+  const total = Math.max(0, roundMoney(taxableAmount + gstAmount + handlingCharge + delivery.deliveryCharge));
+  return {
+    ...draft, subtotalAmount: subtotal, subtotal,
+    deliveryDistance: route.distanceKm, actualRoadDistance: route.distanceKm,
+    distanceSource: route.source || "google_routes_backend",
+    deliveryCharge: delivery.deliveryCharge, originalDeliveryCharge: delivery.baseCharge,
+    freeDeliveryDiscount: delivery.freeDeliveryDiscount, freeDelivery: delivery.freeDelivery,
+    freeDeliveryThreshold: delivery.threshold, gstPercent, gstAmount, handlingCharge,
+    totalAmount: total, grandTotal: total, finalAmount: total,
+    maxDeliveryDistance: settings.maxDistance
+  };
+}
+
 function compactOrderDraft(draft = {}, cartSnapshot = []) {
   const items = compactCart(draft.items || cartSnapshot);
   return stripUndefined({
@@ -566,6 +636,35 @@ exports.calculateRouteDistance = onRequest(
     } catch (error) {
       logger.error("calculateRouteDistance failed", { error: error.message });
       return sendJson(res, error.status || 500, { ok: false, error: error.message || "Route distance failed" });
+    }
+  }
+);
+
+exports.validateDeliveryPricing = onRequest(
+  { region: "asia-south1", cors: allowedWebOrigins() },
+  async (req, res) => {
+    if (req.method === "OPTIONS") return sendJson(res, 204, {});
+    try {
+      const user = await requireAuth(req);
+      const cart = compactCart(req.body?.cart);
+      const draft = compactOrderDraft(req.body?.orderDraft || {}, cart);
+      if (draft.userId && draft.userId !== user.uid) {
+        throw Object.assign(new Error("Checkout account mismatch"), { status: 403 });
+      }
+      const secured = await secureDeliveryDraft(draft, cart);
+      return sendJson(res, 200, {
+        ok: true,
+        subtotal: secured.subtotal,
+        deliveryDistance: secured.deliveryDistance,
+        deliveryCharge: secured.deliveryCharge,
+        originalDeliveryCharge: secured.originalDeliveryCharge,
+        freeDeliveryDiscount: secured.freeDeliveryDiscount,
+        freeDelivery: secured.freeDelivery,
+        freeDeliveryThreshold: secured.freeDeliveryThreshold,
+        maxDeliveryDistance: secured.maxDeliveryDistance
+      });
+    } catch (error) {
+      return sendJson(res, error.status || 500, { ok: false, error: error.message || "Delivery validation failed" });
     }
   }
 );
@@ -886,15 +985,18 @@ exports.createPaymentSession = onRequest(
     try {
       const user = await requireAuth(req);
       const body = req.body || {};
-      const amount = normalizeAmount(body.amount);
-      if (amount < 10) throw Object.assign(new Error("Online payment is available for orders of ₹10 or more."), { status: 400 });
-      const amountPaise = Math.round(amount * 100);
       const idempotencyKey = String(body.idempotencyKey || "").slice(0, 160);
       if (!idempotencyKey) throw Object.assign(new Error("Missing idempotency key"), { status: 400 });
       const razorpayKeyId = env("RAZORPAY_KEY_ID");
       if (!razorpayKeyId) throw Object.assign(new Error("Razorpay key is not configured"), { status: 500 });
       const incomingCart = compactCart(body.cart);
-      const draft = compactOrderDraft(body.orderDraft || {}, incomingCart);
+      const draft = await secureDeliveryDraft(compactOrderDraft(body.orderDraft || {}, incomingCart), incomingCart);
+      const amount = normalizeAmount(draft.grandTotal);
+      if (amount < 10) throw Object.assign(new Error("Online payment is available for orders of ₹10 or more."), { status: 400 });
+      if (Math.abs(Number(body.amount || 0) - amount) > 0.01) {
+        throw Object.assign(new Error("Delivery pricing changed. Please review the updated total and try again."), { status: 409 });
+      }
+      const amountPaise = Math.round(amount * 100);
       const customerName = String(draft.customerName || body.customerName || "Magneetoz Customer").slice(0, 120);
       const customerPhone = String(user.phone_number || "").replace(/\D/g, "").slice(-10);
       if (!customerPhone) throw Object.assign(new Error("Verified mobile missing. Please update your profile once."), { status: 400 });
@@ -1747,6 +1849,10 @@ function riderBaseEarning(order = {}) {
   return roundMoney(20 + Math.max(0, distance - 3) * 5);
 }
 
+function canonicalRiderEarning(order = {}) {
+  return Math.max(20, riderBaseEarning(order));
+}
+
 async function riderProfileForUser(uid) {
   const snap = await db.collection("riders").doc(uid).get();
   if (!snap.exists) throw Object.assign(new Error("Rider profile not found"), { status: 403 });
@@ -2147,7 +2253,7 @@ async function completeDeliveryTransaction({ orderId, rider, mode, codeRef, code
       throw Object.assign(new Error("Customer delivery OTP is required for prepaid order"), { status: 409 });
     }
 
-    const baseEarning = riderBaseEarning(order, pricing);
+    const baseEarning = canonicalRiderEarning(order);
     const riderEarning = Math.max(0, baseEarning);
     const total = Number(order.totalAmount || order.finalAmount || 0);
     const treatedAsCashSettlement = cashOrder && !doorstepOnlineDelivery;
@@ -2239,9 +2345,18 @@ async function completeDeliveryTransaction({ orderId, rider, mode, codeRef, code
     transaction.set(db.collection("riderOrderHistory").doc(orderId), historyData, { merge: true });
     transaction.set(db.collection("riderLedger").doc(`earning_${orderId}`), {
       riderId: rider.riderId, orderId, type: "DELIVERY_EARNING", amount: riderEarning,
-      direction: "credit", description: `Delivery earnings for Order #${historyData.orderNumber}`,
+      direction: "credit", status: "credited",
+      description: `Full delivery earning credited for Order #${historyData.orderNumber}`,
       createdAt: FieldValue.serverTimestamp()
     }, { merge: true });
+    if (earningsAdjustedToCompany > 0) {
+      transaction.set(db.collection("riderLedger").doc(`earning_settlement_${orderId}`), {
+        riderId: rider.riderId, orderId, type: "COMPANY_SETTLEMENT_SUCCESS",
+        amount: earningsAdjustedToCompany, direction: "debit", status: "auto_adjusted",
+        description: `Company due adjusted separately from earnings for Order #${historyData.orderNumber}`,
+        createdAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
     if (treatedAsCashSettlement) {
       transaction.set(db.collection("riderLedger").doc(`cod_${orderId}`), {
         riderId: rider.riderId, orderId, type: "COD_COLLECTION", amount: total,
@@ -2444,7 +2559,7 @@ exports.assignRiderToOrder = onRequest(
       const pickupAddress = order.restaurantAddress || order.pickupAddress || "MAGNEETOZ Restaurant";
       const dropAddress = order.address || order.dropAddress || "";
       const estimatedDistance = Number(order.actualRoadDistance || order.deliveryDistance || order.distance || 0);
-      const earning = riderBaseEarning(order, (await db.collection("settings").doc("pricing").get()).data() || {});
+      const earning = canonicalRiderEarning(order);
       await db.runTransaction(async transaction => {
         const [lockedOrderSnap, lockedRiderSnap] = await Promise.all([
           transaction.get(orderRef),
@@ -3074,7 +3189,7 @@ exports.createRiderPaymentSession = onRequest(
       const pricingSnap = await db.collection("settings").doc("pricing").get();
       const pricing = pricingSnap.exists ? pricingSnap.data() : {};
       const total = Number(order.totalAmount || order.finalAmount || 0);
-      const earning = riderBaseEarning(order, pricing);
+      const earning = canonicalRiderEarning(order);
       const grossCompanyDue = Math.max(0, total - earning);
       const walletSnap = await db.collection("riderWallet").doc(rider.riderId).get();
       const currentWallet = netWalletState(walletSnap.exists ? walletSnap.data() : {
@@ -3350,7 +3465,7 @@ exports.verifyRiderPayment = onRequest(
           });
         }
         if (autoDeliverCustomerOnline) {
-          const riderEarning = Number(session.riderEarning || 0);
+          const riderEarning = canonicalRiderEarning(lockedOrder);
           transaction.update(riderRef, {
             totalOrders: FieldValue.increment(1),
             totalEarnings: FieldValue.increment(riderEarning),
@@ -3675,7 +3790,7 @@ exports.sendRiderDeliveryRequest = onDocumentCreated(
           pickupAddress: order.restaurantAddress || order.pickupAddress || "MAGNEETOZ Restaurant",
           dropAddress: order.address || order.dropAddress || "",
           estimatedDistance: Number(order.actualRoadDistance || order.deliveryDistance || order.distance || 0),
-          estimatedEarning: riderBaseEarning(order, (await db.collection("settings").doc("pricing").get()).data() || {}),
+          estimatedEarning: canonicalRiderEarning(order),
           expiresAt,
           status: "pending",
           createdAt: admin.firestore.FieldValue.serverTimestamp()
