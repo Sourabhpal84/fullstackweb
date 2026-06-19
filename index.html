@@ -535,14 +535,11 @@ Verify OTP
     <!-- CATEGORY NAV -->
 
     <div class="sticky-area">
-      <div class="brand-location-row">
-        <div class="brand-tagline">The Taste Of Attraction 🔥</div>
-        <button type="button" class="compact-location-chip" id="heroLocationPill" aria-label="Select delivery location">
-          <span>📍</span>
-          <span><strong id="heroLocationTitle">Select location</strong><small id="heroLocationAddress">Use current location</small></span>
-          <b>›</b>
-        </button>
-      </div>
+      <button type="button" class="delivery-location-strip" id="heroLocationPill" aria-label="Select delivery location">
+        <span class="delivery-location-pin">⌖</span>
+        <span class="delivery-location-copy"><small>DELIVERING TO</small><strong id="heroLocationTitle">Select your location</strong><em id="heroLocationAddress">Use current location for accurate delivery offers</em></span>
+        <span class="delivery-location-change">Change <b>›</b></span>
+      </button>
 
       <nav
         class="category-nav"
