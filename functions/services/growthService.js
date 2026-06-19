@@ -10,6 +10,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   walletMaxRedemptionPercent: 20,
   walletMinimumOrderValue: 0,
   walletAppliesToDeliveryFee: false,
+  walletPointExpiryDays: 60,
   birthdayRewardPoints: 0,
   ambassadorMinimumWithdrawal: 100
 });
@@ -160,6 +161,8 @@ async function creditPoints(transaction, { db, FieldValue, userRef, user, points
     orderId,
     referralUserId,
     status: "credited",
+    remainingPoints: amount,
+    expiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
     description,
     createdAt: FieldValue.serverTimestamp()
   });

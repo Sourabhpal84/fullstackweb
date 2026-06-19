@@ -3867,8 +3867,6 @@ async function buildPaidOnlineOrderDraft(){
   const user = await waitForAuthReady();
   if(!user?.uid) throw new Error("Please login again to place this order.");
   if(!cart.length) throw new Error("Cart empty");
-  if(walletPointsRequested > 0) throw new Error("Pizza Points are currently available with Cash on Delivery. Remove points to pay online.");
-
   const fields = getCheckoutFields();
   fields.phone = await resolveAuthenticatedCheckoutPhone(user);
   if(!fields.phone) throw new Error("We could not verify your mobile. Please sign out and sign in again.");
@@ -3939,6 +3937,8 @@ async function buildPaidOnlineOrderDraft(){
       couponPgName:activeCoupon?.pgName || activeCoupon?.pg || "",
       couponPgCode:activeCoupon?.pgCode || "",
       couponDiscount:pricing.couponDiscount,
+      walletPointsRequested:pricing.walletDiscount,
+      walletDiscount:pricing.walletDiscount,
       freeDelivery:deliveryRulePaid.freeDelivery || !!activeCoupon?.freeDelivery,
       gstPercent:pricing.gstPercent,
       gstAmount:pricing.gstAmount,

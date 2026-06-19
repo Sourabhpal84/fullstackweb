@@ -90,6 +90,24 @@ async function requireAuth(req) {
   return admin.auth().verifyIdToken(match[1]);
 }
 
+function normalizeIndianPhone(value = "") {
+  const digits = String(value || "").replace(/\D/g, "");
+  const phone = digits.slice(-10);
+  return /^[6-9]\d{9}$/.test(phone) ? phone : "";
+}
+
+async function resolveVerifiedCustomerPhone(authUser, profile = {}) {
+  const tokenPhone = normalizeIndianPhone(authUser?.phone_number);
+  if (tokenPhone) return tokenPhone;
+  const authRecord = await admin.auth().getUser(authUser.uid).catch(() => null);
+  const authPhone = normalizeIndianPhone(
+    authRecord?.phoneNumber
+    || authRecord?.providerData?.find(provider => provider.phoneNumber)?.phoneNumber
+  );
+  if (authPhone) return authPhone;
+  return normalizeIndianPhone(profile.phone || profile.customerPhone || profile.phoneDigits);
+}
+
 async function requireAdmin(req) {
   const user = await requireAuth(req);
   const email = String(user.email || "").toLowerCase();
@@ -548,6 +566,7 @@ function compactOrderDraft(draft = {}, cartSnapshot = []) {
     couponPgName: compactText(draft.couponPgName, 160),
     couponPgCode: compactText(draft.couponPgCode, 80),
     couponDiscount: Number(draft.couponDiscount || 0),
+    walletPointsRequested: Math.max(0, Math.floor(Number(draft.walletPointsRequested || 0))),
     freeDeliveryDiscount: Number(draft.freeDeliveryDiscount || 0),
     freeDelivery: Boolean(draft.freeDelivery),
     freeDeliveryApplied: Boolean(draft.freeDeliveryApplied ?? draft.freeDelivery),
@@ -797,14 +816,33 @@ async function createOrderFromPaidSession({ sessionRef, session, payment, source
   const orderRef = db.collection("orders").doc(session.orderId);
   const counterRef = db.collection("counters").doc("orders");
   const recoveryRef = db.collection("paidOrderRecovery").doc(session.id);
+  const walletReserveRef = db.collection("walletTransactions").doc(`online_reserve_${session.id}`);
+  const userRef = db.collection("users").doc(session.userId);
 
   const result = await db.runTransaction(async transaction => {
-    const [sessionSnap, existingOrderSnap, counterSnap] = await Promise.all([
+    const [sessionSnap, existingOrderSnap, counterSnap, userSnap, walletReserveSnap] = await Promise.all([
       transaction.get(sessionRef),
       transaction.get(orderRef),
-      transaction.get(counterRef)
+      transaction.get(counterRef),
+      transaction.get(userRef),
+      transaction.get(walletReserveRef)
     ]);
     const locked = { id: sessionRef.id, ...(sessionSnap.data() || session) };
+    const finalizeWalletReservation = paymentId => {
+      const reservedPoints = Math.max(0, Number(locked.walletPointsReserved || 0));
+      if (!reservedPoints || !walletReserveSnap.exists || walletReserveSnap.data()?.status !== "reserved") return;
+      const wallet = userSnap.data() || {};
+      transaction.set(userRef, {
+        pendingPoints: Math.max(0, Number(wallet.pendingPoints || 0) - reservedPoints),
+        lifetimePointsUsed: Number(wallet.lifetimePointsUsed || 0) + reservedPoints,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      transaction.set(walletReserveRef, {
+        status: "debited",
+        consumedAt: FieldValue.serverTimestamp(),
+        razorpayPaymentId: paymentId || ""
+      }, { merge: true });
+    };
     if (locked.status === "order_created" && locked.createdOrderId) {
       return { orderId: locked.createdOrderId, orderNumber: locked.orderNumber || "", duplicate: true };
     }
@@ -824,11 +862,13 @@ async function createOrderFromPaidSession({ sessionRef, session, payment, source
     ) {
       transaction.set(sessionRef, {
         status: "order_created",
+        walletReservationStatus: Number(locked.walletPointsReserved || 0) ? "consumed" : "none",
         createdOrderId: orderRef.id,
         orderNumber: existingOrder.orderNumber,
         orderCreatedAt: existingOrder.placedAt || FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp()
       }, { merge: true });
+      finalizeWalletReservation(existingOrder.razorpayPaymentId || payment.id);
       return { orderId: orderRef.id, orderNumber: existingOrder.orderNumber, duplicate: true };
     }
 
@@ -881,6 +921,7 @@ async function createOrderFromPaidSession({ sessionRef, session, payment, source
         razorpayPaymentId: paymentId,
         createdAt: FieldValue.serverTimestamp()
       });
+      finalizeWalletReservation(paymentId);
       return { orderId: orderRef.id, orderNumber: existingOrder.orderNumber || locked.orderNumber || "", duplicate: false, paymentOnly: true };
     }
 
@@ -888,6 +929,7 @@ async function createOrderFromPaidSession({ sessionRef, session, payment, source
     const draft = stripUndefined(locked.orderDraft || {});
     const amount = Number(locked.amount || 0);
     const paymentId = payment.id;
+    const reservedPoints = Math.max(0, Number(locked.walletPointsReserved || 0));
     const orderData = {
       ...draft,
       orderId: orderRef.id,
@@ -934,6 +976,7 @@ async function createOrderFromPaidSession({ sessionRef, session, payment, source
     transaction.set(orderRef, orderData, { merge: true });
     transaction.set(sessionRef, {
       status: "order_created",
+      walletReservationStatus: reservedPoints ? "consumed" : "none",
       createdOrderId: orderRef.id,
       orderNumber: nextOrderNumber,
       orderCreatedAt: FieldValue.serverTimestamp(),
@@ -950,6 +993,7 @@ async function createOrderFromPaidSession({ sessionRef, session, payment, source
       userId: locked.userId,
       updatedAt: FieldValue.serverTimestamp()
     }, { merge: true });
+    finalizeWalletReservation(paymentId);
     return { orderId: orderRef.id, orderNumber: nextOrderNumber, duplicate: false };
   });
 
@@ -996,15 +1040,34 @@ exports.createPaymentSession = onRequest(
       if (!razorpayKeyId) throw Object.assign(new Error("Razorpay key is not configured"), { status: 500 });
       const incomingCart = compactCart(body.cart);
       const draft = await secureDeliveryDraft(compactOrderDraft(body.orderDraft || {}, incomingCart), incomingCart);
-      const amount = normalizeAmount(draft.grandTotal);
+      const userRef = db.collection("users").doc(user.uid);
+      const userSnap = await userRef.get();
+      if (!userSnap.exists) throw Object.assign(new Error("Pizza Points wallet not found"), { status: 404 });
+      const rewardConfig = await growth.settings(db);
+      const requestedPoints = Math.max(0, Math.floor(Number(draft.walletPointsRequested || 0)));
+      const pointsReserved = growth.calculateWalletRedemption({
+        orderValue: Number(draft.grandTotal || 0),
+        deliveryFee: Number(draft.deliveryCharge || 0),
+        requestedPoints,
+        availablePoints: Number(userSnap.data()?.walletPoints || 0),
+        config: rewardConfig
+      });
+      if (requestedPoints && !pointsReserved) throw Object.assign(new Error("Selected Pizza Points are no longer available"), { status: 409 });
+      const amount = normalizeAmount(Number(draft.grandTotal || 0) - pointsReserved);
+      draft.walletPointsRequested = requestedPoints;
+      draft.walletPointsUsed = pointsReserved;
+      draft.walletDiscount = pointsReserved;
+      draft.totalAmount = amount;
+      draft.grandTotal = amount;
+      draft.finalAmount = amount;
       if (amount < 10) throw Object.assign(new Error("Online payment is available for orders of ₹10 or more."), { status: 400 });
       if (Math.abs(Number(body.amount || 0) - amount) > 0.01) {
         throw Object.assign(new Error("Delivery pricing changed. Please review the updated total and try again."), { status: 409 });
       }
       const amountPaise = Math.round(amount * 100);
       const customerName = String(draft.customerName || body.customerName || "Magneetoz Customer").slice(0, 120);
-      const customerPhone = String(user.phone_number || "").replace(/\D/g, "").slice(-10);
-      if (!customerPhone) throw Object.assign(new Error("Verified mobile missing. Please update your profile once."), { status: 400 });
+      const customerPhone = await resolveVerifiedCustomerPhone(user, userSnap.data() || {});
+      if (!customerPhone) throw Object.assign(new Error("Mobile number could not be verified. Please sign in again once."), { status: 400 });
       const customerEmail = String(draft.email || body.email || "").trim();
       if (draft.restaurantLocation && draft.location) {
         const route = await calculateGoogleRouteDistance({
@@ -1076,6 +1139,40 @@ exports.createPaymentSession = onRequest(
         keyId: razorpayKeyId
       });
 
+      if (pointsReserved) {
+        await db.runTransaction(async transaction => {
+          const reserveRef = db.collection("walletTransactions").doc(`online_reserve_${sessionId}`);
+          const [lockedUserSnap, reserveSnap] = await Promise.all([
+            transaction.get(userRef),
+            transaction.get(reserveRef)
+          ]);
+          if (reserveSnap.exists) return;
+          const lockedUser = lockedUserSnap.data() || {};
+          if (Number(lockedUser.walletPoints || 0) < pointsReserved) {
+            throw Object.assign(new Error("Pizza Points balance changed. Please review checkout again."), { status: 409 });
+          }
+          const allocations = await consumePizzaPointBatches(transaction, user.uid, pointsReserved, `online_reserve_${sessionId}`);
+          transaction.set(userRef, {
+            walletPoints: Number(lockedUser.walletPoints || 0) - pointsReserved,
+            pendingPoints: Number(lockedUser.pendingPoints || 0) + pointsReserved,
+            updatedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+          transaction.set(reserveRef, {
+            userId: user.uid,
+            type: "online_order_reserve",
+            points: -pointsReserved,
+            amountEquivalent: pointsReserved,
+            source: "online_checkout",
+            paymentSessionId: sessionId,
+            orderId,
+            allocations,
+            status: "reserved",
+            description: "Pizza Points reserved for online payment",
+            createdAt: FieldValue.serverTimestamp()
+          });
+        });
+      }
+
       await sessionRef.set({
         id: sessionId,
         idempotencyKey,
@@ -1090,6 +1187,8 @@ exports.createPaymentSession = onRequest(
         razorpayPaymentLinkId: "",
         razorpayPaymentLinkUrl: "",
         status: "created",
+        walletPointsReserved: pointsReserved,
+        walletReservationStatus: pointsReserved ? "reserved" : "none",
         lockState: "open",
         attempts: 0,
         createdAt: FieldValue.serverTimestamp(),
@@ -1120,6 +1219,9 @@ exports.createPaymentSession = onRequest(
         amountDue: amount,
         amountPaid: 0,
         amountToCollect: amount,
+        walletPointsRequested: requestedPoints,
+        walletPointsUsed: pointsReserved,
+        walletDiscount: pointsReserved,
         paymentCaptured: false,
         orderSource: "online",
         checkoutSource: "razorpay_payment_pending",
@@ -1757,6 +1859,151 @@ exports.expirePendingPaymentOrders = onSchedule(
       }
     });
     if (!pendingSnap.empty) await batch.commit();
+  }
+);
+
+exports.releaseExpiredOnlinePointReservations = onSchedule(
+  { region: "asia-south1", schedule: "every 15 minutes" },
+  async () => {
+    const cutoff = admin.firestore.Timestamp.fromMillis(Date.now() - 20 * 60 * 1000);
+    const reservations = await db.collection("walletTransactions")
+      .where("type", "==", "online_order_reserve")
+      .where("status", "==", "reserved")
+      .where("createdAt", "<", cutoff)
+      .limit(100)
+      .get();
+    for (const reservationSnap of reservations.docs) {
+      await db.runTransaction(async transaction => {
+        const lockedReservation = await transaction.get(reservationSnap.ref);
+        if (!lockedReservation.exists || lockedReservation.data()?.status !== "reserved") return;
+        const reservation = lockedReservation.data() || {};
+        const sessionRef = db.collection("paymentSessions").doc(String(reservation.paymentSessionId || ""));
+        const userRef = db.collection("users").doc(String(reservation.userId || ""));
+        const [sessionSnap, userSnap] = await Promise.all([
+          transaction.get(sessionRef),
+          transaction.get(userRef)
+        ]);
+        const session = sessionSnap.data() || {};
+        if (session.status === "order_created" || session.walletReservationStatus === "consumed") return;
+        if (sessionSnap.exists && !["expired", "verification_failed", "failed"].includes(String(session.status || "").toLowerCase())) return;
+        const points = Math.abs(Number(reservation.points || 0));
+        const allocations = Array.isArray(reservation.allocations) ? reservation.allocations : [];
+        const creditRefs = allocations.map(allocation =>
+          db.collection("walletTransactions").doc(String(allocation.transactionId || ""))
+        );
+        const creditSnaps = await Promise.all(creditRefs.map(ref => transaction.get(ref)));
+        let releasablePoints = 0;
+        let expiredWhileReserved = 0;
+        allocations.forEach((allocation, index) => {
+          const creditRef = creditRefs[index];
+          const creditSnap = creditSnaps[index];
+          const allocated = Number(allocation.points || 0);
+          if (!creditSnap.exists) {
+            expiredWhileReserved += allocated;
+            return;
+          }
+          const credit = creditSnap.data() || {};
+          const expiryMs = credit.expiresAt?.toMillis?.() || 0;
+          if (credit.status === "expired" || (expiryMs && expiryMs <= Date.now())) {
+            expiredWhileReserved += allocated;
+            return;
+          }
+          releasablePoints += allocated;
+          transaction.set(creditRef, {
+            remainingPoints: Math.max(0, Number(credit.remainingPoints || 0)) + allocated
+          }, { merge: true });
+        });
+        const wallet = userSnap.data() || {};
+        transaction.set(userRef, {
+          walletPoints: Number(wallet.walletPoints || 0) + releasablePoints,
+          pendingPoints: Math.max(0, Number(wallet.pendingPoints || 0) - points),
+          lifetimePointsExpired: Number(wallet.lifetimePointsExpired || 0) + expiredWhileReserved,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        transaction.set(reservationSnap.ref, {
+          status: expiredWhileReserved ? "released_with_expiry" : "released",
+          releasedPoints: releasablePoints,
+          expiredPoints: expiredWhileReserved,
+          releasedAt: FieldValue.serverTimestamp(),
+          releaseReason: "online_payment_session_expired"
+        }, { merge: true });
+        transaction.set(sessionRef, {
+          walletReservationStatus: "released",
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      });
+    }
+  }
+);
+
+exports.expirePizzaPoints = onSchedule(
+  { region: "asia-south1", schedule: "every day 02:15" },
+  async () => {
+    const now = admin.firestore.Timestamp.now();
+    const legacyCredits = await db.collection("walletTransactions")
+      .where("status", "==", "credited")
+      .limit(500)
+      .get();
+    const legacyBatch = db.batch();
+    let legacyUpdates = 0;
+    legacyCredits.docs.forEach(item => {
+      const credit = item.data() || {};
+      if (Number(credit.points || 0) <= 0 || credit.expiresAt) return;
+      const createdMs = credit.createdAt?.toMillis?.() || Date.now();
+      legacyBatch.set(item.ref, {
+        remainingPoints: Math.max(0, Number(
+          credit.remainingPoints === undefined ? credit.points : credit.remainingPoints
+        )),
+        expiresAt: admin.firestore.Timestamp.fromMillis(createdMs + PIZZA_POINT_EXPIRY_MS)
+      }, { merge: true });
+      legacyUpdates += 1;
+    });
+    if (legacyUpdates) await legacyBatch.commit();
+    const credits = await db.collection("walletTransactions")
+      .where("status", "==", "credited")
+      .where("expiresAt", "<=", now)
+      .limit(200)
+      .get();
+    for (const creditSnap of credits.docs) {
+      await db.runTransaction(async transaction => {
+        const lockedCredit = await transaction.get(creditSnap.ref);
+        if (!lockedCredit.exists || lockedCredit.data()?.status !== "credited") return;
+        const credit = lockedCredit.data() || {};
+        const expiring = Math.max(0, Math.floor(Number(
+          credit.remainingPoints === undefined ? credit.points : credit.remainingPoints
+        )));
+        if (!expiring) {
+          transaction.set(creditSnap.ref, { status: "consumed" }, { merge: true });
+          return;
+        }
+        const userRef = db.collection("users").doc(String(credit.userId || ""));
+        const userSnap = await transaction.get(userRef);
+        if (!userSnap.exists) return;
+        const user = userSnap.data() || {};
+        transaction.set(userRef, {
+          walletPoints: Math.max(0, Number(user.walletPoints || 0) - expiring),
+          lifetimePointsExpired: Number(user.lifetimePointsExpired || 0) + expiring,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        transaction.set(creditSnap.ref, {
+          remainingPoints: 0,
+          status: "expired",
+          expiredPoints: expiring,
+          expiredAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        transaction.set(db.collection("walletTransactions").doc(`expiry_${creditSnap.id}`), {
+          userId: credit.userId,
+          type: "points_expiry",
+          points: -expiring,
+          amountEquivalent: expiring,
+          source: "60_day_expiry",
+          sourceTransactionId: creditSnap.id,
+          status: "expired",
+          description: `${expiring} Pizza Points expired after 60 days`,
+          createdAt: FieldValue.serverTimestamp()
+        });
+      });
+    }
   }
 );
 
@@ -4503,6 +4750,39 @@ function feedbackRewardPoints(orderAmount) {
   return 0;
 }
 
+const PIZZA_POINT_EXPIRY_MS = 60 * 24 * 60 * 60 * 1000;
+
+async function consumePizzaPointBatches(transaction, userId, points, sourceId) {
+  let remaining = Math.max(0, Math.floor(Number(points || 0)));
+  if (!remaining) return [];
+  const creditsQuery = db.collection("walletTransactions")
+    .where("userId", "==", userId)
+    .where("status", "==", "credited")
+    .orderBy("createdAt", "asc")
+    .limit(100);
+  const credits = await transaction.get(creditsQuery);
+  const allocations = [];
+  for (const creditSnap of credits.docs) {
+    if (!remaining) break;
+    const credit = creditSnap.data() || {};
+    if (Number(credit.points || 0) <= 0) continue;
+    const available = Math.max(0, Math.floor(Number(
+      credit.remainingPoints === undefined ? credit.points : credit.remainingPoints
+    )));
+    if (!available) continue;
+    const used = Math.min(available, remaining);
+    transaction.set(creditSnap.ref, {
+      remainingPoints: available - used,
+      lastConsumedAt: FieldValue.serverTimestamp(),
+      lastConsumptionSource: sourceId
+    }, { merge: true });
+    allocations.push({ transactionId: creditSnap.id, points: used });
+    remaining -= used;
+  }
+  if (remaining) throw Object.assign(new Error("Available Pizza Point batches are insufficient"), { status: 409 });
+  return allocations;
+}
+
 exports.creditFeedbackPizzaPoints = onDocumentCreated(
   { document: "feedback/{feedbackId}", region: "asia-south1" },
   async event => {
@@ -4549,6 +4829,8 @@ exports.creditFeedbackPizzaPoints = onDocumentCreated(
         orderNumber: order.orderNumber || order.orderId || feedback.orderId,
         orderAmount: eligibleOrderAmount, feedbackId: event.params.feedbackId,
         status: "credited",
+        remainingPoints: points,
+        expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + PIZZA_POINT_EXPIRY_MS),
         description: `${points} Pizza Points earned from feedback for Order #${order.orderNumber || order.orderId || feedback.orderId}`,
         createdAt: FieldValue.serverTimestamp()
       });
@@ -4711,7 +4993,12 @@ exports.adminAdjustPizzaPoints = onRequest(
         transaction.set(txRef, {
           userId, type: points > 0 ? "admin_credit" : "admin_debit",
           points, amountEquivalent: points, source: "admin",
-          status: "credited", description: String(req.body?.description || "Admin adjustment").slice(0, 240),
+          status: points > 0 ? "credited" : "debited",
+          ...(points > 0 ? {
+            remainingPoints: points,
+            expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + PIZZA_POINT_EXPIRY_MS)
+          } : {}),
+          description: String(req.body?.description || "Admin adjustment").slice(0, 240),
           adminUid: adminUser.uid, createdAt: FieldValue.serverTimestamp()
         });
       });
@@ -4757,6 +5044,7 @@ exports.applyWalletToOrder = onRequest(
         if (!pointsUsed) throw Object.assign(new Error("No Pizza Points can be applied to this order"), { status: 409 });
         const finalTotal = Math.max(0, roundMoney(Number(order.grandTotal || order.totalAmount || 0) - pointsUsed));
         const walletBalance = Number(user.walletPoints || 0) - pointsUsed;
+        const allocations = await consumePizzaPointBatches(transaction, authUser.uid, pointsUsed, `order_redeem_${orderId}_${authUser.uid}`);
         transaction.set(userRef, {
           walletPoints: walletBalance,
           lifetimePointsUsed: Number(user.lifetimePointsUsed || 0) + pointsUsed,
@@ -4775,6 +5063,7 @@ exports.applyWalletToOrder = onRequest(
         transaction.set(ledgerRef, {
           userId: authUser.uid, type: "order_redeem", points: -pointsUsed,
           amountEquivalent: pointsUsed, source: "checkout", orderId,
+          allocations,
           status: "debited", description: "Pizza Points used on order",
           createdAt: FieldValue.serverTimestamp()
         });
