@@ -448,15 +448,6 @@ Verify OTP
 
     </header>
 
-    <button type="button" class="top-location-bar" id="heroLocationPill" aria-label="Select delivery location">
-      <span>📍</span>
-      <span>
-        <strong id="heroLocationTitle">Select delivery location</strong>
-        <small id="heroLocationAddress">Tap to use your current location</small>
-      </span>
-      <b>Change ›</b>
-    </button>
-
     <button id="globalOrderStatusStrip" class="global-order-status-strip" type="button" aria-live="polite" hidden>
       <span class="status-dot"></span>
       <strong>Order updating</strong>
@@ -544,8 +535,13 @@ Verify OTP
     <!-- CATEGORY NAV -->
 
     <div class="sticky-area">
-      <div class="brand-tagline">
-        The Taste Of Attraction 🔥
+      <div class="brand-location-row">
+        <div class="brand-tagline">The Taste Of Attraction 🔥</div>
+        <button type="button" class="compact-location-chip" id="heroLocationPill" aria-label="Select delivery location">
+          <span>📍</span>
+          <span><strong id="heroLocationTitle">Select location</strong><small id="heroLocationAddress">Use current location</small></span>
+          <b>›</b>
+        </button>
       </div>
 
       <nav
@@ -837,6 +833,7 @@ Verify OTP
           <select id="savedAddressSelect" aria-label="Saved addresses">
             <option value="">Add new address</option>
           </select>
+          <div id="savedAddressCards" class="saved-address-cards"></div>
           <div class="checkout-location-status" id="checkoutLocationStatus">📍 Location will be verified automatically.</div>
         </section>
         <div class="location-address-form" id="locationAddressForm" hidden>

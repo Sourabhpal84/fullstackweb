@@ -1683,6 +1683,21 @@ function renderSavedAddresses(addresses = []){
     return `<option value="${index}">${escapeHTML(label).slice(0, 52)}${escapeHTML(addressDistanceLabel(item))}${coord}</option>`;
   }).join("");
   select.dataset.addresses = JSON.stringify(valid);
+  const cards = document.getElementById("savedAddressCards");
+  if(cards){
+    cards.innerHTML = valid.length ? valid.map((item, index) => `
+      <article class="saved-address-card ${select.value === String(index) ? "active" : ""}">
+        <button type="button" class="saved-address-main" onclick="selectSavedAddressCard(${index})">
+          <span>⌂</span>
+          <span><strong>${escapeHTML(item.landmark || item.label || `Address ${index + 1}`)}</strong><small>${escapeHTML(item.address || "")}</small></span>
+        </button>
+        <div class="saved-address-card-actions">
+          <button type="button" onclick="editSavedAddressCard(${index})">Edit</button>
+          <button type="button" class="delete" onclick="deleteSavedAddressCard(${index})">Delete</button>
+        </div>
+      </article>
+    `).join("") : `<div class="saved-address-empty">No saved addresses yet</div>`;
+  }
   if(valid.length && !select.value){
     select.value = "0";
     restoreCheckoutFields(valid[0], true);
@@ -1737,6 +1752,25 @@ function applySavedAddress(index){
   persistGuestState();
   closeLocationSelector();
 }
+
+window.selectSavedAddressCard = function(index){
+  const select = document.getElementById("savedAddressSelect");
+  if(select) select.value = String(index);
+  applySavedAddress(String(index));
+};
+
+window.editSavedAddressCard = function(index){
+  const select = document.getElementById("savedAddressSelect");
+  if(select) select.value = String(index);
+  applySavedAddress(String(index));
+  showLocationAddressForm();
+};
+
+window.deleteSavedAddressCard = async function(index){
+  const select = document.getElementById("savedAddressSelect");
+  if(select) select.value = String(index);
+  await deleteSelectedAddress();
+};
 
 function isUsableLocation(item = {}){
   const lat = Number(item.lat);
@@ -1847,7 +1881,8 @@ async function deleteSelectedAddress(){
   addresses.splice(index, 1);
   await saveAddressBook(addresses);
   setCheckoutFieldsCollapsed(false);
-  alert("Address deleted.");
+  updateSelectedLocationUi("");
+  toastSuccess?.("Address deleted");
 }
 
 function editSelectedAddress(){
