@@ -508,11 +508,21 @@ async function verifyOtp(){
 async function ensureRiderProfile(user){
   const ref = doc(db, "riders", user.uid);
   const snap = await getDoc(ref);
-  const rawPhone = (user.phoneNumber || "").replace("+91","");
-  const cleanName = els.name.value.trim();
-  if(!cleanName && !snap.exists()){
+  const rawPhone = (user.phoneNumber || els.phone.value || "").replace(/\D/g, "").slice(-10);
+  const accountSnap = rawPhone ? await getDoc(doc(db, "riderAccounts", rawPhone)).catch(() => null) : null;
+  const account = accountSnap?.exists?.() ? accountSnap.data() : {};
+  const cleanName = (
+    els.name.value.trim()
+    || account.riderName
+    || account.name
+    || localStorage.getItem("riderName")
+    || ""
+  ).trim();
+  const knownRiderLogin = !!(account.riderId || account.loginEmail || account.passwordLoginEnabled);
+  if(!cleanName && !snap.exists() && !knownRiderLogin){
     throw new Error("Enter your rider name.");
   }
+  const resolvedName = cleanName || "Magneetoz Rider";
   const base = {
     riderId:user.uid,
     phone:user.phoneNumber,
@@ -525,11 +535,11 @@ async function ensureRiderProfile(user){
   if(!snap.exists()){
     await setDoc(ref, {
       ...base,
-      name:cleanName,
-      riderName:cleanName,
-      approved:false,
+      name:resolvedName,
+      riderName:resolvedName,
+      approved:account.approved === true,
       active:true,
-      status:"pending",
+      status:account.approved === true ? "approved" : "pending",
       totalOrders:0,
       totalEarnings:0,
       todayEarnings:0,
@@ -594,6 +604,7 @@ async function saveRiderPassword(){
         riderId:user.uid,
         phoneDigits,
         loginEmail,
+        riderName:(await getDoc(doc(db,"riders",user.uid))).data()?.name || els.name.value.trim() || "Magneetoz Rider",
         passwordLoginEnabled:true,
         updatedAt:serverTimestamp()
       }, { merge:true });
@@ -654,7 +665,14 @@ function renderApproval(data){
 
 async function handleUser(user){
   if(!user) return;
-  const ref = await ensureRiderProfile(user);
+  let ref;
+  try{
+    ref = await ensureRiderProfile(user);
+  }catch(error){
+    console.error(error);
+    toast(error?.message || "Unable to open rider account", "error");
+    return;
+  }
   approvalUnsub?.();
   approvalUnsub = onSnapshot(ref, async (snap) => {
     const rider = snap.data();
