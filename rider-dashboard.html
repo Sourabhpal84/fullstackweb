@@ -527,7 +527,7 @@ function isUnpaidOnlineOrder(order = {}){
 }
 
 function logStructured(scope, detail = {}){
-  console.info(`[${scope}]`, detail);
+  if(localStorage.getItem("magneetozDebug") === "1") console.info(`[${scope}]`, detail);
 }
 
 async function callRiderFunction(name, payload = {}, timeoutMs = 25000){
@@ -542,16 +542,18 @@ async function callRiderFunction(name, payload = {}, timeoutMs = 25000){
       "createRiderWalletSettlement",
       "verifyRiderWalletSettlement"
     ]);
-    const endpoint = sameOriginFunctions.has(name) ? `/api/${name}` : `${FUNCTIONS_BASE_URL}/${name}`;
-    const response = await fetch(endpoint, {
+    const requestOptions = {
       method:"POST",
-      headers:{
-        "Content-Type":"application/json",
-        "Authorization":`Bearer ${token}`
-      },
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
       body:JSON.stringify(payload),
       signal:controller.signal
-    });
+    };
+    let endpoint = sameOriginFunctions.has(name) ? `/api/${name}` : `${FUNCTIONS_BASE_URL}/${name}`;
+    let response = await fetch(endpoint, requestOptions);
+    if(response.status === 404 && endpoint.startsWith("/api/")){
+      endpoint = `${FUNCTIONS_BASE_URL}/${name}`;
+      response = await fetch(endpoint, requestOptions);
+    }
     const data = await response.json().catch(() => ({}));
     if(!response.ok || data.ok === false){
       console.warn("[RIDER FUNCTION ERROR]", {
@@ -562,7 +564,9 @@ async function callRiderFunction(name, payload = {}, timeoutMs = 25000){
         payload,
         response:data
       });
-      throw new Error(data.error || "Request failed.");
+      throw new Error(data.error || (response.status === 404
+        ? "This rider service is not deployed yet. Please contact admin."
+        : "Request failed."));
     }
     return data;
   }finally{
