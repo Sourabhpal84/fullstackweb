@@ -2863,12 +2863,12 @@ function loadMenu(){
     };
     allMenuDishes = snapshot.docs
       .map(docSnap => ({ id:docSnap.id, ...docSnap.data() }))
-      .filter(d => d.available && d.category);
+      .filter(d => d.available && d.category)
+      .sort((a,b) => Number(a.order ?? Number.MAX_SAFE_INTEGER) - Number(b.order ?? Number.MAX_SAFE_INTEGER)
+        || String(a.name || "").localeCompare(String(b.name || "")));
     menuImageRenderIndex = 0;
 
-    snapshot.forEach(docSnap => {
-
-      const d = { id:docSnap.id, ...docSnap.data() };
+    allMenuDishes.forEach(d => {
       if(!d.available || !d.category) return;
 
       const gridId = "grid-cat-" + normalize(d.category);

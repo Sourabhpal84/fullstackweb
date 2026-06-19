@@ -114,6 +114,72 @@ img[loading="lazy"] {
   background: #f1f5f9;
 }
 
+/* Compact horizontal combo carousel */
+#combosSection .combo-rail{
+  display:flex!important;
+  flex-wrap:nowrap!important;
+  gap:12px!important;
+  width:100%!important;
+  overflow-x:auto!important;
+  overflow-y:hidden!important;
+  padding:4px 2px 12px!important;
+  scroll-snap-type:x mandatory!important;
+  scroll-behavior:smooth!important;
+  overscroll-behavior-inline:contain!important;
+  scrollbar-width:thin!important;
+}
+#combosSection .combo-rail::-webkit-scrollbar{height:6px}
+#combosSection .combo-rail::-webkit-scrollbar-thumb{border-radius:999px;background:rgba(255,123,0,.45)}
+#combosSection .combo-card{
+  flex:0 0 clamp(230px,28vw,290px)!important;
+  scroll-snap-align:start!important;
+  display:grid!important;
+  grid-template-columns:82px minmax(0,1fr)!important;
+  gap:10px!important;
+  min-height:150px!important;
+  max-height:170px!important;
+  padding:10px!important;
+  border-radius:18px!important;
+  overflow:hidden!important;
+}
+#combosSection .combo-card img{
+  width:82px!important;
+  height:100%!important;
+  min-height:128px!important;
+  max-height:148px!important;
+  object-fit:cover!important;
+  border-radius:13px!important;
+}
+#combosSection .combo-card>div{min-width:0!important}
+#combosSection .combo-card span{padding:3px 6px!important;font-size:8px!important}
+#combosSection .combo-card h3{margin:4px 0!important;font-size:13px!important;line-height:1.15!important}
+#combosSection .combo-card p{
+  display:-webkit-box!important;
+  -webkit-line-clamp:2!important;
+  -webkit-box-orient:vertical!important;
+  margin:0 0 5px!important;
+  overflow:hidden!important;
+  font-size:9px!important;
+  line-height:1.35!important;
+}
+#combosSection .combo-price-row{margin-top:auto!important;font-size:10px!important}
+#combosSection .combo-card button{
+  min-height:34px!important;
+  margin-top:4px!important;
+  padding:6px 9px!important;
+  font-size:9px!important;
+}
+@media(max-width:760px){
+  #combosSection .combo-rail{margin-inline:-4px!important;padding-inline:4px!important}
+  #combosSection .combo-card{
+    flex-basis:225px!important;
+    grid-template-columns:76px minmax(0,1fr)!important;
+    min-height:140px!important;
+    max-height:154px!important;
+  }
+  #combosSection .combo-card img{width:76px!important;min-height:118px!important}
+}
+
 /* CART V2 FINAL CASCADE — intentionally last */
 @media(max-width:760px){
   body .cart-panel{

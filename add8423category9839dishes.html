@@ -170,6 +170,9 @@
 @keyframes previewIn{from{opacity:0;transform:scale(1.04)}to{opacity:1;transform:scale(1)}}
 .dish-row{margin-top:10px;padding:12px;border:1px solid #1e293b;border-radius:14px;background:#0f172a}
 .dish-row-main{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.dish-row-info{display:flex;align-items:center;gap:10px;min-width:0;flex:1}
+.dish-drag-handle{display:grid;place-items:center;width:38px;height:38px;flex:0 0 auto;border:1px solid #334155;border-radius:10px;color:#94a3b8;font-size:21px;cursor:grab;touch-action:none}.dish-drag-handle:active{cursor:grabbing;color:#22c55e;border-color:#22c55e}
+.dish-sortable-ghost{opacity:.35}.dish-sortable-chosen{border-color:#22c55e;box-shadow:0 12px 35px rgba(34,197,94,.16)}
 .dish-row strong{color:#f8fafc}.dish-row small{display:block;color:#94a3b8;margin-top:3px}
 .dish-actions{display:flex;gap:6px;flex-wrap:wrap}
 .dish-edit-panel{display:none;margin-top:12px;padding:12px;border-radius:14px;background:#020617;border:1px solid #334155}
@@ -314,6 +317,7 @@ protectAdminPage();
 mountAdminLogout(document.body);
 
 let isSorting = false;
+let isDishSorting = false;
 let uploadedDishImageUrl = "";
 let uploadedCategoryImageUrl = "";
 let uploadedDishImageSet = null;
@@ -882,6 +886,10 @@ window.addDish = async function(){
       description: descText,
       available: true
     };
+    const existingCategoryDishes = await getDocs(collection(db,"dishes"));
+    data.order = existingCategoryDishes.docs.filter(item =>
+      normalizeUnicodeText(item.data().category).toLowerCase() === cat.toLowerCase()
+    ).length + 1;
 
     if(t === "simple"){
 
@@ -954,7 +962,13 @@ onSnapshot(collection(db,"categories"), (catSnap)=>{
 
       let hasDish = false;
 
-      dishSnap.forEach(d=>{
+      const orderedDishes = [...dishSnap.docs].sort((a,b) => {
+        const aData = a.data();
+        const bData = b.data();
+        return Number(aData.order ?? Number.MAX_SAFE_INTEGER) - Number(bData.order ?? Number.MAX_SAFE_INTEGER)
+          || String(aData.name || "").localeCompare(String(bData.name || ""));
+      });
+      orderedDishes.forEach(d=>{
 
         const dish = d.data();
 
@@ -978,11 +992,14 @@ onSnapshot(collection(db,"categories"), (catSnap)=>{
           const currentPrice = isSizeBased ? (small.price || medium.price || large.price || 0) : simplePrice;
 
           html += `
-          <div class="dish-row" id="dishRow-${d.id}">
+          <div class="dish-row" id="dishRow-${d.id}" data-dish-id="${d.id}" data-category="${escapeHTML(dish.category || "")}">
             <div class="dish-row-main">
-              <div>
+              <div class="dish-row-info">
+                <span class="dish-drag-handle" title="Drag to reorder">☰</span>
+                <div>
                 <strong>${escapeHTML(dish.name || "Untitled dish")}</strong> - ${formatCurrency(currentPrice)}
                 <small>${escapeHTML(dish.description || "No description")} • ${isSizeBased ? "Size based" : "Simple"} • ${dish.available ? "Active" : "Disabled"}</small>
+                </div>
               </div>
 
               <div class="dish-actions">
@@ -1057,10 +1074,42 @@ onSnapshot(collection(db,"categories"), (catSnap)=>{
       list.innerHTML += html;
 
     });
+    if(!isDishSorting) initDishSortables();
 
   });
 
 });
+
+function initDishSortables(){
+  document.querySelectorAll("#list > .card").forEach(group => {
+    if(group.dishSortableInstance) group.dishSortableInstance.destroy();
+    const rows = group.querySelectorAll(".dish-row");
+    if(!rows.length) return;
+    group.dishSortableInstance = new Sortable(group, {
+      animation:180,
+      handle:".dish-drag-handle",
+      draggable:".dish-row",
+      ghostClass:"dish-sortable-ghost",
+      chosenClass:"dish-sortable-chosen",
+      onStart(){ isDishSorting = true; },
+      async onEnd(){
+        try{
+          const orderedRows = [...group.querySelectorAll(".dish-row")];
+          await Promise.all(orderedRows.map((row,index) =>
+            updateDoc(doc(db,"dishes",row.dataset.dishId),{
+              order:index + 1
+            })
+          ));
+        }catch(error){
+          console.error("Dish order save failed", error);
+          alert("Dish order save nahi hua. Please retry.");
+        }finally{
+          setTimeout(() => { isDishSorting = false; }, 400);
+        }
+      }
+    });
+  });
+}
 /* TOGGLE */
 window.toggleDish = async(id,c)=>{
   await updateDoc(doc(db,"dishes",id),{available:!c});
