@@ -3120,7 +3120,7 @@ body.dark-mode .brand-tagline{
 }
 
 body{
-  scroll-behavior:smooth;
+  scroll-behavior:auto;
   background:
     radial-gradient(circle at 12% 0%, rgba(255,123,0,.09), transparent 26%),
     radial-gradient(circle at 88% 12%, rgba(34,197,94,.08), transparent 28%),
@@ -8042,7 +8042,7 @@ body .cart-backdrop{display:none!important}
 }
 
 body{
-  overscroll-behavior-y:contain;
+  overscroll-behavior-y:auto;
 }
 
 .sticky-area,
@@ -9185,7 +9185,14 @@ body .category-jump-footer a{
 
 /* Cart items must always remain visible and usable on mobile checkout. */
 @media(max-width:760px){
-  html.cart-open-root,body.cart-open{overflow:hidden!important}
+  html.cart-open-root,
+  body.cart-open{
+    height:auto!important;
+    min-height:100%!important;
+    overflow-x:hidden!important;
+    overflow-y:auto!important;
+    touch-action:pan-y!important;
+  }
   body .cart-panel{
     display:block!important;
     height:100dvh!important;
