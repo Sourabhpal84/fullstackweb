@@ -29,6 +29,7 @@ export type Dish = {
   description?: string;
   image?: string;
   category?: string;
+  productType?: string;
   available?: boolean;
   price?: number;
   oldPrice?: number;
@@ -44,6 +45,7 @@ export type CartItem = {
   price: number;
   qty: number;
   variantLabel?: string;
+  productType?: string;
 };
 
 export type OrderStatus =

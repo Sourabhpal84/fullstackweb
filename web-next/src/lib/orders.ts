@@ -39,6 +39,10 @@ export type CodOrderDraft = {
   maxDeliveryDistance: number;
   restaurantRoutingMode: string;
   userId: string;
+  offerApplied?: boolean;
+  offerType?: string;
+  offerDiscount?: number;
+  freeItems?: Array<Record<string, unknown>>;
 };
 
 export function buildInvoiceNumber(orderId: string) {

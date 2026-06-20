@@ -71,7 +71,8 @@ export const useCartStore = create<CartState>((set) => ({
             image: normalizeImageUrl(dish.image),
             price: Number(variant.price || 0),
             qty: 1,
-            variantLabel: variant.label || variant.name
+            variantLabel: variant.label || variant.name,
+            productType: dish.productType
           }
         ]
       };

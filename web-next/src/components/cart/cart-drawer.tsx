@@ -9,6 +9,7 @@ import { formatCurrency } from "@/lib/format";
 import { createPaymentSession, loadRazorpayScript, verifyPayment } from "@/lib/checkout";
 import { calculatePricing, validateCoupon } from "@/lib/pricing";
 import { createCodOrder, type CodOrderDraft } from "@/lib/orders";
+import { calculateOffer, PIZZA_POINTS_BOGO_MESSAGE, resolveActiveOffer } from "@/lib/offerEngine";
 import { trackEvent } from "@/components/seo/analytics";
 
 export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCouponCode: string; onCouponCodeChange: (code: string) => void }) {
@@ -20,6 +21,9 @@ export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCou
     () => calculatePricing(items, checkoutContext.distanceKm, checkoutContext.activeCoupon, categories, auth.currentUser?.uid),
     [categories, checkoutContext.activeCoupon, checkoutContext.distanceKm, items]
   );
+  const activeOffer = useMemo(() => resolveActiveOffer(process.env.NEXT_PUBLIC_ACTIVE_OFFER_TYPE), []);
+  const offer = useMemo(() => calculateOffer(items, activeOffer), [activeOffer, items]);
+  const payableTotal = Math.max(0, pricing.grandTotal - offer.discount);
   const visibleCoupons = checkoutContext.coupons.filter((coupon) => {
     const visibility = String(coupon.visibility || "public").toLowerCase();
     return coupon.active !== false && !coupon.deleted && visibility !== "hidden" && visibility !== "vip-only";
@@ -27,7 +31,7 @@ export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCou
 
   function orderDraft(paymentMethod = "online"): CodOrderDraft {
     const user = auth.currentUser;
-    const checkoutSignature = `${user?.uid || "guest"}:${items.map((item) => `${item.name}:${item.qty}:${item.price}`).join("|")}:${pricing.grandTotal}:${activeCouponCode}:${paymentMethod}`;
+    const checkoutSignature = `${user?.uid || "guest"}:${items.map((item) => `${item.name}:${item.qty}:${item.price}`).join("|")}:${payableTotal}:${activeCouponCode}:${offer.offerType || "no_offer"}:${paymentMethod}`;
     return {
       checkoutId: `co_${user?.uid || "guest"}_${Date.now()}`,
       checkoutSignature,
@@ -44,10 +48,11 @@ export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCou
         qty: item.qty,
         quantity: item.qty,
         image: item.image,
-        category: item.variantLabel || ""
+        category: item.variantLabel || "",
+        productType: item.productType || ""
       })),
       subtotalAmount: pricing.subtotal,
-      totalAmount: pricing.grandTotal,
+      totalAmount: payableTotal,
       deliveryDistance: checkoutContext.distanceKm,
       actualRoadDistance: checkoutContext.distanceKm,
       distanceSource: checkoutContext.distanceKm ? "next_checkout" : "pending",
@@ -60,8 +65,8 @@ export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCou
       gstAmount: pricing.gstAmount,
       handlingCharge: pricing.handlingCharge,
       subtotal: pricing.subtotal,
-      grandTotal: pricing.grandTotal,
-      finalAmount: pricing.grandTotal,
+      grandTotal: payableTotal,
+      finalAmount: payableTotal,
       orderSource: "next_web",
       location: checkoutContext.customerLocation,
       restaurantId: "primary",
@@ -70,7 +75,11 @@ export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCou
       restaurantDistance: checkoutContext.distanceKm,
       maxDeliveryDistance: checkoutContext.maxDeliveryDistance,
       restaurantRoutingMode: "single_restaurant",
-      userId: user?.uid || ""
+      userId: user?.uid || "",
+      offerApplied: offer.offerApplied,
+      offerType: offer.offerType || "",
+      offerDiscount: offer.discount,
+      freeItems: offer.freeItems
     };
   }
 
@@ -88,7 +97,7 @@ export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCou
       const loaded = await loadRazorpayScript();
       if (!loaded || !window.Razorpay) throw new Error("Payment gateway unavailable");
       const draft = orderDraft("online");
-      const session = await createPaymentSession(items, draft, pricing.grandTotal);
+      const session = await createPaymentSession(items, draft, payableTotal);
       const razorpay = new window.Razorpay({
         key: session.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         amount: Math.round(session.amount * 100),
@@ -98,7 +107,7 @@ export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCou
         order_id: session.razorpayOrderId,
         handler: async (response: Record<string, unknown>) => {
           await verifyPayment({ paymentSessionId: session.paymentSessionId, ...response });
-          trackEvent("purchase", { value: pricing.grandTotal, currency: "INR", payment_type: "online" });
+          trackEvent("purchase", { value: payableTotal, currency: "INR", payment_type: "online" });
           clear();
           setOpen(false);
         }
@@ -123,7 +132,7 @@ export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCou
     setBusy(true);
     try {
       const result = await createCodOrder(orderDraft("cod"), items);
-      trackEvent("purchase", { value: pricing.grandTotal, currency: "INR", payment_type: "cod", order_number: result.orderNumber });
+      trackEvent("purchase", { value: payableTotal, currency: "INR", payment_type: "cod", order_number: result.orderNumber });
       clear();
       setOpen(false);
       alert(`Order placed. Order #${result.orderNumber}`);
@@ -216,13 +225,26 @@ export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCou
             ) : null}
           </div>
           <div className="mb-4 space-y-2 rounded-2xl bg-white/[.05] p-3 text-sm">
-            <Row label="Subtotal" value={pricing.subtotal} />
+            <Row label="Original Total" value={offer.originalTotal} />
+            {offer.offerApplied ? (
+              <>
+                <Row label="Offer Discount" value={-offer.discount} />
+                <div className="rounded-xl bg-emerald-400/10 p-3 text-xs font-bold text-emerald-100">
+                  <div className="mb-1 text-white">Free Pizza:</div>
+                  {offer.freeItems.map((item) => (
+                    <div key={`${item.id}:${item.price}`}>{item.name}{item.qty > 1 ? ` x ${item.qty}` : ""}</div>
+                  ))}
+                  <div className="mt-2 text-white/70">{PIZZA_POINTS_BOGO_MESSAGE}</div>
+                </div>
+              </>
+            ) : null}
             <Row label="Coupon savings" value={-pricing.couponDiscount} />
             <Row label="Delivery" value={pricing.deliveryCharge} />
+            <Row label="Final Total" value={payableTotal} />
           </div>
           <div className="mb-4 flex items-center justify-between">
             <span className="text-sm font-bold text-white/60">Total</span>
-            <strong className="text-2xl font-black">{formatCurrency(pricing.grandTotal)}</strong>
+            <strong className="text-2xl font-black">{formatCurrency(payableTotal)}</strong>
           </div>
           <button disabled={!items.length || busy} onClick={payOnline} className="h-12 w-full rounded-full bg-brand font-black text-white disabled:opacity-45">
             {busy ? "Processing..." : "Pay Online Securely"}
