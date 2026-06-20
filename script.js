@@ -185,6 +185,9 @@ let lastOrderSignature = null;
 let razorpayInFlight = false;
 let activeCoupon = null;
 let availableCoupons = [];
+let activeBogoOffer = null;
+let bogoOfferAccepted = false;
+let bogoOfferSignature = "";
 let countdownInterval = null;
 let cachedAuthUser = auth.currentUser || null;
 let authReadyResolved = false;
@@ -788,14 +791,20 @@ function buildInvoiceNumber(orderId = ""){
 }
 
 function calculateInvoicePricing(subtotal, basePricing = calculateCouponPricing(subtotal)){
+  const offerResult = calculateBogoOffer();
+  const offerApplied = bogoOfferAccepted && offerResult.offerApplied;
+  if(offerApplied){
+    basePricing = calculateCouponPricingWithoutCoupon(subtotal);
+  }
   const gstPercent = Math.max(0, Number(appPricing.gstPercent) || 0);
   const handlingCharge = Math.max(0, Math.round(Number(appPricing.handlingCharge) || 0));
-  const discount = Math.max(0, Number(basePricing.couponDiscount || 0) + Number(basePricing.freeDeliveryDiscount || 0));
+  const offerDiscount = offerApplied ? offerResult.discount : 0;
+  const discount = Math.max(0, Number(basePricing.couponDiscount || 0) + Number(basePricing.freeDeliveryDiscount || 0) + offerDiscount);
   const delivery = Math.max(0, Number(basePricing.deliveryCharge) || 0);
-  const taxableAmount = Math.max(0, Number(subtotal) - Number(basePricing.couponDiscount || 0));
+  const taxableAmount = Math.max(0, Number(subtotal) - Number(basePricing.couponDiscount || 0) - offerDiscount);
   const gstAmount = Math.round(taxableAmount * gstPercent / 100);
   const beforeWallet = Math.max(0, Math.round(taxableAmount + gstAmount + handlingCharge + delivery));
-  const walletDiscount = Math.max(0, Math.min(walletPointsRequested, Math.floor(beforeWallet * .2), walletPointsAvailable));
+  const walletDiscount = offerApplied ? 0 : Math.max(0, Math.min(walletPointsRequested, Math.floor(beforeWallet * .2), walletPointsAvailable));
   const grandTotal = Math.max(0, beforeWallet - walletDiscount);
   return {
     ...basePricing,
@@ -803,6 +812,10 @@ function calculateInvoicePricing(subtotal, basePricing = calculateCouponPricing(
     gstAmount,
     handlingCharge,
     discount,
+    offerApplied,
+    offerType:offerApplied ? activeBogoOffer?.type || "" : "",
+    offerDiscount,
+    freeItems:offerApplied ? offerResult.freeItems : [],
     beforeWallet,
     walletDiscount,
     grandTotal,
@@ -833,6 +846,10 @@ async function loadWalletForCheckout(user = auth.currentUser){
 }
 
 function toggleWalletRedemption(){
+  if(bogoOfferAccepted && calculateBogoOffer().offerApplied){
+    toastError("Pizza Points cannot be used with Buy One Get One offers.");
+    return;
+  }
   const pricing = calculateInvoicePricing(getCartSubtotal());
   walletPointsRequested = walletPointsRequested > 0 ? 0 : Math.min(walletPointsAvailable, Math.floor(pricing.beforeWallet * .2));
   document.getElementById("walletRedeemBox")?.classList.toggle("active", walletPointsRequested > 0);
@@ -3249,7 +3266,7 @@ function calculateDistanceDeliveryPricing(distanceKm = deliveryDistance, subtota
 
 /* ================= COUPONS ================= */
 
-registerGlobalSnapshot(onSnapshot(collection(db, "coupons"), (snapshot) => {
+function useCouponSnapshot(snapshot){
   availableCoupons = snapshot.docs.map(item => ({ id:item.id, ...item.data() }));
   const referral = capturePgReferralCoupon();
   const referralCoupon = findReferralCoupon(referral);
@@ -3265,7 +3282,41 @@ registerGlobalSnapshot(onSnapshot(collection(db, "coupons"), (snapshot) => {
   renderAvailableCoupons();
   if(activeCoupon) validateActiveCoupon();
   updateCart();
+}
+
+registerGlobalSnapshot(onSnapshot(collection(db, "coupons"), useCouponSnapshot, async error => {
+  console.warn("Coupon live updates unavailable; using one-time load.", error);
+  try{
+    useCouponSnapshot(await getDocs(collection(db, "coupons")));
+  }catch(loadError){
+    console.warn("Coupon load failed.", loadError);
+    renderAvailableCoupons();
+  }
 }));
+getDocs(collection(db, "coupons"))
+  .then(useCouponSnapshot)
+  .catch(error => console.warn("Initial coupon load failed.", error));
+
+function useBogoOfferSnapshot(snapshot){
+  const data = snapshot.exists() ? snapshot.data() : null;
+  activeBogoOffer = data?.active === true ? data : null;
+  if(!activeBogoOffer) bogoOfferAccepted = false;
+  updateCart();
+}
+
+registerGlobalSnapshot(onSnapshot(doc(db, "settings", "offerEngine"), useBogoOfferSnapshot, async error => {
+  console.warn("BOGO live updates unavailable; using one-time load.", error);
+  try{
+    useBogoOfferSnapshot(await getDoc(doc(db, "settings", "offerEngine")));
+  }catch(loadError){
+    console.warn("BOGO settings load failed.", loadError);
+    activeBogoOffer = null;
+    updateCart();
+  }
+}));
+getDoc(doc(db, "settings", "offerEngine"))
+  .then(useBogoOfferSnapshot)
+  .catch(error => console.warn("Initial BOGO load failed.", error));
 
 registerGlobalSnapshot(onSnapshot(query(collection(db, "offers"), orderBy("createdAt", "desc")), (snapshot) => {
   const host = document.getElementById("offerRail");
@@ -3477,6 +3528,95 @@ function calculateCouponPricing(subtotal = getCartSubtotal()){
   return { subtotal, couponDiscount:Math.round(couponDiscount), deliveryCharge:finalDeliveryCharge, freeDeliveryDiscount, finalTotal };
 }
 
+function calculateCouponPricingWithoutCoupon(subtotal = getCartSubtotal()){
+  const distancePricing = calculateDistanceDeliveryPricing(deliveryDistance, subtotal);
+  deliveryCharge = distancePricing.deliveryCharge;
+  return {
+    subtotal,
+    couponDiscount:0,
+    deliveryCharge,
+    freeDeliveryDiscount:distancePricing.freeDeliveryDiscount,
+    finalTotal:Math.max(0, subtotal + deliveryCharge)
+  };
+}
+
+function normalizeOfferCategory(value = ""){
+  return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function calculateBogoOffer(){
+  const originalTotal = getCartSubtotal();
+  const requiredItemCount = activeBogoOffer?.type === "buy_2_get_1" ? 3 : 2;
+  if(!activeBogoOffer || activeBogoOffer.active !== true){
+    return { originalTotal, discount:0, finalTotal:originalTotal, freeItems:[], offerApplied:false, eligibleItemCount:0, requiredItemCount };
+  }
+  const allowed = new Set((activeBogoOffer.eligibleCategories || []).map(normalizeOfferCategory).filter(Boolean));
+  const units = [];
+  cart.forEach(item => {
+    const category = normalizeOfferCategory(item.category || item.dishCategory || "");
+    const eligible = allowed.size ? allowed.has(category) : /pizza/i.test(`${item.productType || ""} ${item.category || ""} ${item.name || ""}`);
+    if(!eligible) return;
+    const qty = Math.max(1, Number(item.qty) || 1);
+    const unitPrice = Number(item.unitPrice || Number(item.price || 0) / qty) || 0;
+    for(let index = 0; index < qty; index++){
+      units.push({ id:item.id || item.dishId || item.name, name:item.name || "Pizza", price:unitPrice });
+    }
+  });
+  units.sort((a,b) => b.price - a.price);
+  const freeUnits = [];
+  for(let index = 0; index + requiredItemCount <= units.length; index += requiredItemCount){
+    freeUnits.push(units[index + requiredItemCount - 1]);
+  }
+  const discount = Math.round(freeUnits.reduce((sum,item) => sum + item.price, 0));
+  const grouped = new Map();
+  freeUnits.forEach(item => {
+    const key = `${item.id}:${item.price}`;
+    const current = grouped.get(key) || { ...item, qty:0 };
+    current.qty += 1;
+    grouped.set(key, current);
+  });
+  return {
+    originalTotal,
+    discount,
+    finalTotal:Math.max(0, originalTotal - discount),
+    freeItems:[...grouped.values()],
+    offerApplied:discount > 0,
+    eligibleItemCount:units.length,
+    requiredItemCount
+  };
+}
+
+function renderBogoOfferPanel(){
+  const host = document.getElementById("bogoOfferPanel");
+  if(!host) return;
+  if(!activeBogoOffer){
+    host.innerHTML = "";
+    return;
+  }
+  const result = calculateBogoOffer();
+  const applied = bogoOfferAccepted && result.offerApplied;
+  const typeLabel = activeBogoOffer.type === "buy_2_get_1" ? "Buy 2 Get 1 Free" : "Buy 1 Get 1 Free";
+  host.innerHTML = `
+    <div style="margin-bottom:12px;padding:12px;border:1px solid ${applied ? "#22c55e" : "#f59e0b"};border-radius:12px;background:${applied ? "rgba(34,197,94,.12)" : "rgba(245,158,11,.10)"}">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <div><strong>${typeLabel}</strong><small style="display:block;margin-top:4px">Eligible pizzas: ${result.eligibleItemCount}/${result.requiredItemCount}</small></div>
+        <button type="button" onclick="applyBogoOffer()" ${!result.offerApplied || applied ? "disabled" : ""} style="padding:10px 14px;border:0;border-radius:999px;background:${result.offerApplied && !applied ? "#16a34a" : "#6b7280"};color:white;font-weight:800">${applied ? "Applied" : "Apply Offer"}</button>
+      </div>
+      ${applied ? `<small style="display:block;margin-top:8px">Coupon and Pizza Points are disabled. Free: ${result.freeItems.map(item => `${escapeHTML(item.name)}${item.qty > 1 ? ` x${item.qty}` : ""}`).join(", ")}</small>` : ""}
+    </div>`;
+}
+
+window.applyBogoOffer = function(){
+  const result = calculateBogoOffer();
+  if(!result.offerApplied) return;
+  bogoOfferAccepted = true;
+  activeCoupon = null;
+  walletPointsRequested = 0;
+  const couponInput = document.getElementById("couponInput");
+  if(couponInput) couponInput.value = "";
+  updateCart();
+};
+
 function renderCouponPanel(result = calculateInvoicePricing(getCartSubtotal())){
   const applied = document.getElementById("appliedCoupon");
   if(applied){
@@ -3490,7 +3630,7 @@ function renderCouponPanel(result = calculateInvoicePricing(getCartSubtotal())){
     breakdown.innerHTML = `
       <div><span>Subtotal</span><b>${formatCurrency(result.subtotal)}</b></div>
       <div><span>Delivery Distance</span><b>${deliveryDistance ? `${Number(deliveryDistance).toFixed(1)} KM` : "Checking…"}</b></div>
-      <div><span>Coupon Savings</span><b>-${formatCurrency(result.couponDiscount)}</b></div>
+      ${result.offerApplied ? `<div><span>Offer Discount</span><b>-${formatCurrency(result.offerDiscount)}</b></div>` : `<div><span>Coupon Savings</span><b>-${formatCurrency(result.couponDiscount)}</b></div>`}
       <div><span>GST (${result.gstPercent || 0}%)</span><b>${formatCurrency(result.gstAmount || 0)}</b></div>
       <div><span>Handling Charges</span><b>${formatCurrency(result.handlingCharge || 0)}</b></div>
       <div><span>Delivery Charges</span><b>${result.deliveryCharge ? formatCurrency(result.deliveryCharge) : "FREE"}</b></div>
@@ -3504,6 +3644,10 @@ function renderCouponPanel(result = calculateInvoicePricing(getCartSubtotal())){
 function renderAvailableCoupons(){
   const host = document.getElementById("availableCoupons");
   if(!host) return;
+  if(bogoOfferAccepted && calculateBogoOffer().offerApplied){
+    host.innerHTML = `<p class="coupon-empty">Coupons cannot be used with the active BOGO offer.</p>`;
+    return;
+  }
   const subtotal = getCartSubtotal();
   const isCustomerVisibleCoupon = (coupon) => {
     const visibility = String(coupon.visibility || "public").toLowerCase();
@@ -3515,7 +3659,6 @@ function renderAvailableCoupons(){
   };
   const cards = availableCoupons
     .filter(isCustomerVisibleCoupon)
-    .filter(coupon => validateCoupon(coupon, subtotal).ok || String(coupon.code || "").toUpperCase() === String(activeCoupon?.code || "").toUpperCase())
     .slice(0, 6)
     .map(coupon => {
       const valid = validateCoupon(coupon, subtotal);
@@ -3965,6 +4108,10 @@ async function buildPaidOnlineOrderDraft(){
 }
 
 window.applyCoupon = async function(codeFromCard){
+  if(bogoOfferAccepted && calculateBogoOffer().offerApplied){
+    alert("Coupons cannot be used with Buy One Get One offers.");
+    return;
+  }
   const input = document.getElementById("couponInput");
   const code = String(codeFromCard || input?.value || "").trim().toUpperCase();
   const coupon = availableCoupons.find(item => String(item.code || "").toUpperCase() === code);
@@ -4001,6 +4148,9 @@ function updateCart() {
   let itemsHTML = "";
   let total = 0;
   const totalQty = cart.reduce((sum, item) => sum + (Number(item.qty) || 1), 0);
+  const nextOfferSignature = `${activeBogoOffer?.type || "none"}:${activeBogoOffer?.active === true}:${(activeBogoOffer?.eligibleCategories || []).join("|")}:${cart.map(item => `${item.id || item.name}:${item.qty}:${item.price}:${item.category || ""}`).join("|")}`;
+  if(bogoOfferSignature && bogoOfferSignature !== nextOfferSignature) bogoOfferAccepted = false;
+  bogoOfferSignature = nextOfferSignature;
 
   cart.forEach((item, index) => {
     total += item.price;
@@ -4044,6 +4194,18 @@ function updateCart() {
       : "";
   }
   const couponResult = calculateInvoicePricing(total);
+  const offerIsApplied = couponResult.offerApplied === true;
+  const couponInput = document.getElementById("couponInput");
+  const couponApplyButton = couponInput?.parentElement?.querySelector("button");
+  if(couponInput){
+    couponInput.disabled = offerIsApplied;
+    couponInput.placeholder = offerIsApplied ? "Coupon disabled with BOGO" : "Enter Coupon";
+  }
+  if(couponApplyButton) couponApplyButton.disabled = offerIsApplied;
+  const walletBox = document.getElementById("walletRedeemBox");
+  if(walletBox) walletBox.hidden = offerIsApplied || walletPointsAvailable < 1;
+  renderBogoOfferPanel();
+  renderAvailableCoupons();
   if(totalEl) totalEl.innerText = formatCurrency(couponResult.finalTotal);
   const stickyTotal = document.getElementById("stickyCheckoutTotal");
   if(stickyTotal) stickyTotal.textContent = formatCurrency(couponResult.finalTotal);
