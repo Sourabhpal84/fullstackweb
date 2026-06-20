@@ -23,6 +23,9 @@ export type OfferCalculation = {
   freeItems: FreeOfferItem[];
   offerApplied: boolean;
   offerType?: OfferType;
+  eligibleItemCount: number;
+  requiredItemCount: number;
+  eligibleCategories: string[];
 };
 
 export type OfferCartItem = CartItem & {

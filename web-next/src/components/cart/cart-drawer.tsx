@@ -236,6 +236,16 @@ export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCou
                   <div className="mt-2 text-white/70">{PIZZA_POINTS_BOGO_MESSAGE}</div>
                 </div>
               </>
+            ) : checkoutContext.activeOffer ? (
+              <div className="rounded-xl bg-amber-400/10 p-3 text-xs font-bold text-amber-100">
+                <div className="text-white">BOGO offer active</div>
+                <div className="mt-1 text-white/70">
+                  Eligible categories: {offer.eligibleCategories.length ? offer.eligibleCategories.join(", ") : "All pizzas"}
+                </div>
+                <div className="mt-1 text-white/70">
+                  Eligible items in cart: {offer.eligibleItemCount}/{offer.requiredItemCount || 0}
+                </div>
+              </div>
             ) : null}
             <Row label="Coupon savings" value={-pricing.couponDiscount} />
             <Row label="Delivery" value={pricing.deliveryCharge} />

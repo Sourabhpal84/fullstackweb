@@ -23,7 +23,7 @@ export function calculateOffer(cart: OfferCartItem[], activeOffer: ActiveOffer |
   const groupSize = activeOffer.type === "buy_1_get_1" ? 2 : 3;
   const minimumItems = groupSize;
   if (eligibleItems.length < minimumItems) {
-    return emptyOffer(originalTotal, activeOffer.type);
+    return emptyOffer(originalTotal, activeOffer.type, eligibleItems.length, minimumItems, activeOffer.eligibleCategories || []);
   }
 
   const freeUnits: OfferCartItem[] = [];
@@ -38,17 +38,23 @@ export function calculateOffer(cart: OfferCartItem[], activeOffer: ActiveOffer |
     finalTotal: Math.max(0, Math.round(originalTotal - discount)),
     freeItems: summarizeFreeItems(freeUnits),
     offerApplied: discount > 0,
-    offerType: activeOffer.type
+    offerType: activeOffer.type,
+    eligibleItemCount: eligibleItems.length,
+    requiredItemCount: minimumItems,
+    eligibleCategories: activeOffer.eligibleCategories || []
   };
 }
 
-function emptyOffer(originalTotal: number, offerType?: ActiveOffer["type"]): OfferCalculation {
+function emptyOffer(originalTotal: number, offerType?: ActiveOffer["type"], eligibleItemCount = 0, requiredItemCount = 0, eligibleCategories: string[] = []): OfferCalculation {
   return {
     originalTotal,
     discount: 0,
     finalTotal: originalTotal,
     freeItems: [],
     offerApplied: false,
-    offerType
+    offerType,
+    eligibleItemCount,
+    requiredItemCount,
+    eligibleCategories
   };
 }

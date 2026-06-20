@@ -935,6 +935,7 @@ window.addDish = async function(){
       image: img,
       imageSet: uploadedDishImageSet,
       category: cat,
+      productType: /pizza/i.test(`${cat} ${dishName}`) ? "pizza" : "food",
       type: t,
       description: descText,
       available: true
@@ -1249,6 +1250,7 @@ window.saveDishEdit = async function(id){
       category: normalizeUnicodeText(document.getElementById(`edit-category-${id}`)?.value),
       type
     };
+    data.productType = /pizza/i.test(`${data.category} ${data.name}`) ? "pizza" : "food";
     const editedImage = editedDishImages.get(id);
     if(editedImage){
       data.image = editedImage.url;
