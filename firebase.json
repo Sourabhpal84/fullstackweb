@@ -9,6 +9,11 @@
   "hosting": {
     "public": ".",
     "rewrites": [
+      { "source": "/offline", "destination": "/magneetozoffline.html" },
+      { "source": "/api/createOfflineOrder", "function": { "functionId": "createOfflineOrder", "region": "asia-south1" } },
+      { "source": "/api/createOfflinePaymentSession", "function": { "functionId": "createOfflinePaymentSession", "region": "asia-south1" } },
+      { "source": "/api/verifyOfflinePaymentAndCreateOrder", "function": { "functionId": "verifyOfflinePaymentAndCreateOrder", "region": "asia-south1" } },
+      { "source": "/api/adminUpdateOfflineOrderStatus", "function": { "functionId": "adminUpdateOfflineOrderStatus", "region": "asia-south1" } },
       { "source": "/api/requestRiderWithdrawal", "function": { "functionId": "requestRiderWithdrawal", "region": "asia-south1" } },
       { "source": "/api/createRiderWalletSettlement", "function": { "functionId": "createRiderWalletSettlement", "region": "asia-south1" } },
       { "source": "/api/verifyRiderWalletSettlement", "function": { "functionId": "verifyRiderWalletSettlement", "region": "asia-south1" } }
@@ -42,7 +47,7 @@
         ]
       },
       {
-        "source": "{/8423order9839status.html,/8423total_sell9839.html,/add8423category9839dishes.html,/admin-login.html,/coupons-admin.html,/delivery-logic-admin.html,/feedback-admin.html,/offers-admin.html,/rider-dashboard.html,/rider-login.html,/rider-settlements-admin.html,/riders-admin.html,/super-admin-dashboard.html,/theme-studio-admin.html,/whatsapp-marketing-admin.html}",
+        "source": "{/8423order9839status.html,/8423total_sell9839.html,/add8423category9839dishes.html,/admin-login.html,/coupons-admin.html,/delivery-logic-admin.html,/feedback-admin.html,/offers-admin.html,/offline-orders-admin.html,/rider-dashboard.html,/rider-login.html,/rider-settlements-admin.html,/riders-admin.html,/super-admin-dashboard.html,/theme-studio-admin.html,/whatsapp-marketing-admin.html}",
         "headers": [
           { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" },
           { "key": "Cache-Control", "value": "private, no-store" }

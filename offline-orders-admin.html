@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MAGNEETOZ Offline Restaurant Orders</title>
+  <style>
+    body{margin:0;background:#071018;color:#fff;font-family:Inter,system-ui,Segoe UI,sans-serif}.wrap{max-width:1180px;margin:auto;padding:22px}
+    header{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-bottom:18px}h1{margin:0;font-size:26px}.muted{color:#9fb0c2}
+    .tabs{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0 20px}.tabs a{color:white;text-decoration:none;background:#132033;border:1px solid #26384f;padding:11px 14px;border-radius:14px}.tabs a.active{background:#d8aa4f;color:#1d1308;font-weight:900}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:14px}.card{background:#0f1724;border:1px solid #26384f;border-radius:20px;padding:16px;box-shadow:0 20px 60px rgba(0,0,0,.22)}
+    .top{display:flex;justify-content:space-between;gap:12px}.token{font-size:34px;font-weight:950;color:#ffd27a}.badge{display:inline-flex;padding:6px 10px;border-radius:999px;background:#18263a;border:1px solid #334b67;font-size:12px;font-weight:800}
+    .paid{background:rgba(34,197,94,.16);color:#86efac;border-color:#22c55e}.pending{background:rgba(250,204,21,.16);color:#fde68a;border-color:#facc15}
+    ul{padding-left:18px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}.meta div{background:#0b111b;border:1px solid #1f2d40;border-radius:12px;padding:10px}.meta span{display:block;color:#9fb0c2;font-size:11px}.meta b{display:block;margin-top:3px}
+    .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}button{border:0;border-radius:12px;padding:10px 12px;font-weight:900;cursor:pointer}.primary{background:#d8aa4f;color:#1d1308}.ready{background:#38bdf8;color:#062335}.done{background:#22c55e;color:#052e16}.cancel{background:#ef4444;color:white}
+    .empty{border:1px dashed #334b67;border-radius:20px;padding:30px;text-align:center;color:#9fb0c2}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header><div><h1>Offline Restaurant Orders</h1><p class="muted">Table/QR orders only. Delivery orders remain separate.</p></div><div id="authState" class="muted">Checking admin...</div></header>
+    <nav class="tabs"><a href="./8423order9839status.html">Delivery Orders</a><a class="active" href="./offline-orders-admin.html">Offline Restaurant Orders</a></nav>
+    <section class="grid" id="orders"></section>
+  </div>
+  <script type="module">
+    import { auth, db } from "./firebase.js";
+    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { collection, onSnapshot, query, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    const FUNCTIONS_BASE_URL = "https://asia-south1-magneetoz.cloudfunctions.net";
+    const ADMIN_EMAILS = ["magneeto73@gmail.com","sourabhpal982@gmail.com"];
+    const money = n => `₹${Math.round(Number(n || 0))}`;
+    const esc = s => String(s ?? "").replace(/[&<>"']/g, m => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
+    const time = v => v?.toDate ? v.toDate().toLocaleString() : "";
+    const host = document.getElementById("orders");
+    let currentUser = null;
+    async function updateStatus(orderId, status){
+      if(!currentUser) return alert("Admin login required");
+      const token = await currentUser.getIdToken(true);
+      const res = await fetch(`${FUNCTIONS_BASE_URL}/adminUpdateOfflineOrderStatus`, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json", "Authorization":`Bearer ${token}` },
+        body:JSON.stringify({ orderId, status })
+      });
+      const data = await res.json().catch(()=>({}));
+      if(!res.ok || data.ok === false) alert(data.error || "Status update failed");
+    }
+    function renderCard(order){
+      const items = (order.items || order.cart || []).map(i=>`<li>${esc(i.name)} × ${i.qty || i.quantity || 1}</li>`).join("");
+      const paymentClass = String(order.paymentStatus || "").toLowerCase() === "paid" ? "paid" : "pending";
+      return `<article class="card">
+        <div class="top"><div><div class="token">#${esc(order.tokenNumber || "-")}</div><div class="muted">${esc(order.orderNumber || order.id)}</div></div><span class="badge">${esc(order.orderStatus || order.status || "New Order")}</span></div>
+        <div class="meta">
+          <div><span>Customer</span><b>${esc(order.customerName || "-")}</b></div>
+          <div><span>Table</span><b>${esc(order.tableNo || "Not provided")}</b></div>
+          <div><span>Amount</span><b>${money(order.finalTotal ?? order.totalAmount)}</b></div>
+          <div><span>Payment</span><b><span class="badge ${paymentClass}">${esc(order.paymentStatus || "pending")}</span></b></div>
+          <div><span>Time</span><b>${esc(time(order.createdAt))}</b></div>
+          <div><span>Phone</span><b>${esc(order.customerPhone || "-")}</b></div>
+        </div>
+        <strong>Items</strong><ul>${items}</ul>
+        ${order.specialInstructions ? `<p class="muted"><b>Instructions:</b> ${esc(order.specialInstructions)}</p>` : ""}
+        <div class="actions">
+          <button class="primary" data-id="${esc(order.id)}" data-status="Preparing">Accept / Preparing</button>
+          <button class="ready" data-id="${esc(order.id)}" data-status="Ready">Mark Ready</button>
+          <button class="done" data-id="${esc(order.id)}" data-status="Completed">Completed</button>
+          <button class="cancel" data-id="${esc(order.id)}" data-status="Cancelled">Cancel</button>
+        </div>
+      </article>`;
+    }
+    function attachActions(){ host.querySelectorAll("button[data-id]").forEach(btn=>btn.onclick=()=>updateStatus(btn.dataset.id, btn.dataset.status)); }
+    onAuthStateChanged(auth, user => {
+      currentUser = user;
+      if(!user || !ADMIN_EMAILS.includes(String(user.email || "").toLowerCase())){
+        document.getElementById("authState").textContent = "Admin login required";
+        host.innerHTML = `<div class="empty">Please login as MAGNEETOZ admin first.</div>`;
+        return;
+      }
+      document.getElementById("authState").textContent = user.email;
+      onSnapshot(query(collection(db,"orders"), where("orderType","==","offline")), snap => {
+        const orders = snap.docs.map(d=>({ id:d.id, ...d.data() }))
+          .sort((a,b)=>(b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+        host.innerHTML = orders.map(renderCard).join("") || `<div class="empty">No offline restaurant orders yet.</div>`;
+        attachActions();
+      }, error => {
+        console.warn(error);
+        host.innerHTML = `<div class="empty">Unable to load offline orders. Check Firestore index/rules.</div>`;
+      });
+    });
+  </script>
+</body>
+</html>
