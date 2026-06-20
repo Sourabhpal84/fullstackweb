@@ -1,5 +1,5 @@
 import type { ActiveOffer, OfferCalculation, OfferCartItem } from "@/lib/offerTypes";
-import { expandCartItems, isPizzaItem, summarizeFreeItems } from "@/lib/offerUtils";
+import { categoryAllowed, expandCartItems, isPizzaItem, summarizeFreeItems } from "@/lib/offerUtils";
 
 export const PIZZA_POINTS_BOGO_MESSAGE = "Pizza Points cannot be used with Buy One Get One offers.";
 
@@ -17,7 +17,7 @@ export function calculateOffer(cart: OfferCartItem[], activeOffer: ActiveOffer |
   }
 
   const eligibleItems = expandCartItems(cart)
-    .filter(isPizzaItem)
+    .filter((item) => categoryAllowed(item, activeOffer.eligibleCategories) && (isPizzaItem(item) || !!activeOffer.eligibleCategories?.length))
     .sort((a, b) => Number(b.price || 0) - Number(a.price || 0));
 
   const groupSize = activeOffer.type === "buy_1_get_1" ? 2 : 3;

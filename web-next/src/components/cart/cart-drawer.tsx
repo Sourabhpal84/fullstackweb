@@ -9,7 +9,7 @@ import { formatCurrency } from "@/lib/format";
 import { createPaymentSession, loadRazorpayScript, verifyPayment } from "@/lib/checkout";
 import { calculatePricing, validateCoupon } from "@/lib/pricing";
 import { createCodOrder, type CodOrderDraft } from "@/lib/orders";
-import { calculateOffer, PIZZA_POINTS_BOGO_MESSAGE, resolveActiveOffer } from "@/lib/offerEngine";
+import { calculateOffer, PIZZA_POINTS_BOGO_MESSAGE } from "@/lib/offerEngine";
 import { trackEvent } from "@/components/seo/analytics";
 
 export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCouponCode: string; onCouponCodeChange: (code: string) => void }) {
@@ -21,8 +21,7 @@ export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCou
     () => calculatePricing(items, checkoutContext.distanceKm, checkoutContext.activeCoupon, categories, auth.currentUser?.uid),
     [categories, checkoutContext.activeCoupon, checkoutContext.distanceKm, items]
   );
-  const activeOffer = useMemo(() => resolveActiveOffer(process.env.NEXT_PUBLIC_ACTIVE_OFFER_TYPE), []);
-  const offer = useMemo(() => calculateOffer(items, activeOffer), [activeOffer, items]);
+  const offer = useMemo(() => calculateOffer(items, checkoutContext.activeOffer), [checkoutContext.activeOffer, items]);
   const payableTotal = Math.max(0, pricing.grandTotal - offer.discount);
   const visibleCoupons = checkoutContext.coupons.filter((coupon) => {
     const visibility = String(coupon.visibility || "public").toLowerCase();
@@ -48,7 +47,7 @@ export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCou
         qty: item.qty,
         quantity: item.qty,
         image: item.image,
-        category: item.variantLabel || "",
+        category: item.category || item.variantLabel || "",
         productType: item.productType || ""
       })),
       subtotalAmount: pricing.subtotal,

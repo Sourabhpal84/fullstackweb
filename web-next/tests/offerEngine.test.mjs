@@ -30,7 +30,7 @@ compileSource(join(appRoot, "src", "lib", "offerEngine.ts"), join(outDir, "offer
 
 const { calculateOffer } = await import(pathToFileURL(join(outDir, "offerEngine.js")).href);
 
-function pizza(name, price, productType = "pizza") {
+function pizza(name, price, productType = "pizza", category = "Pizza") {
   return {
     id: name.toLowerCase().replaceAll(" ", "-"),
     dishId: name.toLowerCase().replaceAll(" ", "-"),
@@ -38,6 +38,7 @@ function pizza(name, price, productType = "pizza") {
     image: "",
     price,
     qty: 1,
+    category,
     productType
   };
 }
@@ -73,14 +74,26 @@ test("Buy 2 Get 1: 200 + 180 + 150 + 120 + 100 + 90 = 600", () => {
 
 test("Mixed categories work when productType is pizza", () => {
   const result = calculateOffer([
-    pizza("Premium Pizza", 220),
-    pizza("Regular Pizza", 140),
-    pizza("Double Topping Pizza", 180),
+    pizza("Premium Pizza", 220, "pizza", "Premium"),
+    pizza("Regular Pizza", 140, "pizza", "Regular"),
+    pizza("Double Topping Pizza", 180, "pizza", "Double Topping"),
     pizza("Burger", 120, "burger")
   ], { type: "buy_2_get_1", active: true });
   assert.equal(result.finalTotal, 520);
   assert.equal(result.discount, 140);
   assert.deepEqual(result.freeItems.map((item) => item.name), ["Regular Pizza"]);
+});
+
+test("Admin selected category limits eligibility", () => {
+  const result = calculateOffer([
+    pizza("Premium A", 220, "pizza", "Premium"),
+    pizza("Premium B", 180, "pizza", "Premium"),
+    pizza("Regular A", 100, "pizza", "Regular"),
+    pizza("Regular B", 90, "pizza", "Regular")
+  ], { type: "buy_1_get_1", active: true, eligibleCategories: ["Premium"] });
+  assert.equal(result.finalTotal, 410);
+  assert.equal(result.discount, 180);
+  assert.deepEqual(result.freeItems.map((item) => item.name), ["Premium B"]);
 });
 
 test("No active offer keeps totals unchanged", () => {

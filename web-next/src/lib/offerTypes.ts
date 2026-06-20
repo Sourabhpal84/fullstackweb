@@ -5,6 +5,7 @@ export type OfferType = "buy_1_get_1" | "buy_2_get_1";
 export type ActiveOffer = {
   type: OfferType;
   active?: boolean;
+  eligibleCategories?: string[];
 };
 
 export type FreeOfferItem = {

@@ -49,7 +49,18 @@
     </section>
     
     <section id="coupons" class="section panel"><h2>Coupons</h2><button class="primary" onclick="location.href='coupons-admin.html'">Open Coupons Admin</button></section>
-    <section id="offers" class="section panel"><h2>Offers</h2><button class="soft" onclick="location.href='offers-admin.html'">Open Offers Page</button><div class="grid" id="offerList" style="margin-top:12px"></div></section>
+    <section id="offers" class="section panel">
+      <h2>Offers</h2>
+      <p>Manage BOGO Offer Engine from here. Jab offer disabled hoga, website normal checkout jaisi abhi chal rahi hai waise hi chalegi.</p>
+      <div class="actions">
+        <button class="primary" onclick="location.href='offers-admin.html'">Manage BOGO Offers</button>
+      </div>
+      <div class="item" id="offerEngineStatus" style="margin-top:12px">
+        <h3>BOGO Offer Engine</h3>
+        <p>Loading current offer settings...</p>
+      </div>
+      <div class="grid" id="offerList" style="margin-top:12px"></div>
+    </section>
     <section id="homepage" class="section panel"><h2>Homepage Sections</h2><p>Control recommended, best seller, trending, and custom food rails.</p><button class="primary" onclick="location.href='homepage-sections-admin.html'">Manage Homepage Sections</button></section>
     <section id="themes" class="section panel"><h2>Themes</h2><button class="primary" onclick="location.href='theme-studio-admin.html'">Open Advanced Theme Studio</button></section>
     <section id="feedback" class="section panel"><h2>Feedback</h2><button class="primary" onclick="location.href='feedback-admin.html'">Open Feedback Admin</button><div class="grid" id="feedbackList" style="margin-top:12px"></div></section>
@@ -101,6 +112,7 @@ import { formatImageBytes, optimizeImageForUpload } from "./image-upload-utils.j
 protectAdminPage(); mountAdminLogout(document.querySelector(".top"));
 const fmt = n => new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0}).format(Number(n)||0);
 let combos=[], offers=[];
+let offerEngine=null;
 let comboUploadTask=null;
 function showComboPreview(url=comboImage.value.trim()){comboImagePreview.src=url||"";comboImagePreview.classList.toggle("show",!!url)}
 comboImage.addEventListener("input",()=>showComboPreview());
@@ -153,6 +165,13 @@ onSnapshot(query(collection(db,"offers"), orderBy("createdAt","desc")), snap => 
 function renderOffers(){offerList.innerHTML=offers.map(o=>`<div class="item"><h3>${o.title||"Offer"}</h3><p>${o.description||""}</p><span class="pill ${o.active!==false?"on":"off"}">${o.active!==false?"Enabled":"Disabled"}</span><div class="actions"><button class="soft" onclick="toggleOffer('${o.id}',${o.active===false})">${o.active===false?"Enable":"Disable"}</button><button class="danger" onclick="deleteOffer('${o.id}')">Delete</button></div></div>`).join("")}
 window.toggleOffer=(id,active)=>updateDoc(doc(db,"offers",id),{active,updatedAt:serverTimestamp()});
 window.deleteOffer=async id=>{if(await MagneetozNotify.confirm("Delete this offer?")) await deleteDoc(doc(db,"offers",id));};
+onSnapshot(doc(db,"settings","offerEngine"), snap=>{offerEngine=snap.exists()?snap.data():null;renderOfferEngineStatus();});
+function renderOfferEngineStatus(){
+  const active=offerEngine?.active===true;
+  const type=offerEngine?.type==="buy_2_get_1"?"Buy 2 Get 1 Free":"Buy 1 Get 1 Free";
+  const categories=offerEngine?.eligibleCategories?.length?offerEngine.eligibleCategories.join(", "):"No category selected";
+  offerEngineStatus.innerHTML=`<h3>BOGO Offer Engine</h3><p>${active?"Offer is live on website.":"Offer is disabled. Normal checkout active."}</p><span class="pill ${active?"on":"off"}">${active?"Active":"Disabled"}</span><p style="margin-top:8px">Type: <b>${type}</b><br>Categories: ${categories}</p><div class="actions"><button class="primary" onclick="location.href='offers-admin.html'">Open BOGO Manager</button></div>`;
+}
 onSnapshot(query(collection(db,"combos"), orderBy("createdAt","desc")), snap => {combos=snap.docs.map(d=>({id:d.id,...d.data()}));mCombos.textContent=combos.length;renderCombos();});
 function renderCombos(){const ordered=[...combos].sort((a,b)=>Number(a.displayOrder??999)-Number(b.displayOrder??999));comboList.innerHTML=ordered.map(c=>`<div class="item"><h3>${c.name||"Combo"}</h3><p>${c.itemsIncluded||""}</p><p>${fmt(c.comboPrice)} <s>${fmt(c.originalPrice)}</s></p><span class="pill ${c.active!==false?"on":"off"}">${c.active!==false?"Active":"Inactive"}</span><div class="combo-order-controls"><button class="soft" onclick="moveCombo('${c.id}','top')">Top</button><button class="soft" onclick="moveCombo('${c.id}','up')">↑</button><button class="soft" onclick="moveCombo('${c.id}','down')">↓</button><button class="soft" onclick="moveCombo('${c.id}','bottom')">Bottom</button></div><div class="actions"><button class="soft" onclick="editCombo('${c.id}')">Edit</button><button class="soft" onclick="toggleCombo('${c.id}',${c.active===false})">${c.active===false?"Activate":"Deactivate"}</button><button class="danger" onclick="deleteCombo('${c.id}')">Delete</button></div></div>`).join("") || "<div class='item'><p>No combos yet.</p></div>"}
 window.moveCombo=async(id,direction)=>{const ordered=[...combos].sort((a,b)=>Number(a.displayOrder??999)-Number(b.displayOrder??999));const current=ordered.findIndex(c=>c.id===id);if(current<0)return;const target=direction==="top"?0:direction==="bottom"?ordered.length-1:direction==="up"?Math.max(0,current-1):Math.min(ordered.length-1,current+1);if(target===current)return;const [moved]=ordered.splice(current,1);ordered.splice(target,0,moved);await Promise.all(ordered.map((combo,index)=>updateDoc(doc(db,"combos",combo.id),{displayOrder:index+1,updatedAt:serverTimestamp()})));};

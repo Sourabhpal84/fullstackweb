@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import type { CartItem, Coupon, Dish, GeoPointLike } from "@/types/domain";
+import type { ActiveOffer } from "@/lib/offerTypes";
 import { normalizeImageUrl } from "@/lib/format";
 
 type CartState = {
@@ -20,6 +21,7 @@ type CartState = {
     customerPhone: string;
     customerAddress: string;
     customerLandmark: string;
+    activeOffer: ActiveOffer | null;
   };
   addDish: (dish: Dish) => void;
   changeQty: (id: string, delta: number) => void;
@@ -50,7 +52,8 @@ export const useCartStore = create<CartState>((set) => ({
     customerName: "",
     customerPhone: "",
     customerAddress: "",
-    customerLandmark: ""
+    customerLandmark: "",
+    activeOffer: null
   },
   addDish: (dish) => {
     const variant = lowestPrice(dish);
@@ -71,6 +74,7 @@ export const useCartStore = create<CartState>((set) => ({
             image: normalizeImageUrl(dish.image),
             price: Number(variant.price || 0),
             qty: 1,
+            category: dish.category,
             variantLabel: variant.label || variant.name,
             productType: dish.productType
           }

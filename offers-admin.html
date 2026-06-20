@@ -23,6 +23,10 @@ label{display:block;color:#aeb8c7;font-size:12px;font-weight:800;margin:11px 0 6
 input,textarea{width:100%;border-radius:13px;border:1px solid #334155;background:#0b0f14;color:#fff;padding:11px;font:700 13px Poppins}
 textarea{min-height:88px;resize:vertical}
 select{width:100%;border-radius:13px;border:1px solid #334155;background:#0b0f14;color:#fff;padding:11px;font:700 13px Poppins}
+.check-grid{display:grid;gap:8px;margin-top:8px;max-height:190px;overflow:auto;border:1px solid #263241;border-radius:14px;background:#0b0f14;padding:10px}
+.check-row{display:flex;align-items:center;gap:9px;color:#dbe4f0;font-size:12px;font-weight:800}
+.check-row input{width:auto;margin:0}
+.engine-state{margin-top:10px;border-radius:14px;background:#0b0f14;border:1px solid #263241;padding:11px;color:#aeb8c7;font-size:12px;line-height:1.6}
 button{border:0;border-radius:13px;min-height:44px;padding:0 14px;font:900 12px Poppins;cursor:pointer}
 .send{width:100%;margin-top:14px;background:linear-gradient(135deg,#ff7b00,#22c55e);color:#07100b}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
@@ -44,6 +48,33 @@ button{border:0;border-radius:13px;min-height:44px;padding:0 14px;font:900 12px 
     <div class="metric"><b id="totalOffers">0</b><span>Total offers</span></div>
     <div class="metric"><b id="activeOffers">0</b><span>Active</span></div>
     <div class="metric"><b id="broadcastOffers">0</b><span>Broadcasted</span></div>
+  </section>
+  <section class="panel" style="margin-bottom:16px">
+    <h2 style="margin:0;color:#ffd166">BOGO Offer Engine</h2>
+    <p style="margin:4px 0 12px;color:#aeb8c7;font-size:12px;font-weight:800">Checkout discount yahin se control hoga. Sirf selected categories par offer lagega.</p>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px">
+      <div>
+        <label>Offer Type</label>
+        <select id="engineOfferType">
+          <option value="buy_1_get_1">Buy 1 Get 1 Free</option>
+          <option value="buy_2_get_1">Buy 2 Get 1 Free</option>
+        </select>
+      </div>
+      <div>
+        <label>Status</label>
+        <select id="engineActive">
+          <option value="true">Active</option>
+          <option value="false">Disabled</option>
+        </select>
+      </div>
+    </div>
+    <label>Eligible Categories</label>
+    <div class="check-grid" id="engineCategories"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+      <button class="send" type="button" style="width:auto;margin:0" onclick="saveOfferEngine()">Save BOGO Settings</button>
+      <button class="soft" type="button" onclick="disableOfferEngine()">Disable Offer</button>
+    </div>
+    <div class="engine-state" id="engineStatus">Loading offer settings...</div>
   </section>
   <section class="grid">
     <form class="panel" id="offerForm">
@@ -92,6 +123,7 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   updateDoc,
   Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -104,6 +136,8 @@ const list = document.getElementById("offers");
 const historyList = document.getElementById("offerHistory");
 let snapCache = [];
 let offerActionBusy = false;
+let categoryCache = [];
+let engineSettings = null;
 
 function value(id){ return document.getElementById(id).value.trim(); }
 function showAdminError(error, fallback = "Action failed. Please try again."){
@@ -141,6 +175,30 @@ function parseSizePrices(text = ""){
 }
 function sizePricesToText(rows = []){
   return Array.isArray(rows) ? rows.map(row => `${row.label || row.size || ""}=${row.price || row.offerPrice || ""}${row.oldPrice || row.originalPrice ? `,${row.oldPrice || row.originalPrice}` : ""}`).join("\n") : "";
+}
+function selectedEngineCategories(){
+  return [...document.querySelectorAll(".engine-category:checked")].map(input => input.value);
+}
+function renderEngineCategories(){
+  const selected = new Set(engineSettings?.eligibleCategories || []);
+  const box = document.getElementById("engineCategories");
+  box.innerHTML = categoryCache.map(category => `
+    <label class="check-row">
+      <input class="engine-category" type="checkbox" value="${category.name || ""}" ${selected.has(category.name) ? "checked" : ""}>
+      <span>${category.name || "Untitled category"}</span>
+    </label>
+  `).join("") || `<div class="history-item">No categories found. Add categories first.</div>`;
+}
+function renderEngineSettings(){
+  if(engineSettings){
+    document.getElementById("engineOfferType").value = engineSettings.type || "buy_1_get_1";
+    document.getElementById("engineActive").value = engineSettings.active === false ? "false" : "true";
+  }
+  renderEngineCategories();
+  const activeText = engineSettings?.active === false ? "Disabled" : "Active";
+  const typeText = engineSettings?.type === "buy_2_get_1" ? "Buy 2 Get 1" : "Buy 1 Get 1";
+  const categories = engineSettings?.eligibleCategories?.length ? engineSettings.eligibleCategories.join(", ") : "No category selected";
+  document.getElementById("engineStatus").innerHTML = `<b>Status:</b> ${activeText}<br><b>Type:</b> ${typeText}<br><b>Categories:</b> ${categories}`;
 }
 async function writeHistory(offerId, action, title){
   await addDoc(collection(db, "offerHistory"), {
@@ -228,6 +286,40 @@ onSnapshot(query(collection(db, "offers"), orderBy("createdAt", "desc")), snap =
   snapCache = snap.docs.map(item => ({ id:item.id, ...item.data() }));
   renderOffers();
 });
+
+onSnapshot(query(collection(db, "categories"), orderBy("order", "asc")), snap => {
+  categoryCache = snap.docs.map(item => ({ id:item.id, ...item.data() }));
+  renderEngineCategories();
+});
+
+onSnapshot(doc(db, "settings", "offerEngine"), snap => {
+  engineSettings = snap.exists() ? snap.data() : null;
+  renderEngineSettings();
+});
+
+window.saveOfferEngine = async function(){
+  const categories = selectedEngineCategories();
+  if(!categories.length){
+    alert("Kam se kam ek category select karo.");
+    return;
+  }
+  const payload = {
+    active:document.getElementById("engineActive").value === "true",
+    type:document.getElementById("engineOfferType").value,
+    eligibleCategories:categories,
+    updatedAt:serverTimestamp()
+  };
+  await setDoc(doc(db, "settings", "offerEngine"), payload, { merge:true });
+  alert("BOGO offer settings saved.");
+};
+
+window.disableOfferEngine = async function(){
+  await setDoc(doc(db, "settings", "offerEngine"), {
+    active:false,
+    updatedAt:serverTimestamp()
+  }, { merge:true });
+  alert("BOGO offer disabled.");
+};
 
 window.broadcastOffer = async function(id){
   const original = snapCache.find(item => item.id === id);

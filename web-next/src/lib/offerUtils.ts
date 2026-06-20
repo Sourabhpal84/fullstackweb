@@ -4,6 +4,16 @@ export function isPizzaItem(item: OfferCartItem) {
   return String(item.productType || "").toLowerCase() === "pizza";
 }
 
+export function normalizeOfferCategory(value?: string) {
+  return String(value || "").trim().toLowerCase();
+}
+
+export function categoryAllowed(item: OfferCartItem, categories: string[] = []) {
+  if (!categories.length) return true;
+  const itemCategory = normalizeOfferCategory(item.category || item.variantLabel);
+  return categories.map(normalizeOfferCategory).includes(itemCategory);
+}
+
 export function expandCartItems(items: OfferCartItem[]) {
   return items.flatMap((item) => {
     const qty = Math.max(0, Math.floor(Number(item.qty || 0)));

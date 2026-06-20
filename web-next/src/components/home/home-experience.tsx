@@ -17,6 +17,7 @@ import { CheckoutPersistence } from "@/components/home/checkout-persistence";
 import { calculateRouteDistance, DEFAULT_MAX_DISTANCE_KM, getBrowserLocation } from "@/lib/delivery";
 import { useCartStore } from "@/lib/cart-store";
 import { GeoSections } from "@/components/home/geo-sections";
+import type { ActiveOffer } from "@/lib/offerTypes";
 
 export function HomeExperience() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -32,6 +33,7 @@ export function HomeExperience() {
   const [activeCouponCode, setActiveCouponCode] = useState("");
   const [restaurant, setRestaurant] = useState<RestaurantSettings>({});
   const [deliverySettings, setDeliverySettings] = useState<DeliverySettings>({});
+  const [activeOffer, setActiveOffer] = useState<ActiveOffer | null>(null);
   const [customerLocation, setCustomerLocation] = useState<GeoPointLike | null>(null);
   const [distanceKm, setDistanceKm] = useState(0);
   const setCheckoutContext = useCartStore((state) => state.setCheckoutContext);
@@ -55,6 +57,10 @@ export function HomeExperience() {
     const unsubDelivery = onSnapshot(doc(db, "settings", "delivery"), (snap) => {
       setDeliverySettings(snap.exists() ? snap.data() as DeliverySettings : {});
     });
+    const unsubOfferEngine = onSnapshot(doc(db, "settings", "offerEngine"), (snap) => {
+      const data = snap.exists() ? snap.data() as ActiveOffer : null;
+      setActiveOffer(data?.active === false ? null : data);
+    });
     return () => {
       unsubTheme();
       unsubCategories();
@@ -62,6 +68,7 @@ export function HomeExperience() {
       unsubCoupons();
       unsubRestaurant();
       unsubDelivery();
+      unsubOfferEngine();
     };
   }, []);
 
@@ -109,9 +116,10 @@ export function HomeExperience() {
       distanceKm,
       maxDeliveryDistance: Number(deliverySettings.maxDeliveryDistanceKm || deliverySettings.maxDistance || DEFAULT_MAX_DISTANCE_KM),
       restaurantUnavailable: restaurant.unavailable === true,
-      restaurantUnavailableMessage: restaurant.unavailableMessage || ""
+      restaurantUnavailableMessage: restaurant.unavailableMessage || "",
+      activeOffer
     });
-  }, [activeCoupon, coupons, customerLocation, deliverySettings, distanceKm, restaurant, setCheckoutContext]);
+  }, [activeCoupon, activeOffer, coupons, customerLocation, deliverySettings, distanceKm, restaurant, setCheckoutContext]);
 
   async function refreshLocation() {
     const location = await getBrowserLocation();
