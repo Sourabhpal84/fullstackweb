@@ -933,12 +933,21 @@ function updateSelectedLocationUi(detail = ""){
 
 function openLocationSelector(){
   const popup = document.getElementById("locationSelectorPopup");
-  if(popup) popup.style.display = "flex";
+  if(popup){
+    popup.style.display = "flex";
+    popup.setAttribute("aria-hidden", "false");
+    document.body?.classList.add("location-selector-open");
+    setTimeout(() => document.getElementById("addressSearchInput")?.focus(), 80);
+  }
 }
 
 function closeLocationSelector(){
   const popup = document.getElementById("locationSelectorPopup");
-  if(popup) popup.style.display = "none";
+  if(popup){
+    popup.style.display = "none";
+    popup.setAttribute("aria-hidden", "true");
+    document.body?.classList.remove("location-selector-open");
+  }
 }
 
 function showLocationAddressForm(){
@@ -1634,9 +1643,33 @@ async function resolveAuthenticatedCheckoutPhone(user = auth.currentUser || cach
   return phone;
 }
 
+async function resolveAuthenticatedCheckoutName(user = auth.currentUser || cachedAuthUser){
+  const input = document.getElementById("customerName");
+  let name = normalizeUnicodeText(input?.value || user?.displayName || "");
+  if(!name && user?.uid){
+    try{
+      const profile = await getDoc(doc(db,"users",user.uid));
+      const data = profile.data() || {};
+      name = normalizeUnicodeText(
+        data.fullName ||
+        data.customerName ||
+        data.name ||
+        data.defaultAddress?.name ||
+        data.savedAddresses?.[0]?.name ||
+        ""
+      );
+    }catch(error){
+      console.warn("Saved customer name lookup skipped:", error);
+    }
+  }
+  // A name must never trap a verified customer at checkout. It can be completed later in Profile.
+  if(!name) name = "Customer";
+  if(input) input.value = name;
+  return name;
+}
+
 function focusMissingCheckoutField(){
   const fields = [
-    ["customerName", "name"],
     ["customerAddress", "address"]
   ];
   const missing = fields.find(([id]) => !normalizeUnicodeText(document.getElementById(id)?.value || ""));
@@ -1954,6 +1987,17 @@ async function loadSavedCustomerProfile(user){
     const snap = await getDoc(doc(db, "users", user.uid));
     if(!snap.exists()) return;
     const data = snap.data() || {};
+    const savedName = normalizeUnicodeText(
+      data.fullName ||
+      data.customerName ||
+      data.name ||
+      data.defaultAddress?.name ||
+      data.savedAddresses?.[0]?.name ||
+      user.displayName ||
+      ""
+    );
+    const nameInput = document.getElementById("customerName");
+    if(nameInput && savedName && !normalizeUnicodeText(nameInput.value)) nameInput.value = savedName;
     renderSavedAddresses(data.savedAddresses || []);
     const preferred = data.defaultAddress || data.savedAddresses?.[0] || data.lastCheckoutState;
     if(preferred){
@@ -4542,7 +4586,7 @@ if(!isFreshCustomerLocation(CHECKOUT_LOCATION_REUSE_MAX_AGE_MS)){
   setCheckoutLoading(false);
 }
 
-const name = normalizeUnicodeText(document.getElementById("customerName").value);
+const name = await resolveAuthenticatedCheckoutName(auth.currentUser || cachedAuthUser);
 const phone = await resolveAuthenticatedCheckoutPhone(auth.currentUser || cachedAuthUser);
 const address = normalizeUnicodeText(document.getElementById("customerAddress").value);
 
@@ -4551,7 +4595,7 @@ if(!phone){
   return;
 }
 
-if(!name || !address){
+if(!address){
   focusMissingCheckoutField();
   return;
 }
