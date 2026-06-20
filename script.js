@@ -1264,7 +1264,7 @@ function renderSmartAssistant(intent = smartAssistantIntent){
   const chips = document.getElementById("smartAssistantChips");
   if(!results) return;
   const subtotal = getCartSubtotal();
-  const freeDeliveryTarget = deliveryDistance && deliveryDistance <= 3 ? 149 : DEFAULT_FREE_DELIVERY_MIN;
+  const freeDeliveryTarget = calculateDistanceDeliveryPricing(deliveryDistance, subtotal).threshold || DEFAULT_FREE_DELIVERY_MIN;
   const neededForFree = Math.max(0, freeDeliveryTarget - subtotal);
   const dishes = [...allMenuDishes]
     .sort((a, b) => scoreSmartDish(b, intent) - scoreSmartDish(a, intent))
@@ -4470,50 +4470,33 @@ window.addComboToCart = function(id){
 
 
 function showFreeDeliveryHint(subtotal){
+  const hintText = document.getElementById("freeDeliveryHint");
+  const summaryHint = document.getElementById("summaryFreeDelivery");
+  const pricing = calculateDistanceDeliveryPricing(deliveryDistance, subtotal);
+  let message = "";
+  let state = "";
 
-const hintText = document.getElementById("freeDeliveryHint");
-const summaryHint = document.getElementById("summaryFreeDelivery");
+  if(!pricing.locationAvailable){
+    message = "Select your delivery location to check delivery charges.";
+    state = "pending";
+  }else if(!pricing.serviceable){
+    message = "Delivery is not available at this location.";
+    state = "blocked";
+  }else if(pricing.freeDelivery){
+    message = `Free delivery unlocked for ${Number(deliveryDistance).toFixed(1)} km 🎉`;
+    state = "unlocked";
+  }else{
+    message = `Add ${formatCurrency(pricing.remaining)} more for free delivery in your distance zone.`;
+    state = "pending";
+  }
 
-if(!ALL_INDIA_DELIVERY && !VIP_DELIVERY_ENABLED &&
-  deliveryDistance > MAX_DELIVERY_DISTANCE){
-if(hintText) hintText.innerHTML = "";
-if(summaryHint) summaryHint.innerHTML = "";
-return;
+  [hintText, summaryHint].filter(Boolean).forEach(element => {
+    element.textContent = message;
+    element.classList.remove("unlocked", "pending", "blocked");
+    element.classList.add(state);
+    element.style.color = "";
+  });
 }
-
-let target = deliveryDistance <= 3 ? 149 : 199;
-
-if(subtotal >= target){
-
-if(hintText){
-hintText.innerHTML = "🎉 Free Delivery Applied!";
-hintText.style.color = "green";
-}
-
-if(summaryHint){
-summaryHint.innerHTML = "🎉 Free Delivery Applied!";
-summaryHint.style.color = "green";
-}
-
-}
-else{
-
-const remaining = target - subtotal;
-const msg = `Add ${formatCurrency(remaining)} more for FREE DELIVERY`;
-
-if(hintText){
-hintText.innerHTML = msg;
-hintText.style.color = "#ff4d00";
-}
-
-if(summaryHint){
-summaryHint.innerHTML = msg;
-summaryHint.style.color = "#ff4d00";
-}
-
-}
-
- }
 
 /* ================= ORDER ================= */
 
