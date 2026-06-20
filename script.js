@@ -2639,6 +2639,12 @@ function categoryJumpFooter(categories = [], index = 0){
   return "";
 }
 
+function dishToppingText(d = {}){
+  const raw = d.toppings || d.topping || d.ingredients || d.description || "";
+  if(Array.isArray(raw)) return raw.filter(Boolean).slice(0, 4).join(", ");
+  return String(raw || "Classic MAGNEETOZ toppings").slice(0, 90);
+}
+
 function dishCardMarkup(d = {}, className = ""){
   const safeCallName = String(d.name || "").replace(/\\/g,"\\\\").replace(/'/g,"\\'");
   const dishAttrs = dishDataAttrs(d);
@@ -2650,9 +2656,7 @@ function dishCardMarkup(d = {}, className = ""){
         <div class="card-body">
           <h3>${escapeHTML(d.name || "")}</h3>
           <p>${escapeHTML(d.description || "")}</p>
-          <div class="quantity-box">
-            <button onclick="changeQty(this,-1)">-</button><span class="qty">1</span><button onclick="changeQty(this,1)">+</button>
-          </div>
+          <div class="topping-pill"><span>Topping</span><b>${escapeHTML(dishToppingText(d))}</b></div>
           <div class="card-footer">
             <div class="price-box">
               <span class="offer" data-base="${d.price || 0}">${formatCurrency(d.price)}</span>
@@ -2668,20 +2672,23 @@ function dishCardMarkup(d = {}, className = ""){
   const small = getSize(d.sizes.small);
   const medium = getSize(d.sizes.medium);
   const large = getSize(d.sizes.large);
+  const sizeButtons = [
+    ["Regular", small],
+    ["Medium", medium],
+    ["Large", large]
+  ].map(([label, size], index) => `
+    <button type="button" class="size-option ${index === 0 ? "active" : ""}" data-size="${label}" data-price="${size.price}" data-market="${size.market}" onclick="selectPizzaSize(this)">
+      <span>${label}</span><b>${formatCurrency(size.price)}</b>
+    </button>
+  `).join("");
   return `
     <div class="card new-card ${className}" ${dishAttrs}>
       <button type="button" class="quick-preview-btn" data-preview>Preview</button>
       <div class="card-img">${imageMarkup(d.image, d.name, d.imageSet)}</div>
       <div class="card-body">
         <h3>${escapeHTML(d.name || "")}</h3>
-        <select class="size-select" onchange="updatePrice(this)">
-          <option value="${small.price}" data-market="${small.market}">Small - ${formatCurrency(small.price)}</option>
-          <option value="${medium.price}" data-market="${medium.market}">Medium - ${formatCurrency(medium.price)}</option>
-          <option value="${large.price}" data-market="${large.market}">Large - ${formatCurrency(large.price)}</option>
-        </select>
-        <div class="quantity-box">
-          <button onclick="changeQty(this,-1)">-</button><span class="qty">1</span><button onclick="changeQty(this,1)">+</button>
-        </div>
+        <div class="size-options" role="radiogroup" aria-label="Choose pizza size">${sizeButtons}</div>
+        <div class="topping-pill"><span>Topping</span><b>${escapeHTML(dishToppingText(d))}</b></div>
         <div class="card-footer">
           <div class="price-box">
             <span class="offer" data-base="${small.price}">${formatCurrency(small.price)}</span>
@@ -4262,7 +4269,6 @@ function updateCart() {
         <span>${item.qty}</span>
         <button type="button" onclick="changeCartItemQty(${index}, 1)">+</button>
       </div>
-      <button type="button" aria-label="Remove ${escapeHTML(item.name)}" onclick="removeItem(${index})">x</button>
     </div>
      </div>
     `;
@@ -4329,7 +4335,14 @@ function changeCartItemQty(index, delta){
   const item = cart[index];
   if(!item) return;
   const unit = Number(item.unitPrice || (item.qty ? item.price / item.qty : item.price)) || 0;
-  item.qty = Math.max(1, Number(item.qty || 1) + delta);
+  const nextQty = Number(item.qty || 1) + delta;
+  if(nextQty <= 0){
+    cart.splice(index, 1);
+    if(activeCoupon) validateActiveCoupon();
+    updateCart();
+    return;
+  }
+  item.qty = nextQty;
   item.unitPrice = unit;
   item.price = Math.round(unit * item.qty);
   updateCart();
@@ -4432,6 +4445,25 @@ function updatePrice(selectElement){
 
 }
 
+function selectPizzaSize(button){
+  const card = button.closest(".new-card");
+  if(!card) return;
+  card.querySelectorAll(".size-option").forEach(option => {
+    const active = option === button;
+    option.classList.toggle("active", active);
+    option.setAttribute("aria-checked", active ? "true" : "false");
+  });
+  const offerPrice = Number(button.dataset.price || 0);
+  const marketPrice = Number(button.dataset.market || 0);
+  const offerEl = card.querySelector(".offer");
+  const marketEl = card.querySelector(".market");
+  if(!offerEl || !marketEl) return;
+  offerEl.textContent = formatCurrency(offerPrice);
+  marketEl.textContent = formatCurrency(marketPrice);
+  offerEl.dataset.base = offerPrice;
+  marketEl.dataset.base = marketPrice;
+}
+
 /* ================= ADD TO CART ================= */
 
 function promptGuestLoginAfterCartAction(){
@@ -4452,14 +4484,10 @@ function addToCartFull(btn, name){
 
   const card = btn.closest(".card");
 
-  const select = card.querySelector("select");
-
-  const size = select.options[select.selectedIndex].text.split(" - ")[0];
-
-  const price = parseInt(select.value);
-
-  const qtyEl = card.querySelector(".qty");
-  const qty = qtyEl ? parseInt(qtyEl.innerText) : 1;
+  const selectedSize = card.querySelector(".size-option.active") || card.querySelector(".size-option");
+  const size = selectedSize?.dataset.size || "Regular";
+  const price = Number(selectedSize?.dataset.price || parseCurrency(card.querySelector(".offer")?.innerText || "0"));
+  const qty = 1;
 
   cart.push({
     name,
@@ -4491,10 +4519,9 @@ function addToCartSimple(btn, name){
 
   const card = btn.closest(".card");
 
-  const qty = parseInt(card.querySelector(".qty").innerText);
-
   const priceEl = card.querySelector(".offer");
   const price = parseCurrency(priceEl.innerText);
+  const qty = 1;
 
   cart.push({
     name,
@@ -4502,7 +4529,7 @@ function addToCartSimple(btn, name){
     qty,
     category: card.dataset.dishCategory || "",
     image: card.dataset.dishImage || card.querySelector("img")?.getAttribute("src") || "logo_tran.jpeg",
-    unitPrice: qty ? price / qty : price,
+    unitPrice: price,
     price
   });
 
@@ -6794,6 +6821,7 @@ window.toggleLocation = toggleLocation;
 window.addToCartFull = addToCartFull;
 window.addToCartSimple = addToCartSimple;
 window.changeQty = changeQty;
+window.selectPizzaSize = selectPizzaSize;
 window.updatePrice = updatePrice;
 window.removeItem = removeItem;
 window.changeCartItemQty = changeCartItemQty;

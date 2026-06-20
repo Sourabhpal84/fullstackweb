@@ -730,7 +730,7 @@ a { -webkit-tap-highlight-color: transparent; }
 }
 
 .card-img {
-  height: 150px;
+  height: 126px;
   aspect-ratio: 4 / 3;
   overflow: hidden;
   background: #f0f0f0;
@@ -771,6 +771,63 @@ a { -webkit-tap-highlight-color: transparent; }
   transition: var(--transition);
 }
 .size-select:focus { border-color: var(--brand); }
+
+.size-options{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:6px;
+  margin:6px 0;
+}
+.new-card .size-options .size-option{
+  display:grid;
+  place-items:center;
+  gap:2px;
+  min-height:46px;
+  margin:0;
+  padding:5px 4px;
+  border:1px solid rgba(255,123,0,.24);
+  border-radius:14px;
+  background:#fff7ed;
+  color:#7c2d12;
+  box-shadow:none;
+  font-size:10px;
+  line-height:1.1;
+}
+.size-option span{font-weight:950}
+.size-option b{font-size:10px;color:#111827}
+.new-card .size-options .size-option.active{
+  background:linear-gradient(135deg,#ff7b00,#22c55e);
+  color:#fff;
+  border-color:transparent;
+  box-shadow:0 8px 18px rgba(255,123,0,.22);
+}
+.new-card .size-options .size-option.active b{color:#fff}
+.topping-pill{
+  display:grid;
+  gap:2px;
+  margin:6px 0 8px;
+  padding:8px 10px;
+  border:1px dashed rgba(255,123,0,.28);
+  border-radius:14px;
+  background:linear-gradient(135deg,rgba(255,123,0,.08),rgba(34,197,94,.07));
+  color:#475569;
+}
+.topping-pill span{
+  color:#ff7b00;
+  font-size:9px;
+  font-weight:950;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+}
+.topping-pill b{
+  color:var(--dark);
+  font-size:11px;
+  line-height:1.25;
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+}
 
 /* Quantity box */
 .quantity-box { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
@@ -822,7 +879,7 @@ a { -webkit-tap-highlight-color: transparent; }
 .market { font-size: 11px; color: #bbb; text-decoration: line-through; font-variant-numeric: tabular-nums; }
 
 /* Add button on card */
-.new-card button:not(.quantity-box button) {
+.new-card button:not(.quantity-box button):not(.size-option) {
   background: var(--brand);
   color: #fff;
   border: none;
@@ -837,7 +894,7 @@ a { -webkit-tap-highlight-color: transparent; }
   transition: var(--transition);
   box-shadow: 0 4px 12px rgba(255,123,0,.35);
 }
-.new-card button:not(.quantity-box button):hover {
+.new-card button:not(.quantity-box button):not(.size-option):hover {
   background: var(--brand-dark);
   transform: scale(1.05);
 }
@@ -6929,7 +6986,7 @@ body{
 }
 
 .add-cart-btn,
-.new-card button:not(.quantity-box button),
+.new-card button:not(.quantity-box button):not(.size-option),
 .combo-card button,
 .offer-card button{
   background:var(--menu-add-bg) !important;
@@ -8800,7 +8857,7 @@ body.dark-mode .inline-menu-section .new-card{
 }
 
 .inline-menu-section .new-card .card-img{
-  height:128px !important;
+  height:104px !important;
   margin:8px 8px 0 !important;
   border-radius:14px !important;
   flex:0 0 auto !important;
@@ -8839,26 +8896,13 @@ body .inline-menu-section .new-card .card-body h3{
   overflow:hidden !important;
 }
 
-.inline-menu-section .quantity-box{
-  min-height:28px !important;
-  padding:3px 6px !important;
-  margin:0 !important;
-  border-radius:999px !important;
-}
-
-.inline-menu-section .quantity-box button{
-  width:22px !important;
-  height:22px !important;
-  min-width:22px !important;
-  padding:0 !important;
-  margin:0 !important;
-  border-radius:50% !important;
-}
-
-.inline-menu-section .quantity-box .qty{
-  font-size:11px !important;
-  font-weight:950 !important;
-}
+.inline-menu-section .quantity-box{display:none !important}
+.inline-menu-section .topping-pill{margin:0 !important;padding:6px 8px !important;border-radius:12px !important}
+.inline-menu-section .topping-pill span{font-size:7px !important}
+.inline-menu-section .topping-pill b{font-size:9px !important;line-height:1.15 !important}
+.inline-menu-section .size-options{gap:4px !important;margin:0 !important}
+.inline-menu-section .new-card .size-options .size-option{min-height:38px !important;padding:4px 2px !important;border-radius:11px !important;font-size:8px !important}
+.inline-menu-section .size-option b{font-size:8px !important}
 
 .inline-menu-section .card-footer{
   margin-top:auto !important;
@@ -8888,7 +8932,7 @@ body .inline-menu-section .new-card .card-body h3{
 
 .inline-menu-section .add-cart-btn,
 .inline-menu-section .new-card button.add-cart-btn,
-.inline-menu-section .new-card button:not(.quantity-box button):not(.quick-preview-btn){
+.inline-menu-section .new-card button:not(.quantity-box button):not(.quick-preview-btn):not(.size-option){
   min-height:30px !important;
   padding:0 9px !important;
   margin:0 !important;
@@ -8898,11 +8942,11 @@ body .inline-menu-section .new-card .card-body h3{
 }
 
 .inline-menu-section .quick-preview-btn{
-  top:12px !important;
-  right:12px !important;
-  min-height:28px !important;
-  padding:0 9px !important;
-  font-size:10px !important;
+  top:10px !important;
+  right:10px !important;
+  min-height:22px !important;
+  padding:0 7px !important;
+  font-size:8px !important;
   border-radius:999px !important;
 }
 
@@ -8934,7 +8978,7 @@ body .inline-menu-section .new-card .card-body h3{
   }
 
   .inline-menu-section .new-card .card-img{
-    height:116px !important;
+    height:92px !important;
   }
 
   .inline-menu-section .new-card .card-body{
