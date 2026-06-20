@@ -254,6 +254,11 @@ function hasVisibleRazorpayCheckout(){
     });
 }
 
+function isMobilePaymentDevice(){
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "")
+    || (window.matchMedia?.("(max-width: 768px)")?.matches === true);
+}
+
 function renderHeroPizzaSlider(images = [], imageSets = [], heroImages = []){
   const slider = document.getElementById("heroPizzaSlider");
   const bgSlider = document.getElementById("heroBgSlider");
@@ -395,17 +400,20 @@ function applyHeroBackgroundBlur(hero = {}){
 
 function armRazorpayOpenWatchdog(){
   let checks = 0;
+  const mobile = isMobilePaymentDevice();
+  const firstVisibleCheck = mobile ? 10 : 3;
+  const maxChecks = mobile ? 45 : 12;
   const timer = setInterval(() => {
     checks += 1;
     if(!razorpayInFlight){
       clearInterval(timer);
       return;
     }
-    if(!hasVisibleRazorpayCheckout() && checks >= 3){
+    if(!hasVisibleRazorpayCheckout() && checks >= firstVisibleCheck){
       cancelRazorpayCheckout();
       clearInterval(timer);
     }
-    if(checks >= 12 && razorpayInFlight){
+    if(checks >= maxChecks && razorpayInFlight){
       cancelRazorpayCheckout();
       clearInterval(timer);
     }
@@ -4959,6 +4967,16 @@ prefill:{
 theme:{
   color:"#ff7b00"
 },
+method:{
+  upi:true,
+  card:true,
+  netbanking:true,
+  wallet:true
+},
+retry:{
+  enabled:true,
+  max_count:2
+},
 
 handler: async function (response){
 
@@ -5110,6 +5128,16 @@ async function payPendingOrder(orderId){
       name:"Magneetoz",
       description:"Complete your order payment",
       order_id:String(paymentSession.razorpayOrderId),
+      method:{
+        upi:true,
+        card:true,
+        netbanking:true,
+        wallet:true
+      },
+      retry:{
+        enabled:true,
+        max_count:2
+      },
       theme:{ color:"#ff7b00" },
       handler:async function(response){
         let keepRetryOverlay = false;
@@ -5170,6 +5198,28 @@ async function payPendingOrder(orderId){
 }
 
 window.payPendingOrder = payPendingOrder;
+
+async function cancelUnpaidPaymentOrder(orderId){
+  if(!orderId) return;
+  const ok = confirm("Remove this unpaid payment order? If you already paid, choose Cancel and use Pay now / Check status instead.");
+  if(!ok) return;
+  try{
+    setCheckoutLoading(true, "Removing unpaid payment order...");
+    await callPaymentFunction("cancelUnpaidPaymentOrder", { orderId }, 20000);
+    clearRazorpayPaymentRecovery();
+    liveOrders = liveOrders.map(order => order.id === orderId
+      ? { ...order, status:"Cancelled", orderStatus:"Cancelled", paymentStatus:"cancelled" }
+      : order);
+    toastSuccess?.("Pending payment order removed.");
+    renderOrders();
+  }catch(error){
+    alert(error?.message || "Unable to remove this pending payment order.");
+  }finally{
+    setCheckoutLoading(false);
+  }
+}
+
+window.cancelUnpaidPaymentOrder = cancelUnpaidPaymentOrder;
 
 /* ================= WHATSAPP ================= */
 
@@ -6288,9 +6338,12 @@ function buildPayNowActionHTML(order = {}){
     <div class="order-pay-now-card">
       <div>
         <strong>${escapeHTML(label)}</strong>
-        <span>Complete payment safely anytime from this order.</span>
+        <span>Complete payment safely, or remove this unpaid order if you do not want to pay.</span>
       </div>
-      <button type="button" class="pay-now-order-btn" onclick="payPendingOrder('${escapeHTML(order.id)}')">Pay now</button>
+      <div class="order-pay-actions">
+        <button type="button" class="pay-now-order-btn" onclick="payPendingOrder('${escapeHTML(order.id)}')">Pay now</button>
+        <button type="button" class="remove-pending-payment-btn" onclick="cancelUnpaidPaymentOrder('${escapeHTML(order.id)}')">Remove</button>
+      </div>
     </div>
   `;
 }
@@ -6318,7 +6371,7 @@ function buildPaymentTrackingHTML(order){
       <span class="${paid ? "paid" : "pending"}">${paid ? "Payment Received" : "Payment Pending"}</span>
       <strong>${methodLabel}</strong>
       <p>Status: ${paid ? "paid" : (order.paymentStatus || "pending")}</p>
-      ${canPayNow ? `<button type="button" class="pay-now-order-btn" onclick="payPendingOrder('${escapeHTML(order.id)}')">Pay now</button>` : ""}
+      ${canPayNow ? `<div class="order-pay-actions"><button type="button" class="pay-now-order-btn" onclick="payPendingOrder('${escapeHTML(order.id)}')">Pay now</button><button type="button" class="remove-pending-payment-btn" onclick="cancelUnpaidPaymentOrder('${escapeHTML(order.id)}')">Remove</button></div>` : ""}
       ${showDeliveryCode ? `<p><strong>Delivery OTP: <span data-delivery-code-order="${escapeHTML(order.id)}">Loading</span></strong></p><p>${codeHelp}</p>` : ""}
       ${prepaidOtpPending ? `<p><strong>Delivery OTP: generating...</strong></p><p>${codeHelp}</p>` : ""}
     </div>

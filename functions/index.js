@@ -1504,6 +1504,94 @@ exports.resumeOrderPayment = onRequest(
   }
 );
 
+exports.cancelUnpaidPaymentOrder = onRequest(
+  {
+    region: "asia-south1",
+    cors: allowedWebOrigins()
+  },
+  async (req, res) => {
+    if (req.method === "OPTIONS") return sendJson(res, 204, {});
+    if (req.method !== "POST") return sendJson(res, 405, { ok: false, error: "Method not allowed" });
+    try {
+      const user = await requireAuth(req);
+      const orderId = compactText(req.body?.orderId, 160);
+      if (!orderId) throw Object.assign(new Error("Order id is required"), { status: 400 });
+      const orderRef = db.collection("orders").doc(orderId);
+      const result = await db.runTransaction(async transaction => {
+        const orderSnap = await transaction.get(orderRef);
+        if (!orderSnap.exists) throw Object.assign(new Error("Order not found"), { status: 404 });
+        const order = orderSnap.data() || {};
+        if (order.userId !== user.uid) throw Object.assign(new Error("This order belongs to another user"), { status: 403 });
+        const paymentMethod = String(order.paymentMethod || order.paymentMode || "").toLowerCase();
+        const paymentStatus = String(order.paymentStatus || "").toLowerCase();
+        const paid = paymentStatus === "paid" || order.paymentCaptured === true || !!order.razorpayPaymentId || !!order.transactionId;
+        if (paid) throw Object.assign(new Error("Payment is already received. This order cannot be removed."), { status: 409 });
+        if (!["online", "upi"].includes(paymentMethod) && order.paymentRequired !== true) {
+          throw Object.assign(new Error("Only unpaid online payment orders can be removed here."), { status: 409 });
+        }
+        const statusText = String(order.status || order.orderStatus || "").toLowerCase();
+        if (["delivered", "cancelled", "rejected", "failed"].includes(statusText)) {
+          return { alreadyClosed: true };
+        }
+        const sessionId = compactText(order.paymentSessionId, 160);
+        const reservedPoints = Math.max(0, Number(order.walletPointsUsed || order.walletDiscount || 0));
+        const userRef = reservedPoints > 0 && sessionId ? db.collection("users").doc(user.uid) : null;
+        const reserveRef = reservedPoints > 0 && sessionId ? db.collection("walletTransactions").doc(`online_reserve_${sessionId}`) : null;
+        const [userSnap, reserveSnap] = userRef && reserveRef
+          ? await Promise.all([transaction.get(userRef), transaction.get(reserveRef)])
+          : [null, null];
+        const updates = {
+          status: "Cancelled",
+          orderStatus: "Cancelled",
+          lifecycleStatus: "cancelled",
+          paymentStatus: "cancelled",
+          paymentRequired: false,
+          paymentCompleted: false,
+          paymentCaptured: false,
+          amountDue: 0,
+          amountToCollect: 0,
+          cancelledBy: "customer",
+          cancelledAt: FieldValue.serverTimestamp(),
+          cancellationReason: "Customer cancelled unpaid online payment",
+          updatedAt: FieldValue.serverTimestamp(),
+          lastStatusUpdatedAt: FieldValue.serverTimestamp(),
+          timeline: FieldValue.arrayUnion({ status: "payment_cancelled_by_customer", source: "customer", at: Date.now() })
+        };
+        transaction.set(orderRef, updates, { merge: true });
+        if (sessionId) {
+          transaction.set(db.collection("paymentSessions").doc(sessionId), {
+            status: "cancelled",
+            cancellationReason: "Customer cancelled unpaid online payment",
+            walletReservationStatus: reservedPoints ? "released" : FieldValue.delete(),
+            updatedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+          if (reservedPoints > 0) {
+            if (reserveSnap.exists && String(reserveSnap.data()?.status || "") === "reserved") {
+              const wallet = userSnap.data() || {};
+              transaction.set(userRef, {
+                walletPoints: Number(wallet.walletPoints || 0) + reservedPoints,
+                pendingPoints: Math.max(0, Number(wallet.pendingPoints || 0) - reservedPoints),
+                updatedAt: FieldValue.serverTimestamp()
+              }, { merge: true });
+              transaction.set(reserveRef, {
+                status: "released",
+                releasedPoints: reservedPoints,
+                releasedAt: FieldValue.serverTimestamp(),
+                releaseReason: "customer_cancelled_unpaid_payment"
+              }, { merge: true });
+            }
+          }
+        }
+        return { alreadyClosed: false };
+      });
+      return sendJson(res, 200, { ok: true, orderId, ...result });
+    } catch (error) {
+      logger.error("cancelUnpaidPaymentOrder failed", { error: error.message });
+      return sendJson(res, error.status || 500, { ok: false, error: error.message || "Unable to remove pending payment order" });
+    }
+  }
+);
+
 exports.verifyPaymentLinkAndCreateOrder = onRequest(
   {
     region: "asia-south1",
