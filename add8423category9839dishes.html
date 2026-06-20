@@ -209,6 +209,15 @@
 .dish-edit-image img{width:110px;height:90px;object-fit:cover;border-radius:12px;background:#fff}
 .dish-edit-image-copy strong,.dish-edit-image-copy small{display:block}.dish-edit-image-copy small{margin:5px 0;color:#94a3b8}
 .dish-edit-image-copy button{margin-left:0}.dish-edit-upload-status{min-height:18px;color:#22c55e;font-size:11px;font-weight:700}
+.category-edit-panel{margin-top:12px;padding:12px;border:1px solid #334155;border-radius:14px;background:#020617;display:none;gap:10px}
+.category-edit-panel.active{display:grid}
+.category-edit-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px}
+.category-edit-grid input{width:100%;margin:0}
+.category-edit-images{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}
+.category-edit-image-box{padding:10px;border:1px solid #25334a;border-radius:12px;background:#0b1220}
+.category-edit-image-box img{width:72px;height:72px;object-fit:cover;border-radius:14px;background:#fff;margin-bottom:8px}
+.category-edit-image-box strong,.category-edit-image-box small{display:block}.category-edit-image-box small{color:#94a3b8;margin:4px 0 8px}
+.category-edit-status{min-height:18px;color:#22c55e;font-size:11px;font-weight:800}
 @media(max-width:560px){.dish-edit-image{grid-template-columns:78px minmax(0,1fr)}.dish-edit-image img{width:78px;height:72px}}
 @media(max-width:640px){
   .sidebar{padding:10px 12px;align-items:flex-start;flex-direction:column;gap:9px}
@@ -430,6 +439,10 @@ function escapeHTML(value = ""){
     "\"":"&quot;",
     "'":"&#39;"
   }[char]));
+}
+
+function jsString(value = ""){
+  return JSON.stringify(String(value || ""));
 }
 
 function numberValue(value, fallback = 0){
@@ -854,6 +867,9 @@ onSnapshot(collection(db,"categories"), snap=>{
   snap.forEach(docSnap=>{
 
     const c=docSnap.data();
+    const categoryImage = c.image || c.imageUrl || c.icon || c.photo || c.thumbnail || "";
+    const buttonName = c.parent || c.group || c.mainCategory || "";
+    const buttonImage = c.groupImage || c.mainTypeImage || c.parentImage || categoryImage || "";
 
     if(select){
       select.innerHTML += `<option>${c.name}</option>`;
@@ -869,10 +885,10 @@ onSnapshot(collection(db,"categories"), snap=>{
     <div style="flex:1;">
 
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-      <img src="${c.image || c.imageUrl || c.icon || c.photo || c.thumbnail || 'logo_tran.jpeg'}" alt="${c.name}" style="width:48px;height:48px;border-radius:50%;object-fit:cover;background:#fff;" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
+      <img src="${escapeHTML(categoryImage || 'logo_tran.jpeg')}" alt="${escapeHTML(c.name || "Category")}" style="width:48px;height:48px;border-radius:50%;object-fit:cover;background:#fff;" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
       <div>
-        <b>${c.name}</b>
-        <small style="display:block;color:#94a3b8;">Food Button: ${c.parent || c.group || c.mainCategory || "Not set"}</small>
+        <b>${escapeHTML(c.name || "Category")}</b>
+        <small style="display:block;color:#94a3b8;">Food Button: ${escapeHTML(buttonName || "Not set")}</small>
       </div>
     </div>
 
@@ -894,10 +910,44 @@ onSnapshot(collection(db,"categories"), snap=>{
       <button type="button" onclick="moveCategory('${docSnap.id}','bottom')">Bottom</button>
     </div>
 
+    <button class="btn-blue" type="button" onclick="toggleCategoryEdit('${docSnap.id}')">
+      Edit Button / Category Photo
+    </button>
+
     <button class="btn-red"
-      onclick="deleteCategory('${docSnap.id}','${c.name}')">
+      onclick="deleteCategory('${docSnap.id}',${jsString(c.name || "")})">
       Delete
     </button>
+
+    <div class="category-edit-panel" id="categoryEdit-${docSnap.id}">
+      <div class="category-edit-grid">
+        <input id="editCategoryName-${docSnap.id}" value="${escapeHTML(c.name || "")}" placeholder="Category Name">
+        <input id="editButtonName-${docSnap.id}" value="${escapeHTML(buttonName || "")}" placeholder="Food Button Name">
+        <input id="editCategoryImage-${docSnap.id}" value="${escapeHTML(categoryImage || "")}" placeholder="Category Photo URL">
+        <input id="editButtonImage-${docSnap.id}" value="${escapeHTML(buttonImage || "")}" placeholder="Food Button Photo URL">
+      </div>
+      <div class="category-edit-images">
+        <div class="category-edit-image-box">
+          <img id="editCategoryPreview-${docSnap.id}" src="${escapeHTML(categoryImage || "logo_tran.jpeg")}" alt="Category photo" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
+          <strong>Category photo</strong>
+          <small>Shown in category button/sub-category.</small>
+          <input id="editCategoryFile-${docSnap.id}" type="file" accept="image/*" hidden onchange="uploadEditedCategoryPhoto('${docSnap.id}','category',this.files?.[0])">
+          <button type="button" class="soft" onclick="document.getElementById('editCategoryFile-${docSnap.id}').click()">Upload Category Photo</button>
+        </div>
+        <div class="category-edit-image-box">
+          <img id="editButtonPreview-${docSnap.id}" src="${escapeHTML(buttonImage || "logo_tran.jpeg")}" alt="Food button photo" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
+          <strong>Food button photo</strong>
+          <small>Shown on main Pizza/Burger/Sandwich button.</small>
+          <input id="editButtonFile-${docSnap.id}" type="file" accept="image/*" hidden onchange="uploadEditedCategoryPhoto('${docSnap.id}','button',this.files?.[0])">
+          <button type="button" class="soft" onclick="document.getElementById('editButtonFile-${docSnap.id}').click()">Upload Button Photo</button>
+        </div>
+      </div>
+      <div class="category-edit-status" id="categoryEditStatus-${docSnap.id}"></div>
+      <div class="dish-actions">
+        <button type="button" class="btn-green" onclick="saveCategoryEdit('${docSnap.id}')">Save Changes</button>
+        <button type="button" class="soft" onclick="toggleCategoryEdit('${docSnap.id}',false)">Close</button>
+      </div>
+    </div>
 
   </div>
 
@@ -960,6 +1010,90 @@ window.moveCategory = async function(id, direction){
   isSorting = true;
   try{ await Promise.all(cards.map((card,index) => updateDoc(doc(db,"categories",card.dataset.id),{order:index + 1}))); }
   finally{ setTimeout(() => { isSorting = false; },350); }
+}
+
+window.toggleCategoryEdit = function(id, force){
+  const panel = document.getElementById(`categoryEdit-${id}`);
+  if(!panel) return;
+  const shouldOpen = typeof force === "boolean" ? force : !panel.classList.contains("active");
+  panel.classList.toggle("active", shouldOpen);
+}
+
+function setCategoryEditStatus(id, message, type = "info"){
+  const el = document.getElementById(`categoryEditStatus-${id}`);
+  if(!el) return;
+  el.textContent = message || "";
+  el.style.color = type === "error" ? "#fecaca" : "#22c55e";
+}
+
+const editedCategoryImageSets = new Map();
+
+window.uploadEditedCategoryPhoto = async function(id, target, file){
+  if(!id || !file) return;
+  if(!file.type.startsWith("image/")){
+    alert("Please choose a valid image.");
+    return;
+  }
+  const isButton = target === "button";
+  const urlInput = document.getElementById(`${isButton ? "editButtonImage" : "editCategoryImage"}-${id}`);
+  const previewImg = document.getElementById(`${isButton ? "editButtonPreview" : "editCategoryPreview"}-${id}`);
+  if(previewImg) previewImg.src = URL.createObjectURL(file);
+  const statusPrefix = isButton ? "Button photo" : "Category photo";
+  try{
+    setCategoryEditStatus(id, `${statusPrefix}: optimizing...`);
+    const imageSet = await createAndUploadImageSet(file, isButton ? "category-buttons" : "categories", message => setCategoryEditStatus(id, `${statusPrefix}: ${message}`));
+    editedCategoryImageSets.set(`${id}:${target}`, imageSet);
+    if(urlInput) urlInput.value = imageSet.url || "";
+    if(previewImg) previewImg.src = imageSet.url || previewImg.src;
+    setCategoryEditStatus(id, `${statusPrefix} uploaded. Now click Save Changes.`);
+  }catch(error){
+    console.error("Category edit upload failed:", error);
+    const dataUrl = await compressImageToDataUrl(file, isButton ? 420 : 520, .78);
+    editedCategoryImageSets.set(`${id}:${target}`, null);
+    if(urlInput) urlInput.value = dataUrl;
+    if(previewImg) previewImg.src = dataUrl;
+    setCategoryEditStatus(id, `${statusPrefix}: compressed fallback ready. Click Save Changes.`, "error");
+    alert(firebaseUploadMessage(error));
+  }
+}
+
+window.saveCategoryEdit = async function(id){
+  try{
+    const categoryName = normalizeUnicodeText(document.getElementById(`editCategoryName-${id}`)?.value || "");
+    const buttonName = normalizeUnicodeText(document.getElementById(`editButtonName-${id}`)?.value || "");
+    const categoryImage = normalizeUnicodeText(document.getElementById(`editCategoryImage-${id}`)?.value || "");
+    const buttonImage = normalizeUnicodeText(document.getElementById(`editButtonImage-${id}`)?.value || "");
+    if(!categoryName) return alert("Category name is required.");
+    if(!buttonName) return alert("Food Button name is required.");
+    const categoryImageSet = editedCategoryImageSets.get(`${id}:category`);
+    const buttonImageSet = editedCategoryImageSets.get(`${id}:button`);
+    const payload = {
+      name:categoryName,
+      image:categoryImage,
+      imageUrl:categoryImage,
+      photo:categoryImage,
+      thumbnail:categoryImage,
+      parent:buttonName,
+      group:buttonName,
+      mainCategory:buttonName,
+      groupImage:buttonImage || categoryImage,
+      mainTypeImage:buttonImage || categoryImage,
+      parentImage:buttonImage || categoryImage,
+      updatedAt:Date.now()
+    };
+    if(categoryImageSet) payload.imageSet = categoryImageSet;
+    if(buttonImageSet) payload.groupImageSet = buttonImageSet;
+    setCategoryEditStatus(id, "Saving...");
+    await updateDoc(doc(db,"categories",id), payload);
+    editedCategoryImageSets.delete(`${id}:category`);
+    editedCategoryImageSets.delete(`${id}:button`);
+    setCategoryEditStatus(id, "Saved successfully.");
+    setTimeout(() => toggleCategoryEdit(id, false), 500);
+  }catch(error){
+    console.error("Category edit save failed:", error);
+    setCategoryEditStatus(id, error?.message || "Save failed.", "error");
+    alert(error?.message || "Unable to save category.");
+  }
 }
 
 /* ➕ DISH */
