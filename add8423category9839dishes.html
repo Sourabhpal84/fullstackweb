@@ -339,6 +339,7 @@ import {
 import {
   getDownloadURL,
   ref,
+  uploadBytes,
   uploadBytesResumable
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 import {
@@ -506,6 +507,10 @@ async function makeTargetImageVariant(source, spec){
 async function uploadBlobWithProgress(path, blob, contentType, onProgress, timeoutMs = 90000, maxAttempts = 2){
   const user = await waitForAdminUser();
   const storageRef = ref(storage, path);
+  const metadata = {
+    contentType,
+    cacheControl:"public,max-age=31536000,immutable"
+  };
   uploadLog("upload_start", {
     uid:user.uid,
     email:user.email,
@@ -516,11 +521,48 @@ async function uploadBlobWithProgress(path, blob, contentType, onProgress, timeo
   });
   let lastError;
   for(let attempt = 1; attempt <= maxAttempts; attempt++){
+    // Optimized variants are normally only a few hundred KB. A single-request
+    // upload avoids resumable-session stalls seen on some mobile networks,
+    // proxies and browser privacy extensions.
+    if(blob.size <= 1024 * 1024){
+      let timer;
+      try{
+        onProgress?.(5);
+        const snapshot = await Promise.race([
+          uploadBytes(storageRef, blob, metadata),
+          new Promise((_, reject) => {
+            timer = setTimeout(() => {
+              reject(new Error(`Storage upload timed out after ${Math.round(timeoutMs / 1000)}s: ${path}`));
+            }, timeoutMs);
+          })
+        ]);
+        clearTimeout(timer);
+        onProgress?.(100);
+        const url = await getDownloadURL(snapshot.ref);
+        if(!url) throw new Error("Download URL was not generated.");
+        uploadLog("upload_complete", { fullPath:path, attempt, mode:"direct", url });
+        return url;
+      }catch(error){
+        clearTimeout(timer);
+        lastError = error;
+        uploadLog("upload_retry", {
+          fullPath:path,
+          attempt,
+          mode:"direct",
+          code:error?.code || "",
+          message:error?.message || String(error)
+        });
+        if(attempt < maxAttempts){
+          onProgress?.(0);
+          await new Promise(resolve => setTimeout(resolve, 1200 * attempt));
+          continue;
+        }
+        break;
+      }
+    }
+
     let stallTimer;
-    const task = uploadBytesResumable(storageRef, blob, {
-      contentType,
-      cacheControl:"public,max-age=31536000,immutable"
-    });
+    const task = uploadBytesResumable(storageRef, blob, metadata);
     try{
       await new Promise((resolve, reject) => {
         const armStallTimer = () => {
@@ -548,12 +590,18 @@ async function uploadBlobWithProgress(path, blob, contentType, onProgress, timeo
       }
       const url = await getDownloadURL(task.snapshot.ref);
       if(!url) throw new Error("Download URL was not generated.");
-      uploadLog("upload_complete", { fullPath:path, attempt, url });
+      uploadLog("upload_complete", { fullPath:path, attempt, mode:"resumable", url });
       return url;
     }catch(error){
       clearTimeout(stallTimer);
       lastError = error;
-      uploadLog("upload_retry", { fullPath:path, attempt, message:error?.message || String(error) });
+      uploadLog("upload_retry", {
+        fullPath:path,
+        attempt,
+        mode:"resumable",
+        code:error?.code || "",
+        message:error?.message || String(error)
+      });
       if(attempt < maxAttempts){
         onProgress?.(0);
         await new Promise(resolve => setTimeout(resolve, 1200 * attempt));
