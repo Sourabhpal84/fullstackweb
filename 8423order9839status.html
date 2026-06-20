@@ -15,9 +15,6 @@
     .filter-bar { display:flex; justify-content:center; flex-wrap:wrap; gap:10px; margin-bottom:30px; }
     .filter-bar button { background:var(--card); color:var(--accent); border:1px solid #1e2933; padding:10px 20px; border-radius:30px; cursor:pointer; font-weight:600; transition:0.3s; }
     .filter-bar button:hover, .filter-bar button.active { background:var(--accent); color:#000; box-shadow: 0 0 15px var(--accent); }
-    .order-tabs{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin:-16px 0 22px}
-    .order-tabs a{background:#121821;color:#00ffcc;border:1px solid #1e2933;padding:10px 16px;border-radius:999px;text-decoration:none;font-weight:800}
-    .order-tabs a.active{background:#00ffcc;color:#06110a}
 
     .orders-grid { display:grid; gap:20px; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); }
     .order-card { background:var(--card); padding:20px; border-radius:20px; border:1px solid #1e2933; transition:0.3s; position:relative; }
@@ -159,10 +156,6 @@
 </head>
 <body>
   <h1>MAGNEETOZ ORDERS</h1>
-  <nav class="order-tabs" aria-label="Order type">
-    <a class="active" href="./8423order9839status.html">Delivery Orders</a>
-    <a href="./offline-orders-admin.html">Offline Restaurant Orders</a>
-  </nav>
   <section class="ops-panel">
     <h2>Restaurant Availability</h2>
     <div class="ops-grid">
