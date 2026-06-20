@@ -3378,7 +3378,13 @@ getDocs(collection(db, "coupons"))
 
 function useBogoOfferSnapshot(snapshot){
   const data = snapshot.exists() ? snapshot.data() : null;
-  activeBogoOffer = data?.active === true ? data : null;
+  if(data?.buy1Get1Active === true){
+    activeBogoOffer = { ...data, active:true, type:"buy_1_get_1" };
+  }else if(data?.buy2Get1Active === true){
+    activeBogoOffer = { ...data, active:true, type:"buy_2_get_1" };
+  }else{
+    activeBogoOffer = data?.active === true ? data : null;
+  }
   if(!activeBogoOffer) bogoOfferAccepted = false;
   updateCart();
 }
@@ -3641,11 +3647,9 @@ function calculateBogoOffer(){
       units.push({ id:item.id || item.dishId || item.name, name:item.name || "Pizza", price:unitPrice });
     }
   });
-  units.sort((a,b) => b.price - a.price);
-  const freeUnits = [];
-  for(let index = 0; index + requiredItemCount <= units.length; index += requiredItemCount){
-    freeUnits.push(units[index + requiredItemCount - 1]);
-  }
+  units.sort((a,b) => a.price - b.price);
+  const freeUnitCount = Math.floor(units.length / requiredItemCount);
+  const freeUnits = units.slice(0, freeUnitCount);
   const discount = Math.round(freeUnits.reduce((sum,item) => sum + item.price, 0));
   const grouped = new Map();
   freeUnits.forEach(item => {

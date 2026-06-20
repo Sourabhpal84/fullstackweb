@@ -54,10 +54,16 @@ test("BOGO: 50 + 60 = 60", () => {
   assert.deepEqual(result.freeItems.map((item) => item.name), ["Onion Pizza"]);
 });
 
-test("BOGO: 50 + 60 + 70 + 80 = 140", () => {
+test("BOGO: four pizzas make the two globally cheapest free", () => {
   const result = calculateOffer([pizza("A", 50), pizza("B", 60), pizza("C", 70), pizza("D", 80)], { type: "buy_1_get_1", active: true });
-  assert.equal(result.finalTotal, 140);
-  assert.equal(result.discount, 120);
+  assert.equal(result.finalTotal, 150);
+  assert.equal(result.discount, 110);
+});
+
+test("BOGO odd cart makes the globally cheapest pizza free", () => {
+  const result = calculateOffer([pizza("A", 99), pizza("B", 99), pizza("C", 55)], { type: "buy_1_get_1", active: true });
+  assert.equal(result.discount, 55);
+  assert.deepEqual(result.freeItems.map((item) => item.name), ["C"]);
 });
 
 test("Buy 2 Get 1: 100 + 90 + 80 = 190", () => {
@@ -66,10 +72,10 @@ test("Buy 2 Get 1: 100 + 90 + 80 = 190", () => {
   assert.equal(result.discount, 80);
 });
 
-test("Buy 2 Get 1: 200 + 180 + 150 + 120 + 100 + 90 = 600", () => {
+test("Buy 2 Get 1: six pizzas make the two globally cheapest free", () => {
   const result = calculateOffer([pizza("A", 200), pizza("B", 180), pizza("C", 150), pizza("D", 120), pizza("E", 100), pizza("F", 90)], { type: "buy_2_get_1", active: true });
-  assert.equal(result.finalTotal, 600);
-  assert.equal(result.discount, 240);
+  assert.equal(result.finalTotal, 650);
+  assert.equal(result.discount, 190);
 });
 
 test("Mixed categories work when productType is pizza", () => {

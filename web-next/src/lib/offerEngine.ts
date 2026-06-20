@@ -18,7 +18,7 @@ export function calculateOffer(cart: OfferCartItem[], activeOffer: ActiveOffer |
 
   const eligibleItems = expandCartItems(cart)
     .filter((item) => categoryAllowed(item, activeOffer.eligibleCategories) && (isPizzaItem(item) || !!activeOffer.eligibleCategories?.length))
-    .sort((a, b) => Number(b.price || 0) - Number(a.price || 0));
+    .sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
 
   const groupSize = activeOffer.type === "buy_1_get_1" ? 2 : 3;
   const minimumItems = groupSize;
@@ -26,10 +26,8 @@ export function calculateOffer(cart: OfferCartItem[], activeOffer: ActiveOffer |
     return emptyOffer(originalTotal, activeOffer.type, eligibleItems.length, minimumItems, activeOffer.eligibleCategories || []);
   }
 
-  const freeUnits: OfferCartItem[] = [];
-  for (let index = 0; index + groupSize <= eligibleItems.length; index += groupSize) {
-    freeUnits.push(eligibleItems[index + groupSize - 1]);
-  }
+  const freeUnitCount = Math.floor(eligibleItems.length / groupSize);
+  const freeUnits = eligibleItems.slice(0, freeUnitCount);
 
   const discount = Math.round(freeUnits.reduce((sum, item) => sum + Number(item.price || 0), 0));
   return {

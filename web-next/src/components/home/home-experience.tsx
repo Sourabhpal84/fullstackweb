@@ -59,7 +59,10 @@ export function HomeExperience() {
     });
     const unsubOfferEngine = onSnapshot(doc(db, "settings", "offerEngine"), (snap) => {
       const data = snap.exists() ? snap.data() as ActiveOffer : null;
-      setActiveOffer(data?.active === false ? null : data);
+      const settings = data as (ActiveOffer & { buy1Get1Active?: boolean; buy2Get1Active?: boolean }) | null;
+      if(settings?.buy1Get1Active === true) setActiveOffer({ ...settings, active:true, type:"buy_1_get_1" });
+      else if(settings?.buy2Get1Active === true) setActiveOffer({ ...settings, active:true, type:"buy_2_get_1" });
+      else setActiveOffer(settings?.active === false ? null : settings);
     });
     return () => {
       unsubTheme();
