@@ -41,6 +41,8 @@ const VAPID_KEY_RE = /^[A-Za-z0-9_-]{80,}$/;
 const DEV_LOGS = ["localhost", "127.0.0.1"].includes(location.hostname) || location.search.includes("debugAuth=1");
 const REFERRAL_STORAGE_KEY = "magneetozPendingReferral";
 
+auth.languageCode = "en";
+
 function captureReferralCode(){
   const code = new URLSearchParams(location.search).get("ref");
   if(code) localStorage.setItem(REFERRAL_STORAGE_KEY, code.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 24));
@@ -153,10 +155,6 @@ function openAuthPopup(reason = "checkout"){
     popup.dataset.reason = reason;
   }
   setAuthStatus("Enter mobile number", "info");
-  ensureRecaptcha().catch((error) => {
-    devLog("Invisible reCAPTCHA preload failed:", error);
-    setAuthStatus("Security check will start when you send OTP.", "info");
-  });
   $("phoneNumber")?.focus();
   window.dispatchEvent(new CustomEvent("magneetoz:auth-required", { detail:{ reason } }));
 }
@@ -250,11 +248,13 @@ async function ensureRecaptcha(){
     if(recaptchaVerifier) return recaptchaVerifier;
     const container = $("recaptcha-container");
     if(!container) throw new Error("Login security container missing");
-    recaptchaVerifier = new RecaptchaVerifier(auth, container, {
+    recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
       size:"invisible",
+      badge:"bottomright",
+      isolated:true,
       callback:() => setAuthStatus("Security verified. Sending OTP...", "info"),
       "expired-callback":() => {
-        setAuthStatus("Security check expired. Please try again.", "error");
+        setAuthStatus("Security check expired. Tap Send OTP again.", "error");
         resetRecaptcha({ recreateContainer:true });
       }
     });
@@ -297,7 +297,7 @@ function friendlyAuthError(error){
   if(code.includes("invalid-verification-code")) return "Invalid OTP, please try again.";
   if(code.includes("code-expired")) return "OTP expired. Please resend OTP.";
   if(code.includes("too-many-requests") || code.includes("quota-exceeded")) return "Too many attempts. Please try again after some time.";
-  if(code.includes("captcha") || code.includes("app-not-authorized") || code.includes("missing-app-credential")) return "Security check failed. Please retry OTP.";
+  if(code.includes("captcha") || code.includes("app-not-authorized") || code.includes("missing-app-credential")) return "Security check could not finish automatically. Please tap Send OTP again.";
   if(code.includes("invalid-phone-number")) return "Enter a valid 10 digit mobile number.";
   if(code.includes("network")) return "Network issue. Please check internet and retry.";
   return error?.message || "Something went wrong. Please try again.";
@@ -419,6 +419,7 @@ async function sendOTP(options = {}){
   otpInFlight = true;
   setAuthStatus("Sending OTP...", "info");
   setButton(button, true, "Sending OTP...");
+  resetRecaptcha({ recreateContainer:true });
 
   try{
     confirmationResult = await signInWithPhoneNumber(auth, `+91${phone}`, await ensureRecaptcha());
@@ -571,7 +572,6 @@ function bindAuthUI(){
 
 document.body.classList.add("auth-loading");
 bindAuthUI();
-ensureRecaptcha().catch((error) => devLog("Invisible reCAPTCHA preload skipped:", error));
 
 await setPersistence(auth, browserLocalPersistence)
   .catch((error) => {
