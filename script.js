@@ -158,6 +158,7 @@ let deliveryRoute = null;
 let distanceSource = "route_pending";
 let googleMapsApiKey = "";
 let userLocationUpdatedAt = 0;
+let checkoutLocationChoiceVersion = 0;
 let deliveryDistanceUpdatedAt = 0;
 let deliveryDistanceSignature = "";
 let orderPerfDepth = 0;
@@ -964,9 +965,33 @@ function hideLocationAddressForm(){
 }
 
 async function saveLocationSelection(){
-  const address = normalizeUnicodeText(document.getElementById("customerAddress")?.value || "");
+  let address = normalizeUnicodeText(document.getElementById("customerAddress")?.value || "");
   if(!address){ alert("Please enter a complete delivery address."); return; }
+  if(!isUsableCoordinatePair(
+    document.getElementById("customerLat")?.value,
+    document.getElementById("customerLng")?.value
+  )){
+    try{
+      const result = await callPaymentFunction("geocodeAddress", { address }, 15000);
+      const selectedAddress = result.formattedAddress || address;
+      address = selectedAddress;
+      document.getElementById("customerAddress").value = selectedAddress;
+      document.getElementById("customerLat").value = result.lat || "";
+      document.getElementById("customerLng").value = result.lng || "";
+      setCustomerLocation({
+        lat:Number(result.lat),
+        lng:Number(result.lng),
+        address:selectedAddress,
+        updatedAt:Date.now()
+      }, "address_geocode_manual");
+      await refreshDeliveryDistance({ force:true, maxAgeMs:0, routeTimeoutMs:12000 });
+    }catch(error){
+      alert(error.message || "We could not locate this address. Please search the area and try again.");
+      return;
+    }
+  }
   updateSelectedLocationUi(address);
+  checkoutLocationChoiceVersion++;
   persistGuestState();
   if(auth.currentUser) await saveCurrentAddressToBook().catch(error => console.warn("Address save skipped", error));
   closeLocationSelector();
@@ -1027,7 +1052,7 @@ function showLastSavedLocation(reason = "fresh_location_failed"){
   return saved;
 }
 
-async function fetchFreshCurrentLocation({ updateAddress = true, source = "fresh_gps" } = {}){
+async function fetchFreshCurrentLocation({ updateAddress = true, source = "fresh_gps", expectedChoiceVersion = null } = {}){
   setLocationUiState("detecting");
   const permission = await getLocationPermissionState();
   console.info("[LOCATION]", { event:"permission_status", permission, source });
@@ -1043,6 +1068,10 @@ async function fetchFreshCurrentLocation({ updateAddress = true, source = "fresh
     };
     console.info("[LOCATION]", { event:"fresh_gps_lat_lng", lat:fresh.lat, lng:fresh.lng, accuracy:fresh.accuracy, source });
     const geocode = updateAddress ? await reverseGeocodeFreshLocation(fresh) : null;
+    if(expectedChoiceVersion !== null && checkoutLocationChoiceVersion !== expectedChoiceVersion){
+      console.info("[LOCATION]", { event:"gps_result_ignored_manual_location_selected", source });
+      return userLocation;
+    }
     setCustomerLocation({
       ...fresh,
       address:geocode?.formattedAddress || ""
@@ -1545,6 +1574,11 @@ function isFreshCustomerLocation(maxAgeMs = CUSTOMER_LOCATION_MAX_AGE_MS){
   return !!(userLocation && isUsableCoordinatePair(userLocation.lat, userLocation.lng) && Date.now() - userLocationUpdatedAt <= maxAgeMs);
 }
 
+function hasSelectedCheckoutLocation(){
+  const fields = getCheckoutFields();
+  return !!(fields.address && isUsableCoordinatePair(fields.lat, fields.lng));
+}
+
 function clearCustomerLocation(reason = "cleared"){
   userLocation = null;
   userLocationUpdatedAt = 0;
@@ -1802,6 +1836,7 @@ function applySavedAddress(index){
   try{ addresses = JSON.parse(select.dataset.addresses || "[]"); }catch(_){}
   const item = addresses[Number(index)];
   if(!item) return;
+  checkoutLocationChoiceVersion++;
   restoreCheckoutFields(item, true);
   updateSelectedLocationUi(item.address || item.label || "");
   if(isUsableLocation(item)){
@@ -1905,6 +1940,34 @@ async function useCurrentLocationForAddress(){
   }
 }
 
+async function saveLoginCurrentLocation(user = auth.currentUser){
+  if(!user?.uid) return;
+  const fields = getCheckoutFields();
+  if(!fields.address || !isUsableCoordinatePair(fields.lat, fields.lng)) return;
+  const ref = doc(db, "users", user.uid);
+  const snap = await getDoc(ref);
+  const data = snap.exists() ? snap.data() || {} : {};
+  const existing = Array.isArray(data.savedAddresses) ? data.savedAddresses : [];
+  const nextAddress = {
+    address:fields.address,
+    landmark:fields.landmark || "",
+    lat:fields.lat,
+    lng:fields.lng,
+    label:fields.address,
+    source:"current_location",
+    updatedAt:Date.now()
+  };
+  const signature = addressSignature(nextAddress);
+  const deduped = [nextAddress, ...existing.filter(item => addressSignature(item) !== signature)].slice(0, 8);
+  await setDoc(ref, {
+    uid:user.uid,
+    defaultAddress:nextAddress,
+    savedAddresses:deduped,
+    updatedAt:serverTimestamp()
+  }, { merge:true });
+  renderSavedAddresses(deduped);
+}
+
 async function searchAddressForCheckout(){
   const input = document.getElementById("addressSearchInput");
   const query = input?.value.trim();
@@ -1915,6 +1978,7 @@ async function searchAddressForCheckout(){
   try{
     const result = await callPaymentFunction("geocodeAddress", { address:query }, 15000);
     const selectedAddress = result.formattedAddress || query;
+    checkoutLocationChoiceVersion++;
     document.getElementById("customerAddress").value = selectedAddress;
     document.getElementById("customerLat").value = result.lat || "";
     document.getElementById("customerLng").value = result.lng || "";
@@ -3045,10 +3109,10 @@ async function ensureDeliveryEligible(){
     logDistanceDebug("delivery_blocked_restaurant_location_missing");
     return false;
   }
-  if(!isFreshCustomerLocation(CHECKOUT_LOCATION_REUSE_MAX_AGE_MS)){
+  if(!hasSelectedCheckoutLocation() && !isFreshCustomerLocation(CHECKOUT_LOCATION_REUSE_MAX_AGE_MS)){
     await timedStep("ensureDeliveryEligible:getCurrentPosition", () => getUserLocation()).catch(() => null);
   }
-  if(!isFreshCustomerLocation(CHECKOUT_LOCATION_REUSE_MAX_AGE_MS)){
+  if(!hasSelectedCheckoutLocation() && !isFreshCustomerLocation(CHECKOUT_LOCATION_REUSE_MAX_AGE_MS)){
     updateCustomerDistanceBanner("📍 Enable location to see your distance from our kitchen");
     showServiceAreaPopup("Please turn on location so we can check the exact road distance from our kitchen to your address.", {
       title:"Location Permission Needed",
@@ -4532,7 +4596,7 @@ if(!auth.currentUser){
   resumeCheckoutAfterAuth = false;
 }
 
-if(!isFreshCustomerLocation(CHECKOUT_LOCATION_REUSE_MAX_AGE_MS)){
+if(!hasSelectedCheckoutLocation() && !isFreshCustomerLocation(CHECKOUT_LOCATION_REUSE_MAX_AGE_MS)){
   setCheckoutLoading(true, "Fetching your current delivery location...");
   await timedStep("placeOrder:autoLocation", () =>
     fetchFreshCurrentLocation({ updateAddress:true, source:"fresh_gps:auto_checkout" })
@@ -5248,6 +5312,12 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   ["customerName","customerAddress","customerLandmark"].forEach(id => {
     document.getElementById(id)?.addEventListener("input", () => {
+      if(id === "customerAddress"){
+        const lat = document.getElementById("customerLat");
+        const lng = document.getElementById("customerLng");
+        if(lat) lat.value = "";
+        if(lng) lng.value = "";
+      }
       setCheckoutFieldsCollapsed(false);
       persistGuestState();
     });
@@ -5302,9 +5372,16 @@ onAuthStateChanged(auth,(user)=>{
   if(user){
     mergeGuestCartWithUser(user).then(async () => {
       if(resumeCheckoutAfterAuth) persistGuestState();
-      await fetchFreshCurrentLocation({ updateAddress:true, source:"fresh_gps:login" }).catch(() => {
+      const choiceVersionBeforeGps = checkoutLocationChoiceVersion;
+      await fetchFreshCurrentLocation({
+        updateAddress:true,
+        source:"fresh_gps:login",
+        expectedChoiceVersion:choiceVersionBeforeGps
+      }).catch(() => {
         setLocationUiState("permission", "Please enable location permission and GPS, then retry.");
       });
+      if(checkoutLocationChoiceVersion !== choiceVersionBeforeGps) return;
+      await saveLoginCurrentLocation(user).catch(error => console.warn("Login location save skipped", error));
     });
 
   }
