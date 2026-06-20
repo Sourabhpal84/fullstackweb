@@ -1667,7 +1667,6 @@ function focusMissingCheckoutField(){
 
 function restoreCheckoutFields(state = readJSON(CHECKOUT_STATE_KEY, {}), force = false){
   const map = {
-    customerName:state.name,
     customerAddress:state.address,
     customerLandmark:state.landmark,
     customerLat:state.lat,
