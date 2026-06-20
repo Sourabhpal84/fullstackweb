@@ -1645,31 +1645,12 @@ async function resolveAuthenticatedCheckoutPhone(user = auth.currentUser || cach
 
 async function resolveAuthenticatedCheckoutName(user = auth.currentUser || cachedAuthUser){
   const input = document.getElementById("customerName");
-  let name = normalizeUnicodeText(input?.value || user?.displayName || "");
-  if(!name && user?.uid){
-    try{
-      const profile = await getDoc(doc(db,"users",user.uid));
-      const data = profile.data() || {};
-      name = normalizeUnicodeText(
-        data.fullName ||
-        data.customerName ||
-        data.name ||
-        data.defaultAddress?.name ||
-        data.savedAddresses?.[0]?.name ||
-        ""
-      );
-    }catch(error){
-      console.warn("Saved customer name lookup skipped:", error);
-    }
-  }
-  // A name must never trap a verified customer at checkout. It can be completed later in Profile.
-  if(!name) name = "Customer";
-  if(input) input.value = name;
-  return name;
+  return normalizeUnicodeText(input?.value || "");
 }
 
 function focusMissingCheckoutField(){
   const fields = [
+    ["customerName", "name"],
     ["customerAddress", "address"]
   ];
   const missing = fields.find(([id]) => !normalizeUnicodeText(document.getElementById(id)?.value || ""));
@@ -1678,7 +1659,9 @@ function focusMissingCheckoutField(){
   const el = document.getElementById(missing[0]);
   el?.scrollIntoView({ behavior:"smooth", block:"center" });
   setTimeout(() => el?.focus(), 250);
-  alert(`Please enter your ${missing[1]}.`);
+  alert(missing[1] === "name"
+    ? "Please enter your name in the cart so we know who the order is for."
+    : "Please select or enter your delivery address.");
   return true;
 }
 
@@ -1987,17 +1970,6 @@ async function loadSavedCustomerProfile(user){
     const snap = await getDoc(doc(db, "users", user.uid));
     if(!snap.exists()) return;
     const data = snap.data() || {};
-    const savedName = normalizeUnicodeText(
-      data.fullName ||
-      data.customerName ||
-      data.name ||
-      data.defaultAddress?.name ||
-      data.savedAddresses?.[0]?.name ||
-      user.displayName ||
-      ""
-    );
-    const nameInput = document.getElementById("customerName");
-    if(nameInput && savedName && !normalizeUnicodeText(nameInput.value)) nameInput.value = savedName;
     renderSavedAddresses(data.savedAddresses || []);
     const preferred = data.defaultAddress || data.savedAddresses?.[0] || data.lastCheckoutState;
     if(preferred){
@@ -4595,7 +4567,7 @@ if(!phone){
   return;
 }
 
-if(!address){
+if(!name || !address){
   focusMissingCheckoutField();
   return;
 }

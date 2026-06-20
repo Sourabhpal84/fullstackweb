@@ -778,11 +778,17 @@ Verify OTP
         <b>Change</b>
       </button>
 
-      <input
-        type="text"
-        id="customerName"
-        placeholder="Your Name"
-        autocomplete="name" />
+      <label class="checkout-name-field" for="customerName">
+        <span>Your name <b>*</b></span>
+        <input
+          type="text"
+          id="customerName"
+          placeholder="Enter the name for this order"
+          autocomplete="name"
+          maxlength="60"
+          required />
+        <small>This name will appear on your order.</small>
+      </label>
 
       <div class="checkout-auth-phone" id="checkoutAuthPhone">
         <span>Verified mobile</span>
