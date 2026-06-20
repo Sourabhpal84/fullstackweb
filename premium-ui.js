@@ -269,22 +269,7 @@ function wireNavigation(){
 }
 
 function wireMobileGestures(){
-  const cartPanel = $("#cartPanel");
-  if(!cartPanel) return;
-  let startY = 0;
-  let startX = 0;
-  cartPanel.addEventListener("touchstart", event => {
-    startY = event.touches[0].clientY;
-    startX = event.touches[0].clientX;
-  }, { passive:true });
-  cartPanel.addEventListener("touchend", event => {
-    const touch = event.changedTouches[0];
-    const deltaY = touch.clientY - startY;
-    const deltaX = touch.clientX - startX;
-    if(Math.abs(deltaY) > Math.abs(deltaX) && deltaY > 90 && cartPanel.classList.contains("active")){
-      window.toggleCart?.(false);
-    }
-  }, { passive:true });
+  // Cart stays open during touch and scroll. The header Back button closes it.
 }
 
 function wireMagneticButtons(){

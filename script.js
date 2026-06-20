@@ -4276,10 +4276,6 @@ function toggleCart(forceOpen) {
   return shouldOpen;
 }
 
-document.addEventListener("keydown", event => {
-  if(event.key === "Escape") toggleCart(false);
-});
-
 function closePaymentPopup(){
   const popup = document.getElementById("paymentMethodPopup");
   if(popup){
