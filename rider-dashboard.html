@@ -632,7 +632,9 @@ async function callRiderFunction(name, payload = {}, timeoutMs = 25000){
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try{
     const sameOriginFunctions = new Set([
-      "requestRiderWithdrawal"
+      "requestRiderWithdrawal",
+      "createRiderWalletSettlement",
+      "verifyRiderWalletSettlement"
     ]);
     const requestOptions = {
       method:"POST",
@@ -1117,14 +1119,70 @@ async function getRiderLocation(){
 window.settleCompanyDue = async function(button){
   const due = Number(currentWallet.companySettlementDue || 0);
   if(due <= 0) return alert("No company due remaining.");
+  if(typeof Razorpay === "undefined") return alert("Razorpay is loading. Please try again.");
+  if(riderRazorpayInFlight) return;
   const settlementOrder = allOrders
     .filter(needsCompanySettlement)
     .sort((a,b) => Number(b.cashCollectedAt?.toMillis?.() || 0) - Number(a.cashCollectedAt?.toMillis?.() || 0))[0];
-  if(!settlementOrder){
-    alert("No cash-collected order is waiting for company settlement. Refresh once if cash was just collected.");
+  if(settlementOrder){
+    await payCompanyAndDeliver(settlementOrder.id, orderDistance(settlementOrder) || 1, button);
     return;
   }
-  await payCompanyAndDeliver(settlementOrder.id, orderDistance(settlementOrder) || 1, button);
+  riderRazorpayInFlight = true;
+  if(button){
+    button.disabled = true;
+    button.textContent = "Opening Razorpay...";
+  }
+  try{
+    const session = await callRiderFunction("createRiderWalletSettlement", {}, 20000);
+    const rzp = new Razorpay({
+      key:session.keyId || RAZORPAY_KEY_ID,
+      amount:Math.round(Number(session.amount || due) * 100),
+      currency:"INR",
+      name:"Magneetoz",
+      description:"Company wallet settlement",
+      order_id:session.razorpayOrderId,
+      method:{upi:true,card:true,netbanking:true,wallet:true},
+      prefill:{name:rider.name||"",contact:String(rider.phone||"").replace(/\D/g,"").slice(-10)},
+      handler:async response=>{
+        try{
+          await callRiderFunction("verifyRiderWalletSettlement", {
+            paymentSessionId:session.paymentSessionId,
+            razorpay_order_id:response.razorpay_order_id,
+            razorpay_payment_id:response.razorpay_payment_id,
+            razorpay_signature:response.razorpay_signature
+          },25000);
+          alert("Company settlement successful. Wallet updated.");
+        }catch(error){
+          alert(error?.message || "Payment received but settlement verification failed.");
+        }finally{
+          riderRazorpayInFlight = false;
+          if(button) button.disabled = false;
+          renderWallet(currentWallet);
+        }
+      },
+      modal:{ondismiss:()=>{
+        riderRazorpayInFlight = false;
+        if(button) button.disabled = false;
+        renderWallet(currentWallet);
+      }}
+    });
+    rzp.on("payment.failed", response => {
+      riderRazorpayInFlight = false;
+      if(button) button.disabled = false;
+      renderWallet(currentWallet);
+      alert(response?.error?.description || "Settlement payment failed. Please retry.");
+    });
+    rzp.open();
+  }catch(error){
+    riderRazorpayInFlight = false;
+    if(button) button.disabled = false;
+    renderWallet(currentWallet);
+    const message = /404|Failed to fetch|Network|CORS/i.test(error?.message || "")
+      ? "Settlement service is not live yet. Deploy Firebase Hosting rewrites and the create/verify rider wallet settlement functions."
+      : error?.message || "Unable to open company settlement.";
+    alert(message);
+  }
 };
 
 document.getElementById("settleCompanyWallet").addEventListener("click", async function(){
