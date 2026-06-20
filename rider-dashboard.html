@@ -618,9 +618,7 @@ async function callRiderFunction(name, payload = {}, timeoutMs = 25000){
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try{
     const sameOriginFunctions = new Set([
-      "requestRiderWithdrawal",
-      "createRiderWalletSettlement",
-      "verifyRiderWalletSettlement"
+      "requestRiderWithdrawal"
     ]);
     const requestOptions = {
       method:"POST",
@@ -946,6 +944,7 @@ function renderOrders(){
           ${(order.status === "Reached Nearby" || order.status === "Collect Payment") && !prepaidOnline && !unpaidOnline ? `<button class="btn-green" onclick="markCashReceived('${order.id}')">Cash Received & Get Code</button><button class="btn-blue" onclick="collectOnline('${order.id}')">Online Payment</button>` : ""}
           ${(["Out For Delivery","Reached Nearby","Collect Payment"].includes(order.status)) && prepaidOnline && !convertedCodPaid && !prepaidOtpActive && !prepaidOtpDone ? `<button class="btn-blue" onclick="requestPrepaidDeliveryOtp('${order.id}')">Request Delivery OTP</button>` : ""}
           ${prepaidOtpActive ? `<button class="btn-green" onclick="completeWithCustomerCode('${order.id}')">Enter Delivery OTP</button>` : ""}
+          ${isCashCollectedOrder(order) && !cashSettlementDone ? `<button class="btn-blue" onclick="payCompanyAndDeliver('${order.id}', ${dist || 1}, this)">Settle Company Payment</button>` : ""}
           ${isCashCollectedOrder(order) ? `<button class="btn-green" onclick="deliverCashOrder('${order.id}')">Delivered — Get/Enter Customer Code</button>` : ""}
           ${canDeliver && order.status !== "Out For Delivery" && !isDelivered ? `<button class="btn-green" onclick="deliver('${order.id}', ${dist || 1})">Delivered</button>` : ""}
           ${isDelivered ? `<button class="btn-green" disabled>Delivered</button>` : ""}
@@ -1101,40 +1100,17 @@ async function getRiderLocation(){
 document.getElementById("settleCompanyWallet").addEventListener("click", async function(){
   const due = Number(currentWallet.companySettlementDue || 0);
   if(due <= 0) return alert("No company due remaining.");
-  if(typeof Razorpay === "undefined") return alert("Razorpay is loading. Please try again.");
-  if(riderRazorpayInFlight) return;
-  riderRazorpayInFlight = true;
-  this.disabled = true;
-  this.textContent = "Opening Razorpay...";
-  try{
-    const session = await callRiderFunction("createRiderWalletSettlement", {}, 20000);
-    const rzp = new Razorpay({
-      key:session.keyId || RAZORPAY_KEY_ID,
-      amount:Math.round(Number(session.amount)*100), currency:"INR",
-      name:"Magneetoz", description:"Company wallet settlement",
-      order_id:session.razorpayOrderId,
-      method:{upi:true,card:true,netbanking:true,wallet:true},
-      prefill:{name:rider.name||"",contact:String(rider.phone||"").replace(/\D/g,"").slice(-10)},
-      handler:async response=>{
-        try{
-          await callRiderFunction("verifyRiderWalletSettlement", {
-            paymentSessionId:session.paymentSessionId,
-            razorpay_order_id:response.razorpay_order_id,
-            razorpay_payment_id:response.razorpay_payment_id,
-            razorpay_signature:response.razorpay_signature
-          },25000);
-          alert("Company settlement successful. Wallet and history updated.");
-        }catch(error){alert(error?.message||"Payment received but verification failed.");}
-        finally{riderRazorpayInFlight=false;this.disabled=false;}
-      },
-      modal:{ondismiss:()=>{riderRazorpayInFlight=false;this.disabled=false;renderWallet(currentWallet);}}
-    });
-    rzp.on("payment.failed",response=>{riderRazorpayInFlight=false;this.disabled=false;renderWallet(currentWallet);alert(response?.error?.description||"Settlement failed. Please retry.");});
-    rzp.open();
-  }catch(error){
-    riderRazorpayInFlight=false;this.disabled=false;renderWallet(currentWallet);
-    alert(error?.message||"Unable to start settlement.");
+  const settlementOrder = allOrders
+    .filter(order => assignedToMe(order)
+      && isCashPayment(order.paymentMethod || order.paymentMode)
+      && String(order.paymentStatus || "").toLowerCase() === "collected"
+      && !order.codSettlementStatus)
+    .sort((a,b) => Number(b.cashCollectedAt?.toMillis?.() || 0) - Number(a.cashCollectedAt?.toMillis?.() || 0))[0];
+  if(!settlementOrder){
+    alert("No cash-collected order is waiting for company settlement. Refresh once if cash was just collected.");
+    return;
   }
+  await payCompanyAndDeliver(settlementOrder.id, orderDistance(settlementOrder) || 1, this);
 });
 
 function activeDeliveryOrder(){
