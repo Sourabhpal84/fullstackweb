@@ -807,20 +807,20 @@ a { -webkit-tap-highlight-color: transparent; }
   gap:2px;
   margin:6px 0 8px;
   padding:8px 10px;
-  border:1px dashed rgba(255,123,0,.28);
+  border:1px dashed color-mix(in srgb,var(--menu-price-text,var(--brand,#ff7b00)) 32%,transparent);
   border-radius:14px;
-  background:linear-gradient(135deg,rgba(255,123,0,.08),rgba(34,197,94,.07));
-  color:#475569;
+  background:color-mix(in srgb,var(--menu-price-bg,var(--light-gray,#fff1db)) 72%,transparent);
+  color:var(--menu-desc-text,var(--gray,#64748b));
 }
 .topping-pill span{
-  color:#ff7b00;
+  color:var(--menu-price-text,var(--brand,#ff7b00));
   font-size:9px;
   font-weight:950;
   letter-spacing:.12em;
   text-transform:uppercase;
 }
 .topping-pill b{
-  color:var(--dark);
+  color:var(--menu-title-text,var(--dark));
   font-size:11px;
   line-height:1.25;
   display:-webkit-box;

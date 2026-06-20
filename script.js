@@ -2656,7 +2656,6 @@ function dishCardMarkup(d = {}, className = ""){
         <div class="card-body">
           <h3>${escapeHTML(d.name || "")}</h3>
           <p>${escapeHTML(d.description || "")}</p>
-          <div class="topping-pill"><span>Topping</span><b>${escapeHTML(dishToppingText(d))}</b></div>
           <div class="card-footer">
             <div class="price-box">
               <span class="offer" data-base="${d.price || 0}">${formatCurrency(d.price)}</span>
@@ -2909,10 +2908,6 @@ registerGlobalSnapshot(onSnapshot(doc(db, "settings", "theme"), snap => {
     "--menu-price-bg",
     "--menu-price-text",
     "--menu-old-price-text",
-    "--menu-qty-bg",
-    "--menu-qty-text",
-    "--menu-qty-btn-bg",
-    "--menu-qty-btn-text",
     "--menu-add-bg",
     "--menu-add-text"
   ];
@@ -2928,10 +2923,6 @@ registerGlobalSnapshot(onSnapshot(doc(db, "settings", "theme"), snap => {
     "menu-price-bg",
     "menu-price-text",
     "menu-old-price-text",
-    "menu-qty-bg",
-    "menu-qty-text",
-    "menu-qty-btn-bg",
-    "menu-qty-btn-text",
     "menu-add-bg",
     "menu-add-text"
   ];

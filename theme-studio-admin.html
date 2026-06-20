@@ -6,8 +6,11 @@
 <title>MAGNEETOZ Theme Studio</title>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <style>
-*{box-sizing:border-box}body{margin:0;font-family:Poppins,system-ui,sans-serif;background:#080d14;color:#fff;padding:18px}.admin-auth-checking body{display:none}.wrap{max-width:1180px;margin:auto}.head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:18px}.admin-logout-btn,button{border:0;border-radius:13px;min-height:42px;padding:0 14px;font-weight:900;cursor:pointer}.admin-logout-btn,.soft{background:#1d2938;color:#fff}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}.card,.panel{background:linear-gradient(145deg,#111827,#1b2534);border:1px solid #2b3648;border-radius:20px;padding:16px;box-shadow:0 18px 60px rgba(0,0,0,.28)}.preview{height:110px;border-radius:16px;margin-bottom:12px;border:1px solid rgba(255,255,255,.12);display:grid;place-items:center;font-weight:900}.actions{display:flex;gap:8px;flex-wrap:wrap}.apply{background:linear-gradient(135deg,#ff7b00,#ffd166);color:#111}.panel{margin-top:18px}textarea{width:100%;min-height:170px;border-radius:16px;background:#0b0f14;color:#fff;border:1px solid #334155;padding:12px;font:700 12px ui-monospace,Consolas,monospace}.hero-upload{margin-top:10px;border:1px dashed #334155;border-radius:16px;padding:14px;background:#0b0f14;color:#cbd5e1;font-weight:800}.hero-upload input{height:auto;padding:10px}.upload-note{display:block;margin-top:8px;color:#94a3b8;font-size:12px}.builder{display:grid;grid-template-columns:1.05fr .95fr;gap:16px;align-items:start}.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}label{display:grid;gap:7px;color:#cbd5e1;font-size:12px;font-weight:800}input,select{width:100%;height:42px;border-radius:12px;border:1px solid #334155;background:#0b0f14;color:#fff;padding:0 10px;font-weight:800}input[type=color]{padding:4px}.food-preview{background:var(--menu-card-bg);border:1px solid var(--menu-card-border);box-shadow:var(--menu-card-shadow);border-radius:24px;padding:14px;max-width:280px}.food-preview .img{height:120px;border-radius:18px;background:linear-gradient(135deg,#ff7b00,#22c55e);margin-bottom:14px}.food-preview h3{width:max-content;max-width:100%;padding:8px 12px;border-radius:12px;background:var(--menu-title-bg);color:var(--menu-title-text);margin:0 0 8px;font-size:26px;line-height:1.08;font-weight:950}.food-preview p{color:var(--menu-desc-text);font-weight:800;margin:0 0 12px}.food-preview .price{display:inline-flex;padding:5px 9px;border-radius:999px;background:var(--menu-price-bg);color:var(--menu-price-text);font-weight:950}.food-preview del{color:var(--menu-old-price-text);margin-left:8px}.food-preview .qty{display:flex;justify-content:space-between;align-items:center;margin:12px 0;padding:8px;background:var(--menu-qty-bg);color:var(--menu-qty-text);border:1px solid var(--menu-card-border)}.food-preview .qty b{background:var(--menu-qty-btn-bg);color:var(--menu-qty-btn-text);border-radius:999px;padding:2px 9px}.food-preview .add{display:inline-flex;padding:10px 22px;border-radius:999px;background:var(--menu-add-bg);color:var(--menu-add-text);font-weight:900}@media(max-width:820px){.builder{grid-template-columns:1fr}}
+*{box-sizing:border-box}body{margin:0;font-family:Poppins,system-ui,sans-serif;background:#080d14;color:#fff;padding:18px}.admin-auth-checking body{display:none}.wrap{max-width:1180px;margin:auto}.head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:18px}.admin-logout-btn,button{border:0;border-radius:13px;min-height:42px;padding:0 14px;font-weight:900;cursor:pointer}.admin-logout-btn,.soft{background:#1d2938;color:#fff}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}.card,.panel{background:linear-gradient(145deg,#111827,#1b2534);border:1px solid #2b3648;border-radius:20px;padding:16px;box-shadow:0 18px 60px rgba(0,0,0,.28)}.preview{height:110px;border-radius:16px;margin-bottom:12px;border:1px solid rgba(255,255,255,.12);display:grid;place-items:center;font-weight:900}.actions{display:flex;gap:8px;flex-wrap:wrap}.apply{background:linear-gradient(135deg,#ff7b00,#ffd166);color:#111}.panel{margin-top:18px}textarea{width:100%;min-height:170px;border-radius:16px;background:#0b0f14;color:#fff;border:1px solid #334155;padding:12px;font:700 12px ui-monospace,Consolas,monospace}.hero-upload{margin-top:10px;border:1px dashed #334155;border-radius:16px;padding:14px;background:#0b0f14;color:#cbd5e1;font-weight:800}.hero-upload input{height:auto;padding:10px}.upload-note{display:block;margin-top:8px;color:#94a3b8;font-size:12px}.builder{display:grid;grid-template-columns:1.05fr .95fr;gap:16px;align-items:start}.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}label{display:grid;gap:7px;color:#cbd5e1;font-size:12px;font-weight:800}input,select{width:100%;height:42px;border-radius:12px;border:1px solid #334155;background:#0b0f14;color:#fff;padding:0 10px;font-weight:800}input[type=color]{padding:4px}.food-preview{background:var(--menu-card-bg);border:1px solid var(--menu-card-border);box-shadow:var(--menu-card-shadow);border-radius:24px;padding:14px;max-width:280px}.food-preview .img{height:120px;border-radius:18px;background:linear-gradient(135deg,#ff7b00,#22c55e);margin-bottom:14px}.food-preview h3{width:max-content;max-width:100%;padding:8px 12px;border-radius:12px;background:var(--menu-title-bg);color:var(--menu-title-text);margin:0 0 8px;font-size:26px;line-height:1.08;font-weight:950}.food-preview p{color:var(--menu-desc-text);font-weight:800;margin:0 0 12px}.food-preview .price{display:inline-flex;padding:5px 9px;border-radius:999px;background:var(--menu-price-bg);color:var(--menu-price-text);font-weight:950}.food-preview del{color:var(--menu-old-price-text);margin-left:8px}.food-preview .add{display:inline-flex;padding:10px 22px;border-radius:999px;background:var(--menu-add-bg);color:var(--menu-add-text);font-weight:900}@media(max-width:820px){.builder{grid-template-columns:1fr}}
 .hero-manager{display:grid;grid-template-columns:1fr 320px;gap:14px;margin-top:14px}.hero-list{display:grid;gap:10px}.hero-item{display:grid;grid-template-columns:84px 1fr auto;gap:10px;align-items:center;padding:10px;border:1px solid #334155;border-radius:16px;background:#0b0f14}.hero-item img{width:84px;height:58px;object-fit:cover;border-radius:12px;background:#111827}.hero-item strong{display:block;font-size:12px}.hero-item small{display:block;color:#94a3b8;font-size:11px}.hero-item .mini-actions{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}.hero-item button{min-height:32px;padding:0 9px;border-radius:10px}.hero-item.inactive{opacity:.48}.hero-preview{height:210px;border-radius:18px;overflow:hidden;border:1px solid #334155;background:#0b0f14;position:relative}.hero-preview img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;animation:heroAdminPreview 12s infinite}.hero-preview img:nth-child(1){animation-delay:0s}.hero-preview img:nth-child(2){animation-delay:3s}.hero-preview img:nth-child(3){animation-delay:6s}.hero-preview img:nth-child(4){animation-delay:9s}.progress-track{display:block;width:100%;height:8px;border-radius:99px;background:#1e293b;overflow:hidden;margin-top:8px}.progress-track i{display:block;width:0;height:100%;background:linear-gradient(90deg,#22c55e,#facc15);transition:.2s}@keyframes heroAdminPreview{0%,22%{opacity:1}28%,100%{opacity:0}}@media(max-width:820px){.hero-manager{grid-template-columns:1fr}.hero-item{grid-template-columns:72px 1fr}.hero-item .mini-actions{grid-column:1/-1;justify-content:flex-start}}
+</style>
+<style>
+.food-preview .topping{margin:12px 0;padding:9px 11px;border:1px dashed color-mix(in srgb,var(--menu-price-text,#ff7b00) 34%,transparent);border-radius:14px;background:color-mix(in srgb,var(--menu-price-bg,#fff0d8) 72%,transparent);color:var(--menu-desc-text,#334155);font-size:12px;font-weight:900;line-height:1.35}
 </style>
 </head>
 <body>
@@ -82,7 +85,7 @@
       <h3>Pizza Item Name</h3>
       <p>Fresh loaded cheese, herbs and MAGNEETOZ flavour.</p>
       <div><span class="price">₹99</span><del>₹180</del></div>
-      <div class="qty"><b>-</b><strong>1</strong><b>+</b></div>
+      <div class="topping">Topping · Cheese, herbs, MAGNEETOZ flavour</div>
       <span class="add">Add +</span>
     </div>
   </section>
@@ -246,10 +249,6 @@ const lightCardDefaults={
 "--light-menu-price-bg":"#fff0d8",
 "--light-menu-price-text":"#ea580c",
 "--light-menu-old-price-text":"#64748b",
-"--light-menu-qty-bg":"#ffffff",
-"--light-menu-qty-text":"#111827",
-"--light-menu-qty-btn-bg":"#0f172a",
-"--light-menu-qty-btn-text":"#22c55e",
 "--light-menu-add-bg":"linear-gradient(135deg,#ff7b00,#22c55e)",
 "--light-menu-add-text":"#ffffff"
 };
@@ -265,10 +264,6 @@ const darkCardDefaults={
 "--dark-menu-price-bg":"rgba(255,123,0,.22)",
 "--dark-menu-price-text":"#ffedd5",
 "--dark-menu-old-price-text":"#cbd5e1",
-"--dark-menu-qty-bg":"rgba(255,255,255,.08)",
-"--dark-menu-qty-text":"#ffffff",
-"--dark-menu-qty-btn-bg":"#111827",
-"--dark-menu-qty-btn-text":"#22c55e",
 "--dark-menu-add-bg":"linear-gradient(135deg,#ff7b00,#22c55e)",
 "--dark-menu-add-text":"#ffffff"
 };
@@ -282,10 +277,6 @@ const cardFields=[
 ["menu-price-bg","Price background","color"],
 ["menu-price-text","Price text","color"],
 ["menu-old-price-text","Old price text","color"],
-["menu-qty-bg","Quantity background","color"],
-["menu-qty-text","Quantity text","color"],
-["menu-qty-btn-bg","Plus/minus background","color"],
-["menu-qty-btn-text","Plus/minus text","color"],
 ["menu-add-bg","Add button background","text"],
 ["menu-add-text","Add button text","color"]
 ];
@@ -557,3 +548,4 @@ loadPreset(0);
   <script src="app-notifications.js"></script>
 </body>
 </html>
+
