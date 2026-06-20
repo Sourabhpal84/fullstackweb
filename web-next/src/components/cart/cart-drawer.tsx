@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { Minus, Plus, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { auth } from "@/lib/firebase";
 import { useCartStore } from "@/lib/cart-store";
 import { formatCurrency } from "@/lib/format";
@@ -16,21 +16,39 @@ export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCou
   const { items, open, setOpen, changeQty, remove, clear, checkoutContext } = useCartStore();
   const setCheckoutContext = useCartStore((state) => state.setCheckoutContext);
   const [busy, setBusy] = useState(false);
-  const categories = useMemo(() => [...new Set(items.map((item) => item.variantLabel || ""))], [items]);
+  const [offerAccepted, setOfferAccepted] = useState(false);
+  const categories = useMemo(() => [...new Set(items.map((item) => item.category || item.variantLabel || ""))], [items]);
+  const offerCandidate = useMemo(() => calculateOffer(items, checkoutContext.activeOffer), [checkoutContext.activeOffer, items]);
+  const offer = offerAccepted ? offerCandidate : { ...offerCandidate, discount: 0, finalTotal: offerCandidate.originalTotal, freeItems: [], offerApplied: false };
+  const couponLocked = offer.offerApplied;
   const pricing = useMemo(
-    () => calculatePricing(items, checkoutContext.distanceKm, checkoutContext.activeCoupon, categories, auth.currentUser?.uid),
-    [categories, checkoutContext.activeCoupon, checkoutContext.distanceKm, items]
+    () => calculatePricing(items, checkoutContext.distanceKm, couponLocked ? null : checkoutContext.activeCoupon, categories, auth.currentUser?.uid),
+    [categories, checkoutContext.activeCoupon, checkoutContext.distanceKm, couponLocked, items]
   );
-  const offer = useMemo(() => calculateOffer(items, checkoutContext.activeOffer), [checkoutContext.activeOffer, items]);
   const payableTotal = Math.max(0, pricing.grandTotal - offer.discount);
+  const offerSignature = useMemo(
+    () => `${checkoutContext.activeOffer?.type || "no_offer"}:${checkoutContext.activeOffer?.active === false ? "off" : "on"}:${checkoutContext.activeOffer?.eligibleCategories?.join("|") || "all"}:${items.map((item) => `${item.id}:${item.qty}:${item.price}`).join("|")}`,
+    [checkoutContext.activeOffer, items]
+  );
   const visibleCoupons = checkoutContext.coupons.filter((coupon) => {
     const visibility = String(coupon.visibility || "public").toLowerCase();
     return coupon.active !== false && !coupon.deleted && visibility !== "hidden" && visibility !== "vip-only";
   }).slice(0, 5);
 
+  useEffect(() => {
+    setOfferAccepted(false);
+  }, [offerSignature]);
+
+  function applyOffer() {
+    if (!offerCandidate.offerApplied) return;
+    setOfferAccepted(true);
+    if (activeCouponCode) onCouponCodeChange("");
+  }
+
   function orderDraft(paymentMethod = "online"): CodOrderDraft {
     const user = auth.currentUser;
-    const checkoutSignature = `${user?.uid || "guest"}:${items.map((item) => `${item.name}:${item.qty}:${item.price}`).join("|")}:${payableTotal}:${activeCouponCode}:${offer.offerType || "no_offer"}:${paymentMethod}`;
+    const couponCode = couponLocked ? "" : checkoutContext.activeCoupon?.code || "";
+    const checkoutSignature = `${user?.uid || "guest"}:${items.map((item) => `${item.name}:${item.qty}:${item.price}`).join("|")}:${payableTotal}:${couponCode}:${offer.offerType || "no_offer"}:${paymentMethod}`;
     return {
       checkoutId: `co_${user?.uid || "guest"}_${Date.now()}`,
       checkoutSignature,
@@ -57,9 +75,9 @@ export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCou
       distanceSource: checkoutContext.distanceKm ? "next_checkout" : "pending",
       deliveryCharge: pricing.deliveryCharge,
       originalDeliveryCharge: pricing.deliveryCharge + pricing.freeDeliveryDiscount,
-      couponCode: checkoutContext.activeCoupon?.code || "",
+      couponCode,
       couponDiscount: pricing.couponDiscount,
-      freeDelivery: !!checkoutContext.activeCoupon?.freeDelivery,
+      freeDelivery: couponLocked ? false : !!checkoutContext.activeCoupon?.freeDelivery,
       gstPercent: pricing.gstPercent,
       gstAmount: pricing.gstAmount,
       handlingCharge: pricing.handlingCharge,
@@ -205,11 +223,14 @@ export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCou
           <div className="mb-4 space-y-3">
             <input
               value={activeCouponCode}
-              onChange={(event) => onCouponCodeChange(event.target.value.toUpperCase())}
-              placeholder="Coupon code"
-              className="h-11 w-full rounded-full border border-white/10 bg-white/[.06] px-4 text-sm font-bold outline-none"
+              onChange={(event) => {
+                if (!couponLocked) onCouponCodeChange(event.target.value.toUpperCase());
+              }}
+              placeholder={couponLocked ? "Coupon disabled with BOGO offer" : "Coupon code"}
+              disabled={couponLocked}
+              className="h-11 w-full rounded-full border border-white/10 bg-white/[.06] px-4 text-sm font-bold outline-none disabled:opacity-45"
             />
-            {visibleCoupons.length ? (
+            {!couponLocked && visibleCoupons.length ? (
               <div className="scrollbar-none flex gap-2 overflow-x-auto">
                 {visibleCoupons.map((coupon) => {
                   const valid = validateCoupon(coupon, pricing.subtotal, categories, auth.currentUser?.uid);
@@ -225,6 +246,29 @@ export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCou
           </div>
           <div className="mb-4 space-y-2 rounded-2xl bg-white/[.05] p-3 text-sm">
             <Row label="Original Total" value={offer.originalTotal} />
+            {checkoutContext.activeOffer ? (
+              <div className="rounded-xl bg-white/[.04] p-3 text-xs font-bold">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-white">BOGO offer</div>
+                    <div className="mt-1 text-white/60">
+                      Eligible items: {offerCandidate.eligibleItemCount}/{offerCandidate.requiredItemCount || 0}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!offerCandidate.offerApplied || offerAccepted}
+                    onClick={applyOffer}
+                    className="shrink-0 rounded-full bg-emerald-500 px-4 py-2 text-xs font-black text-white disabled:bg-white/10 disabled:text-white/45"
+                  >
+                    {offerAccepted ? "Applied" : "Apply Offer"}
+                  </button>
+                </div>
+                <div className="mt-2 text-white/55">
+                  {offerCandidate.eligibleCategories.length ? `Categories: ${offerCandidate.eligibleCategories.join(", ")}` : "All eligible pizzas"}
+                </div>
+              </div>
+            ) : null}
             {offer.offerApplied ? (
               <>
                 <Row label="Offer Discount" value={-offer.discount} />
@@ -234,20 +278,21 @@ export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCou
                     <div key={`${item.id}:${item.price}`}>{item.name}{item.qty > 1 ? ` x ${item.qty}` : ""}</div>
                   ))}
                   <div className="mt-2 text-white/70">{PIZZA_POINTS_BOGO_MESSAGE}</div>
+                  <div className="mt-1 text-white/70">Coupons are disabled with this offer.</div>
                 </div>
               </>
-            ) : checkoutContext.activeOffer ? (
+            ) : checkoutContext.activeOffer && !offerCandidate.offerApplied ? (
               <div className="rounded-xl bg-amber-400/10 p-3 text-xs font-bold text-amber-100">
                 <div className="text-white">BOGO offer active</div>
                 <div className="mt-1 text-white/70">
-                  Eligible categories: {offer.eligibleCategories.length ? offer.eligibleCategories.join(", ") : "All pizzas"}
+                  Eligible categories: {offerCandidate.eligibleCategories.length ? offerCandidate.eligibleCategories.join(", ") : "All pizzas"}
                 </div>
                 <div className="mt-1 text-white/70">
-                  Eligible items in cart: {offer.eligibleItemCount}/{offer.requiredItemCount || 0}
+                  Eligible items in cart: {offerCandidate.eligibleItemCount}/{offerCandidate.requiredItemCount || 0}
                 </div>
               </div>
             ) : null}
-            <Row label="Coupon savings" value={-pricing.couponDiscount} />
+            {!couponLocked ? <Row label="Coupon savings" value={-pricing.couponDiscount} /> : null}
             <Row label="Delivery" value={pricing.deliveryCharge} />
             <Row label="Final Total" value={payableTotal} />
           </div>
