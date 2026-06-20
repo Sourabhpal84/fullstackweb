@@ -953,9 +953,12 @@ function closeLocationSelector(){
 
 function showLocationAddressForm(){
   const form = document.getElementById("locationAddressForm");
+  const searchRow = document.querySelector("#locationSelectorPopup .location-search-row");
+  const searchInput = document.getElementById("addressSearchInput");
   if(form){
     form.hidden = false;
-    setTimeout(() => document.getElementById("customerAddress")?.focus(), 50);
+    searchRow?.scrollIntoView({ behavior:"smooth", block:"start" });
+    setTimeout(() => searchInput?.focus(), 180);
   }
 }
 
