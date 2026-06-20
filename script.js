@@ -4951,6 +4951,11 @@ name: "Magneetoz",
 
 description:"Magneetoz order payment",
 order_id:String(paymentSession.razorpayOrderId),
+prefill:{
+  contact:orderDraftPayload.orderDraft?.phone || "",
+  name:orderDraftPayload.orderDraft?.customerName || "",
+  email:auth.currentUser?.email || ""
+},
 theme:{
   color:"#ff7b00"
 },
