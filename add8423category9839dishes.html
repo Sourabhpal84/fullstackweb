@@ -343,7 +343,7 @@ import { protectAdminPage, mountAdminLogout } from "./admin-guard.js";
 import { auth, db, storage } from "./firebase-config.js";
 import {
   collection, addDoc, updateDoc,
-  deleteDoc, doc, onSnapshot, getDocs
+  deleteDoc, doc, onSnapshot, getDocs, getDoc
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import {
   getDownloadURL,
@@ -915,7 +915,7 @@ onSnapshot(collection(db,"categories"), snap=>{
     </button>
 
     <button class="btn-red"
-      onclick="deleteCategory('${docSnap.id}',${jsString(c.name || "")})">
+      onclick="deleteCategory('${docSnap.id}')">
       Delete
     </button>
 
@@ -1498,16 +1498,20 @@ window.del = async(id)=>{
 }
 
 /* CATEGORY DELETE */
-window.deleteCategory = async(id,name)=>{
+window.deleteCategory = async(id)=>{
+  const categoryRef = doc(db,"categories",id);
+  const categorySnap = await getDoc(categoryRef);
+  const name = categorySnap.data()?.name || "";
   const q = await getDocs(collection(db,"dishes"));
 
-  q.forEach(async d=>{
+  await Promise.all(q.docs.map(d=>{
     if(d.data().category===name){
-      await deleteDoc(doc(db,"dishes",d.id));
+      return deleteDoc(doc(db,"dishes",d.id));
     }
-  });
+    return Promise.resolve();
+  }));
 
-  await deleteDoc(doc(db,"categories",id));
+  await deleteDoc(categoryRef);
 }
 
 /* CATEGORY TOGGLE */
