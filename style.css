@@ -10268,3 +10268,75 @@ body .cart-panel .cart-price-breakdown .grand{
     line-height:1.25!important;
   }
 }
+
+/* Cart final contrast split: light item cards, dark checkout blocks. */
+body .cart-panel .cart-item-pro,
+body .cart-panel .checkout-cart-column .cart-item-pro{
+  background:linear-gradient(145deg,#ffffff,#f8fafc)!important;
+  border:1px solid rgba(255,123,0,.26)!important;
+}
+body .cart-panel .cart-item-pro strong,
+body .cart-panel .checkout-cart-column .cart-item-pro strong{
+  color:#111827!important;
+  -webkit-text-fill-color:#111827!important;
+  font-weight:950!important;
+}
+body .cart-panel .cart-item-pro small,
+body .cart-panel .checkout-cart-column .cart-item-pro small{
+  color:#64748b!important;
+  -webkit-text-fill-color:#64748b!important;
+  font-weight:800!important;
+}
+body .cart-panel .cart-item-pro .cart-line-actions>b,
+body .cart-panel .checkout-cart-column .cart-item-pro .cart-line-actions>b{
+  color:#22c55e!important;
+  -webkit-text-fill-color:#22c55e!important;
+  font-weight:950!important;
+}
+body .cart-panel .cart-items-title{
+  background:#fff7ed!important;
+  color:#111827!important;
+  -webkit-text-fill-color:#111827!important;
+  border:1px solid rgba(255,123,0,.22)!important;
+}
+body .cart-panel .cart-items-title b{
+  color:#ffffff!important;
+  -webkit-text-fill-color:#ffffff!important;
+}
+body .cart-panel .total{
+  background:#111827!important;
+  color:#ffffff!important;
+  -webkit-text-fill-color:#ffffff!important;
+  font-weight:950!important;
+}
+body .cart-panel .cart-location-card strong,
+body .cart-panel .coupon-box h3,
+body .cart-panel .coupon-box h4,
+body .cart-panel .delivery-policy-card summary,
+body .cart-panel .delivery-policy-card h3,
+body .cart-panel .wallet-redeem-box h3,
+body .cart-panel .wallet-redeem-box strong,
+body .cart-panel .checkout-name-field>span{
+  color:#ffffff!important;
+  -webkit-text-fill-color:#ffffff!important;
+  opacity:1!important;
+}
+body .cart-panel .cart-location-card small,
+body .cart-panel .coupon-box p,
+body .cart-panel .coupon-box small,
+body .cart-panel .wallet-redeem-box small,
+body .cart-panel .checkout-name-field>small{
+  color:#cbd5e1!important;
+  -webkit-text-fill-color:#cbd5e1!important;
+  opacity:1!important;
+}
+body .cart-panel .available-coupons,
+body .cart-panel .applied-coupon{
+  color:#dbeafe!important;
+  -webkit-text-fill-color:#dbeafe!important;
+}
+body .cart-panel .cart-price-breakdown>div:not(.grand) span,
+body .cart-panel .cart-price-breakdown>div:not(.grand) b{
+  color:#dbeafe!important;
+  -webkit-text-fill-color:#dbeafe!important;
+}
