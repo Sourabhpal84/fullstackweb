@@ -9696,6 +9696,85 @@ body .hero.hero-image-contain .hero-pizza-slider img{
   }
 }
 
+/* Hero banner dimension guard: desktop 16:9, mobile portrait */
+body .hero,
+body.light-theme .hero,
+body.dark-theme .hero,
+body.dark-mode .hero,
+body:not(.dark-mode):not(.dark-theme) .hero{
+  width:min(100%,1920px)!important;
+  aspect-ratio:16/9!important;
+  min-height:0!important;
+  height:auto!important;
+  max-height:none!important;
+  margin-left:auto!important;
+  margin-right:auto!important;
+  overflow:hidden!important;
+}
+body .hero #heroBgSlider,
+body .hero #heroBgSlider img{
+  position:absolute!important;
+  inset:0!important;
+  width:100%!important;
+  height:100%!important;
+}
+body .hero #heroBgSlider img{
+  object-fit:cover!important;
+  object-position:center center!important;
+}
+body .hero-content{
+  position:relative!important;
+  z-index:2!important;
+}
+body .hero-copy{
+  max-width:min(560px,52%)!important;
+}
+body .hero-actions{
+  max-width:min(100%,520px)!important;
+}
+@media(min-width:1280px){
+  body .hero,
+  body.light-theme .hero,
+  body.dark-theme .hero,
+  body.dark-mode .hero,
+  body:not(.dark-mode):not(.dark-theme) .hero{
+    max-width:1920px!important;
+  }
+}
+@media(max-width:760px){
+  body .hero,
+  body.light-theme .hero,
+  body.dark-theme .hero,
+  body.dark-mode .hero,
+  body:not(.dark-mode):not(.dark-theme) .hero{
+    width:100%!important;
+    aspect-ratio:9/16!important;
+    min-height:0!important;
+    height:auto!important;
+    padding:16px 12px!important;
+  }
+  body .hero-content{
+    height:100%!important;
+    align-items:end!important;
+  }
+  body .hero-copy{
+    max-width:68%!important;
+  }
+  body .hero-actions{
+    max-width:100%!important;
+  }
+  body .hero.hero-image-only,
+  body.light-theme .hero.hero-image-only,
+  body.dark-theme .hero.hero-image-only,
+  body.dark-mode .hero.hero-image-only,
+  body:not(.dark-mode):not(.dark-theme) .hero.hero-image-only{
+    aspect-ratio:9/16!important;
+    height:auto!important;
+    min-height:0!important;
+    padding:0!important;
+  }
+}
+
 body .new-card .bogo-menu-badge{
   position:absolute!important;
   left:10px!important;

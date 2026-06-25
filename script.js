@@ -289,14 +289,14 @@ function renderHeroPizzaSlider(images = [], imageSets = [], heroImages = []){
   const slides = cleanImages.length ? cleanImages : [{ url:"logo_tran.jpeg", imageSet:null }];
   const markup = slides.map((slide, index) => {
     const srcset = buildImageSrcset(slide.imageSet);
-    const srcsetAttr = srcset ? `srcset="${escapeHTML(srcset)}" sizes="(max-width: 720px) 62vw, 420px"` : "";
+    const srcsetAttr = srcset ? `srcset="${escapeHTML(srcset)}" sizes="(max-width: 720px) 42vw, 420px"` : "";
     return `
     <img
       src="${escapeHTML(slide.mobileUrl || bestImageUrl(slide.url, slide.imageSet))}"
       ${srcsetAttr}
       alt="MAGNEETOZ pizza slide ${index + 1}"
-      width="420"
-      height="420"
+      width="1080"
+      height="1920"
       loading="${index === 0 ? "eager" : "lazy"}"
       fetchpriority="${index === 0 ? "high" : "auto"}"
       decoding="async"
@@ -312,14 +312,14 @@ function renderHeroPizzaSlider(images = [], imageSets = [], heroImages = []){
   if(bgSlider){
     bgSlider.innerHTML = slides.map((slide, index) => {
       const srcset = buildImageSrcset(slide.imageSet);
-      const srcsetAttr = srcset ? `srcset="${escapeHTML(srcset)}" sizes="100vw"` : "";
+      const srcsetAttr = srcset ? `srcset="${escapeHTML(srcset)}" sizes="(max-width: 720px) 100vw, 100vw"` : "";
       return `
       <img
         src="${escapeHTML(slide.desktopUrl || bestImageUrl(slide.url, slide.imageSet))}"
         ${srcsetAttr}
         alt=""
-        width="1200"
-        height="800"
+        width="1920"
+        height="1080"
         loading="${index === 0 ? "eager" : "lazy"}"
         fetchpriority="${index === 0 ? "high" : "auto"}"
         decoding="async"
