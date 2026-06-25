@@ -10340,3 +10340,49 @@ body .cart-panel .cart-price-breakdown>div:not(.grand) b{
   color:#dbeafe!important;
   -webkit-text-fill-color:#dbeafe!important;
 }
+
+/* Exact cart text visibility fixes */
+body .cart-panel .cart-header h3,
+body .cart-panel .checkout-page-title h3{
+  color:#111827!important;
+  -webkit-text-fill-color:#111827!important;
+  opacity:1!important;
+  font-weight:950!important;
+}
+body .cart-panel .checkout-page-title small{
+  color:#ff7a00!important;
+  -webkit-text-fill-color:#ff7a00!important;
+  opacity:1!important;
+}
+body .cart-panel #freeDeliveryHint,
+body .cart-panel #freeDeliveryHint *,
+body .cart-panel .delivery-campaign,
+body .cart-panel .delivery-campaign *{
+  color:#14532d!important;
+  -webkit-text-fill-color:#14532d!important;
+  opacity:1!important;
+}
+body .cart-panel .delivery-campaign{
+  background:linear-gradient(135deg,#dcfce7,#f0fdf4)!important;
+  border:1px solid #86efac!important;
+}
+body .cart-panel #bogoOfferPanel>div{
+  background:#1f2937!important;
+  border-color:#f59e0b!important;
+}
+body .cart-panel #bogoOfferPanel strong{
+  color:#ffffff!important;
+  -webkit-text-fill-color:#ffffff!important;
+  opacity:1!important;
+  font-weight:950!important;
+}
+body .cart-panel #bogoOfferPanel small{
+  color:#dbeafe!important;
+  -webkit-text-fill-color:#dbeafe!important;
+  opacity:1!important;
+}
+body .cart-panel #bogoOfferPanel button{
+  color:#ffffff!important;
+  -webkit-text-fill-color:#ffffff!important;
+  opacity:1!important;
+}
