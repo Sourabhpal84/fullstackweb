@@ -9615,6 +9615,11 @@ body .hero.hero-image-only::after{
   display:none!important;
 }
 body .hero.hero-image-only #heroBgSlider{
+  display:block!important;
+  position:absolute!important;
+  inset:0!important;
+  width:100%!important;
+  height:100%!important;
   opacity:1!important;
   filter:none!important;
 }
@@ -9662,7 +9667,32 @@ body .hero.hero-image-contain .hero-pizza-slider img{
     font-size:12px;
   }
   body .hero.hero-image-only{
+    display:block!important;
     min-height:62vh!important;
+    height:62vh!important;
+    padding:0!important;
+    overflow:hidden!important;
+  }
+}
+
+@media(max-width:560px){
+  body .hero.hero-image-only,
+  body.light-theme .hero.hero-image-only,
+  body.dark-theme .hero.hero-image-only,
+  body.dark-mode .hero.hero-image-only,
+  body:not(.dark-mode):not(.dark-theme) .hero.hero-image-only{
+    display:block!important;
+    min-height:62vh!important;
+    height:62vh!important;
+    padding:0!important;
+    margin:0!important;
+    overflow:hidden!important;
+  }
+  body .hero.hero-image-only #heroBgSlider,
+  body .hero.hero-image-only #heroBgSlider img{
+    display:block!important;
+    width:100%!important;
+    height:100%!important;
   }
 }
 
