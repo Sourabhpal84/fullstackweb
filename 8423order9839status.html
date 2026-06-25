@@ -134,6 +134,15 @@
 .open-btn{background:#22c55e;color:#06110a}.close-btn{background:#ef4444;color:white}.save-btn{background:#00ffcc;color:#06110a}
 .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#111827;color:white;border:1px solid #263241;border-radius:14px;padding:12px 16px;z-index:80;display:none;font-weight:800}
 .toast.show{display:block}
+.kitchen-alarm-bar{position:sticky;top:0;z-index:45;margin:0 auto 16px;max-width:980px;display:flex;align-items:center;justify-content:space-between;gap:12px;background:#121821;border:1px solid #263241;border-radius:16px;padding:12px 14px;box-shadow:0 16px 50px rgba(0,0,0,.3)}
+.kitchen-alarm-bar strong{color:#00ffcc}.kitchen-alarm-bar small{display:block;color:#94a3b8;margin-top:3px}.kitchen-alarm-bar button{border:0;border-radius:12px;padding:11px 14px;font-weight:900;background:linear-gradient(135deg,#00ffcc,#22c55e);color:#06110a;cursor:pointer}
+.kitchen-alarm-bar.enabled{border-color:#22c55e}.kitchen-alarm-bar.enabled button{background:#263241;color:#86efac}
+.go-live-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin-top:10px}
+.go-live-item{background:#0b0f14;border:1px solid #263241;border-radius:12px;padding:10px;color:#cbd5e1;font-size:12px;font-weight:800}
+.go-live-item.ok{border-color:#22c55e;color:#86efac}.go-live-item.warn{border-color:#f59e0b;color:#fde68a}
+.quick-stock-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end}
+.quick-stock-row select{min-height:42px;border-radius:12px;border:1px solid #334155;background:#0b0f14;color:#fff;padding:0 10px;font-weight:800}
+.wa-alert-btn{display:inline-flex;margin-top:8px;padding:8px 10px;border-radius:999px;background:#25d366;color:#06110a;text-decoration:none;font-size:11px;font-weight:900}
 
 .assign-modal{position:fixed;inset:0;background:rgba(0,0,0,.68);display:none;align-items:center;justify-content:center;z-index:50;padding:18px;}
 .assign-modal.show{display:flex;}
@@ -156,6 +165,25 @@
 </head>
 <body>
   <h1>MAGNEETOZ ORDERS</h1>
+  <div class="kitchen-alarm-bar" id="kitchenAlarmBar">
+    <div><strong>Kitchen alarm</strong><small id="kitchenAlarmStatus">Tap enable once. It keeps this screen awake and rings for pending orders.</small></div>
+    <button type="button" id="enableKitchenAlarmBtn">Enable Alarm</button>
+  </div>
+  <section class="ops-panel">
+    <h2>Go Live Checklist</h2>
+    <div class="ops-grid">
+      <label>Admin WhatsApp Number <input id="adminAlertPhone" inputmode="numeric" placeholder="10 digit mobile"></label>
+      <label style="align-self:end"><button class="save-btn" type="button" onclick="saveAdminAlertPhone()">Save Alert Number</button></label>
+    </div>
+    <div class="go-live-list" id="goLiveChecklist"></div>
+  </section>
+  <section class="ops-panel">
+    <h2>Quick Stock Toggle</h2>
+    <div class="quick-stock-row">
+      <label>Select Dish <select id="quickStockDish"></select></label>
+      <button class="save-btn" type="button" onclick="toggleQuickStock()">Toggle Stock</button>
+    </div>
+  </section>
   <section class="ops-panel">
     <h2>Restaurant Availability</h2>
     <div class="ops-grid">
@@ -191,6 +219,10 @@
 
   <button onclick="loadOrders('All')">
     All
+  </button>
+
+  <button onclick="loadOrders('Active')">
+    Active
   </button>
 
   <button onclick="loadOrders('Pending')">
@@ -264,6 +296,13 @@ incomingOrderAlarm.loop = true;
 incomingOrderAlarm.preload = "auto";
 let incomingOrderAlarmIds = new Set();
 let incomingOrderAlarmUnlocked = false;
+let kitchenWakeLock = null;
+let kitchenAlarmEnabled = false;
+let pendingAlarmReminderTimer = null;
+let latestPendingOrders = [];
+let latestActiveOrders = [];
+let menuDishCache = [];
+let currentOrderFilter = "Pending";
 const FUNCTIONS_BASE_URL = "https://asia-south1-magneetoz.cloudfunctions.net";
 protectAdminPage();
 mountAdminLogout(document.body);
@@ -313,6 +352,48 @@ function toast(message){
   node._t = setTimeout(() => node.classList.remove("show"), 2600);
 }
 
+function terminalOrder(status){
+  return ["Delivered","Rejected","Cancelled","Failed"].includes(normalizeStatus(status));
+}
+
+function adminAlertPhone(){
+  return String(localStorage.getItem("magneetozAdminAlertPhone") || "").replace(/\D/g, "").slice(-10);
+}
+
+function renderGoLiveChecklist(){
+  const phone = adminAlertPhone();
+  const items = [
+    { label:"Kitchen alarm", ok:kitchenAlarmEnabled },
+    { label:"Admin WhatsApp", ok:phone.length === 10 },
+    { label:"Online riders", ok:onlineRiders.length > 0, text:`${onlineRiders.length} online` },
+    { label:"Pending orders", ok:latestPendingOrders.length === 0, warn:latestPendingOrders.length > 0, text:`${latestPendingOrders.length} pending` },
+    { label:"Active orders", ok:true, text:`${latestActiveOrders.length} active` },
+    { label:"Stock loaded", ok:menuDishCache.length > 0, text:`${menuDishCache.length} dishes` }
+  ];
+  const host = document.getElementById("goLiveChecklist");
+  if(host) host.innerHTML = items.map(item => `<div class="go-live-item ${item.ok ? "ok" : "warn"}"><b>${item.ok ? "✓" : "!"} ${item.label}</b><br><span>${item.text || (item.ok ? "Ready" : "Needs attention")}</span></div>`).join("");
+  const input = document.getElementById("adminAlertPhone");
+  if(input && !input.value) input.value = phone;
+}
+
+window.saveAdminAlertPhone = function(){
+  const value = String(document.getElementById("adminAlertPhone")?.value || "").replace(/\D/g, "").slice(-10);
+  if(value.length !== 10){
+    alert("Enter valid 10 digit mobile number.");
+    return;
+  }
+  localStorage.setItem("magneetozAdminAlertPhone", value);
+  renderGoLiveChecklist();
+  toast("Admin alert number saved");
+};
+
+function adminWhatsAppLink(order = {}){
+  const phone = adminAlertPhone();
+  if(phone.length !== 10) return "";
+  const text = `New MAGNEETOZ order #${order.orderNumber || order.orderId || order.id || ""} pending. Total ${formatCurrency(order.totalAmount || 0)}.`;
+  return `https://wa.me/91${phone}?text=${encodeURIComponent(text)}`;
+}
+
 function unlockIncomingOrderAlarm(){
   if(incomingOrderAlarmUnlocked) return;
   incomingOrderAlarm.volume = 1;
@@ -324,6 +405,45 @@ function unlockIncomingOrderAlarm(){
     })
     .catch(() => {});
 }
+
+function setKitchenAlarmStatus(message, enabled = kitchenAlarmEnabled){
+  const status = document.getElementById("kitchenAlarmStatus");
+  const bar = document.getElementById("kitchenAlarmBar");
+  const button = document.getElementById("enableKitchenAlarmBtn");
+  if(status) status.textContent = message;
+  bar?.classList.toggle("enabled", !!enabled);
+  if(button) button.textContent = enabled ? "Alarm Enabled" : "Enable Alarm";
+}
+
+async function requestKitchenWakeLock(){
+  if(!("wakeLock" in navigator)){
+    setKitchenAlarmStatus("Alarm enabled. Browser wake lock is not supported here; keep laptop sleep disabled.", true);
+    return;
+  }
+  try{
+    kitchenWakeLock = await navigator.wakeLock.request("screen");
+    kitchenWakeLock.addEventListener("release", () => {
+      kitchenWakeLock = null;
+      if(kitchenAlarmEnabled && !document.hidden) requestKitchenWakeLock();
+    });
+    setKitchenAlarmStatus("Alarm enabled. Screen will stay awake while this page is open.", true);
+  }catch(error){
+    console.warn("Wake lock unavailable:", error);
+    setKitchenAlarmStatus("Alarm enabled. Please keep laptop sleep disabled if wake lock is blocked.", true);
+  }
+}
+
+async function enableKitchenAlarm(){
+  kitchenAlarmEnabled = true;
+  unlockIncomingOrderAlarm();
+  await requestKitchenWakeLock();
+  toast("Kitchen alarm enabled");
+}
+
+document.getElementById("enableKitchenAlarmBtn")?.addEventListener("click", enableKitchenAlarm);
+document.addEventListener("visibilitychange", () => {
+  if(kitchenAlarmEnabled && !document.hidden && !kitchenWakeLock) requestKitchenWakeLock();
+});
 
 ["click","touchstart","keydown"].forEach(eventName => {
   window.addEventListener(eventName, unlockIncomingOrderAlarm, { once:true, passive:true });
@@ -338,6 +458,8 @@ function syncIncomingOrderAlarm(pendingOrders = []){
   if(!pendingOrders.length){
     incomingOrderAlarm.pause();
     incomingOrderAlarm.currentTime = 0;
+    clearInterval(pendingAlarmReminderTimer);
+    pendingAlarmReminderTimer = null;
     document.title = "Orders | MAGNEETOZ";
     return;
   }
@@ -346,6 +468,13 @@ function syncIncomingOrderAlarm(pendingOrders = []){
   document.title = `Order #${orderNumber} received | MAGNEETOZ`;
   toast(`Order #${orderNumber} received`);
   incomingOrderAlarm.play().catch(() => {});
+  if(!pendingAlarmReminderTimer){
+    pendingAlarmReminderTimer = setInterval(() => {
+      if(!incomingOrderAlarmIds.size) return;
+      incomingOrderAlarm.currentTime = 0;
+      incomingOrderAlarm.play().catch(() => {});
+    }, 45000);
+  }
 }
 
 async function callAdminFunction(name, payload = {}, timeoutMs = 25000){
@@ -532,6 +661,7 @@ window.deleteAllOrders = async function(){
 
 
 window.loadOrders = function(filter) {
+  currentOrderFilter = filter;
   const q = query(collection(db, "orders"), where("orderSource", "==", "online"));
   ordersUnsub?.();
   ordersUnsub = onSnapshot(q, (snap) => {
@@ -539,11 +669,14 @@ window.loadOrders = function(filter) {
     container.innerHTML = "";
     const docs = [];
     snap.forEach(docSnap => docs.push(docSnap));
-    syncIncomingOrderAlarm(docs.map(docSnap => ({ id:docSnap.id, ...docSnap.data() }))
-      .filter(order => {
-        const status = normalizeStatus(order.status || order.orderStatus || "Pending");
-        return status === "Pending" && !isUnpaidOnline(order);
-      }));
+    const allOrders = docs.map(docSnap => ({ id:docSnap.id, ...docSnap.data() }));
+    latestPendingOrders = allOrders.filter(order => {
+      const status = normalizeStatus(order.status || order.orderStatus || "Pending");
+      return status === "Pending" && !isUnpaidOnline(order);
+    });
+    latestActiveOrders = allOrders.filter(order => !terminalOrder(order.status || order.orderStatus || "Pending"));
+    syncIncomingOrderAlarm(latestPendingOrders);
+    renderGoLiveChecklist();
     docs
       .sort((a,b) => tsMillis(b.data().createdAt) - tsMillis(a.data().createdAt))
       .forEach(docSnap => {
@@ -554,9 +687,11 @@ window.loadOrders = function(filter) {
       const paidOnline = (method === "online" || method === "upi") && paidProof;
       const pendingOnlineDraft = (method === "online" || method === "upi") && !paidOnline;
       if(pendingOnlineDraft && filter !== "Payment Pending") return;
-      if (filter !== "All" && displayStatus !== normalizeStatus(filter)) return;
+      if(filter === "Active" && terminalOrder(displayStatus)) return;
+      if (filter !== "All" && filter !== "Active" && displayStatus !== normalizeStatus(filter)) return;
       const badge = paymentBadge(d);
       const paymentLocked = isUnpaidOnline(d);
+      const waLink = displayStatus === "Pending" ? adminWhatsAppLink({ id:docSnap.id, ...d }) : "";
       
       container.innerHTML += `
         <div class="order-card">
@@ -564,6 +699,7 @@ window.loadOrders = function(filter) {
           <span class="payment-badge ${badge.cls}">${badge.label}</span>
           <h3>#${d.orderNumber || d.orderId} - ${d.customerName}</h3>
           <div class="info-row">📞 ${d.phone}</div>
+          ${waLink ? `<a class="wa-alert-btn" href="${waLink}" target="_blank" rel="noopener">Send admin WhatsApp alert</a>` : ""}
           <div class="info-row">🏠 ${d.address}</div>
           <div class="items-list">${d.items.map(i => `• ${i.name} (x${i.qty})`).join('<br>')}</div>
           <div style="font-weight:700; color:var(--accent);">Total: ${formatCurrency(d.totalAmount)}</div>
@@ -739,7 +875,35 @@ onSnapshot(collection(db,"riders"), snap => {
   onlineRiders = snap.docs
     .map(item => ({ id:item.id, ...item.data() }))
     .filter(rider => rider.approved === true && rider.active !== false && riderOnline(rider));
+  renderGoLiveChecklist();
 });
+
+function renderQuickStock(){
+  const select = document.getElementById("quickStockDish");
+  if(!select) return;
+  select.innerHTML = menuDishCache
+    .sort((a,b) => String(a.category || "").localeCompare(String(b.category || "")) || String(a.name || "").localeCompare(String(b.name || "")))
+    .map(dish => `<option value="${dish.id}">${dish.available === false ? "OUT" : "ON"} - ${dish.category || "Menu"} - ${dish.name || "Dish"}</option>`)
+    .join("") || `<option value="">No dishes loaded</option>`;
+  renderGoLiveChecklist();
+}
+
+onSnapshot(collection(db,"dishes"), snap => {
+  menuDishCache = snap.docs.map(item => ({ id:item.id, ...item.data() }));
+  renderQuickStock();
+}, error => console.warn("[DISH STOCK LISTENER]", error));
+
+window.toggleQuickStock = async function(){
+  const id = document.getElementById("quickStockDish")?.value;
+  const dish = menuDishCache.find(item => item.id === id);
+  if(!dish) return alert("Select a dish first.");
+  const next = dish.available === false;
+  await updateDoc(doc(db, "dishes", id), {
+    available:next,
+    updatedAt:serverTimestamp()
+  });
+  toast(`${dish.name || "Dish"} ${next ? "enabled" : "disabled"}`);
+};
 
 window.openManualAssign = async function(orderId){
   const candidates = onlineRiders;
@@ -820,7 +984,8 @@ window.requestNearbyRiders = async function(orderId){
   logStructured("RIDER MATCHING", { orderId, source:"backend_google_routes" });
 };
 
-loadOrders('Pending');
+renderGoLiveChecklist();
+loadOrders('Active');
   </script>
   <script src="app-notifications.js"></script>
 </body>

@@ -18,7 +18,7 @@
 </head>
 <body>
 <main class="profile-shell">
-  <div class="profile-top"><div><a class="button soft" href="index.html">← Back</a><h1>My MAGNEETOZ</h1><p class="muted" id="phone">Checking login…</p></div><button id="logout">Logout</button></div>
+  <div class="profile-top"><div><a class="button soft" href="index.html" id="profileBack">← Back</a><h1>My MAGNEETOZ</h1><p class="muted" id="phone">Checking login…</p></div><button id="logout">Logout</button></div>
   <div class="stats">
     <div class="stat"><b id="wallet">0</b><span>Pizza Points</span></div>
     <div class="stat"><b id="earned">0</b><span>Lifetime earned</span></div>
@@ -39,23 +39,30 @@
 import { auth, db } from "./firebase-config.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { collection, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, setDoc, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-const $=id=>document.getElementById(id); let currentUser, profile={};
+const $=id=>document.getElementById(id); let currentUser, profile={}, needsMobileLogin=false;
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 async function api(name,body){const token=await currentUser.getIdToken();const r=await fetch(`https://asia-south1-${auth.app.options.projectId}.cloudfunctions.net/${name}`,{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify(body)});const data=await r.json();if(!r.ok)throw new Error(data.error||"Request failed");return data}
 function fill(){phone.textContent=currentUser.phoneNumber||profile.phone||"Verified mobile missing";fullName.value=profile.fullName||profile.customerName||"";wallet.textContent=profile.walletPoints||0;earned.textContent=profile.lifetimePointsEarned||0;used.textContent=profile.lifetimePointsUsed||0;orders.textContent=profile.totalOrders||0;referrals.textContent=profile.successfulReferralCount||0;referralCode.textContent=profile.referralCode||"Generating…";const addressesList=profile.savedAddresses||[];addresses.innerHTML=addressesList.length?addressesList.map(a=>`<div class="item">${esc(a.label||a.address)}</div>`).join(""):'<p class="muted">No saved address.</p>'}
+function fillVerifiedMobileState(){needsMobileLogin=!(currentUser.phoneNumber||profile.phone);phone.textContent=needsMobileLogin?"Login again to verify your mobile":currentUser.phoneNumber||profile.phone;logout.textContent=needsMobileLogin?"Login":"Logout";}
+function txDate(value){const date=value?.toDate?.()||null;return date?date.toLocaleString("en-IN",{dateStyle:"medium",timeStyle:"short"}):"Date not available";}
+function txReason(d){if(d.type==="referral_bonus")return "Referral reward";if(d.type==="welcome_bonus")return "Referral welcome reward";if(d.type==="loyalty_bonus")return "Feedback reward";if(d.type==="admin_credit")return "Points added";if(d.type==="admin_debit")return "Points adjusted";if(String(d.type||"").includes("redeem"))return "Used on order";return String(d.type||"Pizza Points").replaceAll("_"," ");}
+function customerLabel(user){return user?(user.fullName||user.customerName||user.name||user.phone||user.customerPhone||"Customer"):"Customer";}
+async function renderWalletHistory(txs){if(txs.empty){walletHistory.innerHTML='<p class="muted">No transactions yet.</p>';return}const rows=txs.docs.map(x=>({id:x.id,...x.data()}));walletHistory.innerHTML=rows.map(d=>{const orderLabel=d.orderNumber||d.orderId||"";const referred={fullName:d.referralUserName||"",phone:d.referralUserPhone||""};const referredText=d.type==="referral_bonus"&&d.referralUserId?`<br><span class="muted">Referred customer: ${esc(customerLabel(referred))}</span>`:d.type==="welcome_bonus"&&d.referralUserId?`<br><span class="muted">Referred by: ${esc(customerLabel(referred))}</span>`:"";return `<div class="item"><b>${d.points>0?"+":""}${d.points} points</b> <span class="muted">Â· ${esc(txDate(d.createdAt))}</span>${orderLabel?`<br><span class="muted">Order #${esc(orderLabel)}</span>`:""}<br><span class="muted">${esc(txReason(d))}: ${esc(d.description||"Pizza Points update")}</span>${referredText}${d.orderAmount?`<br><span class="muted">Order value: â‚¹${Number(d.orderAmount).toFixed(0)}</span>`:""}</div>`}).join("");}
 async function load(){
   await api("ensureGrowthProfile",{}).catch(e=>console.warn("Growth profile setup deferred",e));
   const snap=await getDoc(doc(db,"users",currentUser.uid));
   profile=snap.exists()?snap.data():{};
   fill();
+  fillVerifiedMobileState();
   const [txResult,orderResult]=await Promise.allSettled([
     getDocs(query(collection(db,"walletTransactions"),where("userId","==",currentUser.uid),orderBy("createdAt","desc"),limit(20))),
     getDocs(query(collection(db,"orders"),where("userId","==",currentUser.uid),orderBy("createdAt","desc"),limit(8)))
   ]);
-  if(txResult.status==="fulfilled"){
+  if(txResult.status==="fulfilled") await renderWalletHistory(txResult.value);
+  if(false&&txResult.status==="fulfilled"){
     const txs=txResult.value;
     walletHistory.innerHTML=txs.empty?'<p class="muted">No transactions yet.</p>':txs.docs.map(x=>{const d=x.data(),orderLabel=d.orderNumber||d.orderId||"";return `<div class="item"><b>${d.points>0?"+":""}${d.points} points</b>${orderLabel?` <span class="muted">· Order #${esc(orderLabel)}</span>`:""}<br><span class="muted">${esc(d.description||d.type)}</span>${d.orderAmount?`<br><span class="muted">Order value: ₹${Number(d.orderAmount).toFixed(0)}</span>`:""}</div>`}).join("");
-  }else walletHistory.innerHTML='<p class="muted">Wallet history is temporarily unavailable.</p>';
+  }else if(txResult.status!=="fulfilled") walletHistory.innerHTML='<p class="muted">Wallet history is temporarily unavailable.</p>';
   if(orderResult.status==="fulfilled"){
     const ords=orderResult.value;
     recentOrders.innerHTML=ords.empty?'<p class="muted">No orders yet.</p>':ords.docs.map(x=>{const d=x.data();return `<div class="item"><b>#${esc(d.orderNumber||x.id.slice(0,8))}</b> · ${esc(d.status||d.orderStatus||"Pending")} · ₹${Number(d.totalAmount||0).toFixed(0)}</div>`}).join("");
@@ -69,6 +76,7 @@ function requireReferralCode(){if(referralCodeValue())return true;alert("Referra
 copyCode.onclick=()=>{if(requireReferralCode())navigator.clipboard.writeText(referralCodeValue())};
 copyLink.onclick=()=>{if(requireReferralCode())navigator.clipboard.writeText(link())};
 shareWhatsApp.onclick=()=>{if(requireReferralCode())open(`https://wa.me/?text=${encodeURIComponent(`Order MAGNEETOZ with my code ${referralCodeValue()}: ${link()}`)}`,"_blank")};
-logout.onclick=()=>signOut(auth);
+profileBack.onclick=e=>{if(history.length>1){e.preventDefault();history.back();}};
+logout.onclick=async()=>{await signOut(auth);location.href=needsMobileLogin?"index.html?login=1":"index.html"};
 </script>
 </body></html>

@@ -144,7 +144,7 @@ async function attachReferral({ db, FieldValue, uid, code, authPhone = "" }) {
   return { ok: true, path, code: normalized };
 }
 
-async function creditPoints(transaction, { db, FieldValue, userRef, user, points, type, source, orderId, referralUserId = "", description }) {
+async function creditPoints(transaction, { db, FieldValue, userRef, user, points, type, source, orderId, referralUserId = "", referralUserName = "", referralUserPhone = "", description }) {
   const amount = Math.max(0, Math.floor(Number(points) || 0));
   if (!amount) return;
   transaction.set(userRef, {
@@ -160,6 +160,8 @@ async function creditPoints(transaction, { db, FieldValue, userRef, user, points
     source,
     orderId,
     referralUserId,
+    referralUserName,
+    referralUserPhone,
     status: "credited",
     remainingPoints: amount,
     expiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
@@ -194,12 +196,18 @@ async function processDeliveredOrder({ db, FieldValue, orderId, before = {}, ord
         await creditPoints(transaction, {
           db, FieldValue, userRef: referrerRef, user: referrerSnap.data(),
           points: rewardSettings.referrerRewardPoints, type: "referral_bonus", source: "first_delivered_order",
-          orderId, referralUserId: userRef.id, description: "Friend's first delivered order"
+          orderId, referralUserId: userRef.id,
+          referralUserName: user.fullName || user.customerName || user.name || "",
+          referralUserPhone: user.phone || user.customerPhone || "",
+          description: "Friend's first delivered order"
         });
         await creditPoints(transaction, {
           db, FieldValue, userRef, user,
           points: rewardSettings.referredUserBonusPoints, type: "welcome_bonus", source: "first_delivered_order",
-          orderId, referralUserId: referrerRef.id, description: "Referral welcome reward"
+          orderId, referralUserId: referrerRef.id,
+          referralUserName: referrerSnap.data().fullName || referrerSnap.data().customerName || referrerSnap.data().name || "",
+          referralUserPhone: referrerSnap.data().phone || referrerSnap.data().customerPhone || "",
+          description: "Referral welcome reward"
         });
         transaction.set(referrerRef, {
           successfulReferralCount: Number(referrerSnap.data().successfulReferralCount || 0) + 1

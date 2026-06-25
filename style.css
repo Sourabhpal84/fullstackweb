@@ -9550,3 +9550,100 @@ body #paymentMethodPopup #summaryFreeDelivery.blocked{background:#fee2e2!importa
     align-self:center!important;
   }
 }
+
+/* Food card action visibility guard */
+body .new-card{
+  overflow:visible!important;
+}
+body .new-card .card-body,
+body .new-card .card-footer{
+  position:relative!important;
+  z-index:8!important;
+  overflow:visible!important;
+}
+body .new-card .card-footer{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:8px!important;
+  min-height:44px!important;
+}
+body .new-card .quick-preview-btn,
+body .new-card button.add-cart-btn{
+  opacity:1!important;
+  visibility:visible!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  pointer-events:auto!important;
+  transform:none!important;
+  z-index:30!important;
+  will-change:auto!important;
+}
+body .new-card .quick-preview-btn{
+  position:absolute!important;
+  top:10px!important;
+  right:10px!important;
+}
+body .new-card button.add-cart-btn{
+  position:relative!important;
+  flex:0 0 auto!important;
+  min-width:72px!important;
+  min-height:38px!important;
+  white-space:nowrap!important;
+}
+body .new-card .card-img{
+  position:relative!important;
+  z-index:1!important;
+}
+
+body .new-card .bogo-menu-badge{
+  position:absolute!important;
+  left:10px!important;
+  top:10px!important;
+  z-index:31!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  min-height:24px!important;
+  padding:4px 8px!important;
+  border-radius:999px!important;
+  background:linear-gradient(135deg,#16a34a,#22c55e)!important;
+  color:#ffffff!important;
+  border:1px solid rgba(255,255,255,.28)!important;
+  box-shadow:0 8px 20px rgba(22,163,74,.28)!important;
+  font-size:9px!important;
+  font-weight:950!important;
+  text-transform:uppercase!important;
+  letter-spacing:.02em!important;
+  pointer-events:none!important;
+}
+body .new-card .size-option em{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  margin-top:2px!important;
+  padding:1px 5px!important;
+  border-radius:999px!important;
+  background:#16a34a!important;
+  color:#fff!important;
+  font-size:8px!important;
+  font-style:normal!important;
+  font-weight:950!important;
+}
+
+@media(max-width:560px){
+  body #paymentMethodPopup > div,
+  body #orderPopup > div,
+  body #minOrderPopup > div{
+    width:calc(100vw - 24px)!important;
+    max-width:420px!important;
+    max-height:calc(100vh - 32px)!important;
+    overflow:auto!important;
+  }
+  body .new-card .bogo-menu-badge{
+    max-width:calc(100% - 76px)!important;
+    white-space:nowrap!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+  }
+}

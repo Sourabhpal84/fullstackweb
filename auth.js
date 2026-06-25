@@ -142,6 +142,10 @@ function setAuthView(user){
   if(app) app.style.display = "block";
   if(popup) popup.style.display = "none";
   window.dispatchEvent(new CustomEvent("magneetoz:guest-ready"));
+  if(new URLSearchParams(location.search).get("login") === "1"){
+    history.replaceState(null, "", location.pathname + location.hash);
+    setTimeout(() => openAuthPopup("mobile_verification"), 0);
+  }
 }
 
 function openAuthPopup(reason = "checkout"){

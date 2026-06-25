@@ -70,6 +70,8 @@ button{border:0;border-radius:13px;min-height:44px;padding:0 14px;font:900 12px 
     </div>
     <label>Eligible Categories</label>
     <div class="check-grid" id="engineCategories"></div>
+    <label>Eligible Sizes</label>
+    <div class="check-grid" id="engineSizes"></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
       <button class="send" type="button" style="width:auto;margin:0" onclick="saveOfferEngine()">Save BOGO Settings</button>
       <button class="soft" type="button" onclick="disableOfferEngine()">Disable Offer</button>
@@ -179,6 +181,9 @@ function sizePricesToText(rows = []){
 function selectedEngineCategories(){
   return [...document.querySelectorAll(".engine-category:checked")].map(input => input.value);
 }
+function selectedEngineSizes(){
+  return [...document.querySelectorAll(".engine-size:checked")].map(input => input.value);
+}
 function renderEngineCategories(){
   const selected = new Set(engineSettings?.eligibleCategories || []);
   const box = document.getElementById("engineCategories");
@@ -189,6 +194,17 @@ function renderEngineCategories(){
     </label>
   `).join("") || `<div class="history-item">No categories found. Add categories first.</div>`;
 }
+function renderEngineSizes(){
+  const selected = new Set(engineSettings?.eligibleSizes || []);
+  const sizes = ["Regular", "Medium", "Large"];
+  const box = document.getElementById("engineSizes");
+  box.innerHTML = sizes.map(size => `
+    <label class="check-row">
+      <input class="engine-size" type="checkbox" value="${size}" ${selected.has(size) ? "checked" : ""}>
+      <span>${size}</span>
+    </label>
+  `).join("");
+}
 function renderEngineSettings(){
   if(engineSettings){
     const legacyBuy1 = engineSettings.active === true && engineSettings.type === "buy_1_get_1";
@@ -197,11 +213,13 @@ function renderEngineSettings(){
     document.getElementById("engineBuy2Active").value = (engineSettings.buy2Get1Active === true || legacyBuy2) ? "true" : "false";
   }
   renderEngineCategories();
+  renderEngineSizes();
   const buy1Active = engineSettings?.buy1Get1Active === true || (engineSettings?.active === true && engineSettings?.type === "buy_1_get_1");
   const buy2Active = engineSettings?.buy2Get1Active === true || (engineSettings?.active === true && engineSettings?.type === "buy_2_get_1");
   const typeText = buy1Active ? "Buy 1 Get 1 (priority)" : buy2Active ? "Buy 2 Get 1" : "No checkout offer";
   const categories = engineSettings?.eligibleCategories?.length ? engineSettings.eligibleCategories.join(", ") : "No category selected";
-  document.getElementById("engineStatus").innerHTML = `<b>Checkout offer:</b> ${typeText}<br><b>B1G1:</b> ${buy1Active ? "Active" : "Disabled"}<br><b>B2G1:</b> ${buy2Active ? "Active" : "Disabled"}<br><b>Categories:</b> ${categories}`;
+  const sizes = engineSettings?.eligibleSizes?.length ? engineSettings.eligibleSizes.join(", ") : "All sizes";
+  document.getElementById("engineStatus").innerHTML = `<b>Checkout offer:</b> ${typeText}<br><b>B1G1:</b> ${buy1Active ? "Active" : "Disabled"}<br><b>B2G1:</b> ${buy2Active ? "Active" : "Disabled"}<br><b>Categories:</b> ${categories}<br><b>Sizes:</b> ${sizes}`;
 }
 async function writeHistory(offerId, action, title){
   await addDoc(collection(db, "offerHistory"), {
@@ -311,6 +329,7 @@ window.saveOfferEngine = async function(){
     buy1Get1Active:document.getElementById("engineBuy1Active").value === "true",
     buy2Get1Active:document.getElementById("engineBuy2Active").value === "true",
     eligibleCategories:categories,
+    eligibleSizes:selectedEngineSizes(),
     updatedAt:serverTimestamp()
   };
   await setDoc(doc(db, "settings", "offerEngine"), payload, { merge:true });

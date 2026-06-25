@@ -19,7 +19,7 @@
 
 // Import BOTH auth and db from your centralized firebase.js file
 import { auth, db, messagingReady } from "./firebase-config.js"; 
-import { getIdToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getIdToken, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js";
 
 
@@ -189,6 +189,7 @@ let availableCoupons = [];
 let activeBogoOffer = null;
 let bogoOfferAccepted = false;
 let bogoOfferSignature = "";
+let liveOfferCache = [];
 let countdownInterval = null;
 let cachedAuthUser = auth.currentUser || null;
 let authReadyResolved = false;
@@ -219,6 +220,7 @@ const DISTANCE_CACHE_MAX_AGE_MS = 60 * 1000;
 const DEFAULT_FREE_DELIVERY_MIN = 199;
 let resumeCheckoutAfterAuth = false;
 let checkoutInFlightId = "";
+let placeOrderInFlight = false;
 let walletPointsAvailable = 0;
 let walletPointsRequested = 0;
 let guestCartAuthPrompted = false;
@@ -1214,6 +1216,7 @@ function dishDataAttrs(d = {}){
     data-dish-desc="${escapeHTML(normalizeUnicodeText(d.description || "Fresh MAGNEETOZ favourite"))}"
     data-dish-image="${escapeHTML(bestImageUrl(d.image, d.imageSet))}"
     data-dish-category="${escapeHTML(d.category || "Recommended")}"
+    data-dish-type="${escapeHTML(d.type || "size_based")}"
   `;
 }
 
@@ -1686,6 +1689,28 @@ async function resolveAuthenticatedCheckoutPhone(user = auth.currentUser || cach
   if(hidden) hidden.value = phone;
   if(label) label.textContent = phone || "Please sign in again to verify your mobile";
   return phone;
+}
+
+async function promptVerifiedMobileLogin(){
+  cachedAuthUser = null;
+  try{
+    if(auth.currentUser) await signOut(auth);
+  }catch(error){
+    console.warn("Stale login cleanup skipped:", error);
+  }
+  const label = document.getElementById("checkoutAuthPhoneValue");
+  if(label) label.textContent = "Login to verify mobile";
+  if(typeof window.requireMagneetozAuth === "function"){
+    await window.requireMagneetozAuth("mobile_verification");
+  }else if(typeof window.openMagneetozAuth === "function"){
+    window.openMagneetozAuth("mobile_verification");
+  }
+}
+
+function mobileLoginRequiredError(){
+  const error = new Error("Please login again to verify your mobile.");
+  error.mobileLoginRequired = true;
+  return error;
 }
 
 async function resolveAuthenticatedCheckoutName(user = auth.currentUser || cachedAuthUser){
@@ -2645,6 +2670,29 @@ function dishToppingText(d = {}){
   return String(raw || "Classic MAGNEETOZ toppings").slice(0, 90);
 }
 
+function bogoDishEligible(d = {}){
+  if(!activeBogoOffer) return false;
+  const allowed = new Set((activeBogoOffer.eligibleCategories || []).map(normalizeOfferCategory).filter(Boolean));
+  const category = normalizeOfferCategory(d.category || d.dishCategory || "");
+  return allowed.size ? allowed.has(category) : /pizza/i.test(`${d.productType || ""} ${d.category || ""} ${d.name || ""}`);
+}
+
+function bogoSizeLabel(){
+  const sizes = (activeBogoOffer?.eligibleSizes || []).filter(Boolean);
+  return sizes.length ? sizes.join(", ") : "All sizes";
+}
+
+function bogoCardBadge(d = {}){
+  if(!bogoDishEligible(d)) return "";
+  const typeLabel = activeBogoOffer.type === "buy_2_get_1" ? "B2G1" : "B1G1";
+  return `<span class="bogo-menu-badge">${escapeHTML(typeLabel)} ${escapeHTML(bogoSizeLabel())}</span>`;
+}
+
+function bogoSizeEligibleLabel(size = ""){
+  const allowedSizes = new Set((activeBogoOffer?.eligibleSizes || []).map(normalizeOfferSize).filter(Boolean));
+  return !allowedSizes.size || allowedSizes.has(normalizeOfferSize(size));
+}
+
 function dishCardMarkup(d = {}, className = ""){
   const safeCallName = String(d.name || "").replace(/\\/g,"\\\\").replace(/'/g,"\\'");
   const dishAttrs = dishDataAttrs(d);
@@ -2652,6 +2700,7 @@ function dishCardMarkup(d = {}, className = ""){
     return `
       <div class="card new-card ${className}" ${dishAttrs}>
         <button type="button" class="quick-preview-btn" data-preview>Preview</button>
+        ${bogoCardBadge(d)}
         <div class="card-img">${imageMarkup(d.image, d.name, d.imageSet)}</div>
         <div class="card-body">
           <h3>${escapeHTML(d.name || "")}</h3>
@@ -2677,12 +2726,13 @@ function dishCardMarkup(d = {}, className = ""){
     ["Large", large]
   ].map(([label, size], index) => `
     <button type="button" class="size-option ${index === 0 ? "active" : ""}" data-size="${label}" data-price="${size.price}" data-market="${size.market}" onclick="selectPizzaSize(this)">
-      <span>${label}</span><b>${formatCurrency(size.price)}</b>
+      <span>${label}</span><b>${formatCurrency(size.price)}</b>${bogoDishEligible(d) && bogoSizeEligibleLabel(label) ? `<em>BOGO</em>` : ""}
     </button>
   `).join("");
   return `
     <div class="card new-card ${className}" ${dishAttrs}>
       <button type="button" class="quick-preview-btn" data-preview>Preview</button>
+      ${bogoCardBadge(d)}
       <div class="card-img">${imageMarkup(d.image, d.name, d.imageSet)}</div>
       <div class="card-body">
         <h3>${escapeHTML(d.name || "")}</h3>
@@ -3395,6 +3445,11 @@ function useBogoOfferSnapshot(snapshot){
     activeBogoOffer = data?.active === true ? data : null;
   }
   if(!activeBogoOffer) bogoOfferAccepted = false;
+  renderOfferRail();
+  if(menuListenerStarted){
+    menuListenerStarted = false;
+    loadMenu();
+  }
   updateCart();
 }
 
@@ -3412,19 +3467,50 @@ getDoc(doc(db, "settings", "offerEngine"))
   .then(useBogoOfferSnapshot)
   .catch(error => console.warn("Initial BOGO load failed.", error));
 
-registerGlobalSnapshot(onSnapshot(query(collection(db, "offers"), orderBy("createdAt", "desc")), (snapshot) => {
+function bogoOfferLabels(){
+  const categories = (activeBogoOffer?.eligibleCategories || []).filter(Boolean);
+  const sizes = (activeBogoOffer?.eligibleSizes || []).filter(Boolean);
+  return {
+    categories:categories.length ? categories.join(", ") : "Pizza",
+    sizes:sizes.length ? sizes.join(", ") : "All sizes"
+  };
+}
+
+function renderBogoLiveOfferCard(){
+  if(!activeBogoOffer) return "";
+  const labels = bogoOfferLabels();
+  const typeLabel = activeBogoOffer.type === "buy_2_get_1" ? "Buy 2 Get 1 Free" : "Buy 1 Get 1 Free";
+  return `
+    <article class="offer-card offer-card-simple bogo-live-card">
+      <img src="logo_tran.jpeg" alt="${escapeHTML(typeLabel)}" width="92" height="92" loading="lazy" decoding="async">
+      <div>
+        <span>Checkout offer live</span>
+        <h3>${escapeHTML(typeLabel)}</h3>
+        <p>Applicable on ${escapeHTML(labels.categories)} category. Size: ${escapeHTML(labels.sizes)}.</p>
+        <button type="button" onclick="toggleCart(true)">View offer</button>
+      </div>
+    </article>
+  `;
+}
+
+function renderOfferRail(){
   const host = document.getElementById("offerRail");
   if(!host) return;
-  const offers = snapshot.docs
-    .map(item => ({ id:item.id, ...item.data() }))
+  const offers = liveOfferCache
     .filter(offer => offer.active !== false && offer.deleted !== true)
     .slice(0, 8);
-  host.innerHTML = offers.map(renderLiveOfferCard).join("") || `<p class="coupon-empty">Fresh offers will appear here.</p>`;
+  const cards = [renderBogoLiveOfferCard(), ...offers.map(renderLiveOfferCard)].filter(Boolean);
+  host.innerHTML = cards.join("") || `<p class="coupon-empty">Fresh offers will appear here.</p>`;
   const newest = offers[0];
   if(newest && sessionStorage.getItem("lastOfferSeen") !== newest.id){
     sessionStorage.setItem("lastOfferSeen", newest.id);
     notifyPremiumUI("magneetoz:offer-live", newest);
   }
+}
+
+registerGlobalSnapshot(onSnapshot(query(collection(db, "offers"), orderBy("createdAt", "desc")), (snapshot) => {
+  liveOfferCache = snapshot.docs.map(item => ({ id:item.id, ...item.data() }));
+  renderOfferRail();
 }));
 
 function offerSizeRows(offer = {}){
@@ -3637,6 +3723,13 @@ function calculateCouponPricingWithoutCoupon(subtotal = getCartSubtotal()){
 function normalizeOfferCategory(value = ""){
   return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
+function normalizeOfferSize(value = ""){
+  const text = String(value || "").trim().toLowerCase();
+  if(["regular", "small", "personal"].includes(text)) return "regular";
+  if(["medium", "med"].includes(text)) return "medium";
+  if(["large", "big"].includes(text)) return "large";
+  return text.replace(/\s+/g, " ");
+}
 
 function calculateBogoOffer(){
   const originalTotal = getCartSubtotal();
@@ -3645,11 +3738,14 @@ function calculateBogoOffer(){
     return { originalTotal, discount:0, finalTotal:originalTotal, freeItems:[], offerApplied:false, eligibleItemCount:0, requiredItemCount };
   }
   const allowed = new Set((activeBogoOffer.eligibleCategories || []).map(normalizeOfferCategory).filter(Boolean));
+  const allowedSizes = new Set((activeBogoOffer.eligibleSizes || []).map(normalizeOfferSize).filter(Boolean));
   const units = [];
   cart.forEach(item => {
     const category = normalizeOfferCategory(item.category || item.dishCategory || "");
     const eligible = allowed.size ? allowed.has(category) : /pizza/i.test(`${item.productType || ""} ${item.category || ""} ${item.name || ""}`);
     if(!eligible) return;
+    const size = normalizeOfferSize(item.size || "Regular");
+    if(allowedSizes.size && !allowedSizes.has(size)) return;
     const qty = Math.max(1, Number(item.qty) || 1);
     const unitPrice = Number(item.unitPrice || Number(item.price || 0) / qty) || 0;
     for(let index = 0; index < qty; index++){
@@ -3688,10 +3784,11 @@ function renderBogoOfferPanel(){
   const result = calculateBogoOffer();
   const applied = bogoOfferAccepted && result.offerApplied;
   const typeLabel = activeBogoOffer.type === "buy_2_get_1" ? "Buy 2 Get 1 Free" : "Buy 1 Get 1 Free";
+  const labels = bogoOfferLabels();
   host.innerHTML = `
     <div style="margin-bottom:12px;padding:12px;border:1px solid ${applied ? "#22c55e" : "#f59e0b"};border-radius:12px;background:${applied ? "rgba(34,197,94,.12)" : "rgba(245,158,11,.10)"}">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-        <div><strong>${typeLabel}</strong><small style="display:block;margin-top:4px">Eligible pizzas: ${result.eligibleItemCount}/${result.requiredItemCount}</small></div>
+        <div><strong>${typeLabel}</strong><small style="display:block;margin-top:4px">Category: ${escapeHTML(labels.categories)} · Size: ${escapeHTML(labels.sizes)} · Eligible: ${result.eligibleItemCount}/${result.requiredItemCount}</small></div>
         <button type="button" onclick="applyBogoOffer()" ${!result.offerApplied || applied ? "disabled" : ""} style="padding:10px 14px;border:0;border-radius:999px;background:${result.offerApplied && !applied ? "#16a34a" : "#6b7280"};color:white;font-weight:800">${applied ? "Applied" : "Apply Offer"}</button>
       </div>
       ${applied ? `<small style="display:block;margin-top:8px">Coupon and Pizza Points are disabled. Free: ${result.freeItems.map(item => `${escapeHTML(item.name)}${item.qty > 1 ? ` x${item.qty}` : ""}`).join(", ")}</small>` : ""}
@@ -3906,13 +4003,19 @@ async function createOrderSafely({ paymentMethod, paymentStatus, paymentId = "",
   perfStart("createOrderSafely");
   try{
   if(restaurantUnavailable()) throw new Error(restaurantState.unavailableMessage || "Restaurant currently closed");
-  const user = await timedStep("createOrderSafely:waitForAuthReady", () => waitForAuthReady());
+  let user = await timedStep("createOrderSafely:waitForAuthReady", () => waitForAuthReady());
   if(!user?.uid) throw new Error("Please login again to place this order.");
   if(!cart.length) throw new Error("Cart empty");
 
   const fields = getCheckoutFields();
   fields.phone = await resolveAuthenticatedCheckoutPhone(user);
-  if(!fields.phone) throw new Error("We could not verify your mobile. Please sign out and sign in again.");
+  if(!fields.phone){
+    await promptVerifiedMobileLogin();
+    user = auth.currentUser || cachedAuthUser;
+    if(!user?.uid) throw mobileLoginRequiredError();
+    fields.phone = await resolveAuthenticatedCheckoutPhone(user);
+    if(!fields.phone) throw mobileLoginRequiredError();
+  }
   if(!fields.name || !fields.address) throw new Error("Fill name & address");
   const normalizedPaymentMethod = String(paymentMethod || "").toLowerCase();
   const normalizedPaymentStatus = String(paymentStatus || "pending").toLowerCase();
@@ -4104,12 +4207,18 @@ async function createOrderSafely({ paymentMethod, paymentStatus, paymentId = "",
 
 async function buildPaidOnlineOrderDraft(){
   if(restaurantUnavailable()) throw new Error(restaurantState.unavailableMessage || "Restaurant currently closed");
-  const user = await waitForAuthReady();
+  let user = await waitForAuthReady();
   if(!user?.uid) throw new Error("Please login again to place this order.");
   if(!cart.length) throw new Error("Cart empty");
   const fields = getCheckoutFields();
   fields.phone = await resolveAuthenticatedCheckoutPhone(user);
-  if(!fields.phone) throw new Error("We could not verify your mobile. Please sign out and sign in again.");
+  if(!fields.phone){
+    await promptVerifiedMobileLogin();
+    user = auth.currentUser || cachedAuthUser;
+    if(!user?.uid) throw mobileLoginRequiredError();
+    fields.phone = await resolveAuthenticatedCheckoutPhone(user);
+    if(!fields.phone) throw mobileLoginRequiredError();
+  }
   if(!fields.name || !fields.address) throw new Error("Fill name & address");
 
   const subtotal = getCartSubtotal();
@@ -4240,7 +4349,7 @@ function updateCart() {
   let itemsHTML = "";
   let total = 0;
   const totalQty = cart.reduce((sum, item) => sum + (Number(item.qty) || 1), 0);
-  const nextOfferSignature = `${activeBogoOffer?.type || "none"}:${activeBogoOffer?.active === true}:${(activeBogoOffer?.eligibleCategories || []).join("|")}:${cart.map(item => `${item.id || item.name}:${item.qty}:${item.price}:${item.category || ""}`).join("|")}`;
+  const nextOfferSignature = `${activeBogoOffer?.type || "none"}:${activeBogoOffer?.active === true}:${(activeBogoOffer?.eligibleCategories || []).join("|")}:${(activeBogoOffer?.eligibleSizes || []).join("|")}:${cart.map(item => `${item.id || item.name}:${item.qty}:${item.price}:${item.category || ""}:${item.size || ""}`).join("|")}`;
   if(bogoOfferSignature && bogoOfferSignature !== nextOfferSignature) bogoOfferAccepted = false;
   bogoOfferSignature = nextOfferSignature;
 
@@ -4597,6 +4706,11 @@ function showFreeDeliveryHint(subtotal){
 /* ================= ORDER ================= */
 
 async function placeOrder(){
+if(placeOrderInFlight){
+  toastInfo("Checkout is already opening...");
+  return;
+}
+placeOrderInFlight = true;
 console.time("PLACE_ORDER_TOTAL");
 perfStart("placeOrder");
 const placeBtn = document.querySelector('[aria-label="Place order"]');
@@ -4641,9 +4755,11 @@ const name = await resolveAuthenticatedCheckoutName(auth.currentUser || cachedAu
 const phone = await resolveAuthenticatedCheckoutPhone(auth.currentUser || cachedAuthUser);
 const address = normalizeUnicodeText(document.getElementById("customerAddress").value);
 
-if(!phone){
-  alert("We could not verify your mobile. Please sign out and sign in again.");
-  return;
+let verifiedPhone = phone;
+if(!verifiedPhone){
+  await promptVerifiedMobileLogin();
+  verifiedPhone = await resolveAuthenticatedCheckoutPhone(auth.currentUser || cachedAuthUser);
+  if(!verifiedPhone) return;
 }
 
 if(!name || !address){
@@ -4683,6 +4799,7 @@ if(paymentPopup){
   persistGuestState();
 }
 }finally{
+  placeOrderInFlight = false;
   if(placeBtn){
     placeBtn.disabled = false;
     placeBtn.classList.remove("ai-loading");
@@ -4849,6 +4966,10 @@ async function codOrder(){
 
     console.error("COD ERROR:",e);
     lastOrderSignature = null;
+    if(e?.mobileLoginRequired){
+      keepRetryOverlay = false;
+      return;
+    }
     keepRetryOverlay = true;
     setCheckoutRetry(e?.message || "Order could not be placed.", () => codOrder());
     alert(e?.message || "Something went wrong");
@@ -5099,6 +5220,7 @@ try{
 console.error("UPI OPEN ERROR:", error);
 setCheckoutLoading(false);
 resetRazorpayCheckoutState();
+if(error?.mobileLoginRequired) return;
 setCheckoutRetry(error?.message || "Payment could not open. Please try again.", () => upiOrder());
 }finally{
 if(!razorpayOpened && razorpayInFlight) resetRazorpayCheckoutState();
