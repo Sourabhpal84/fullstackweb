@@ -4834,11 +4834,11 @@ exports.reconcilePendingReferralRewards = onSchedule(
 
 function feedbackRewardPoints(orderAmount) {
   const amount = Number(orderAmount || 0);
-  if (amount >= 500) return 50;
-  if (amount >= 400) return 40;
-  if (amount >= 300) return 25;
-  if (amount >= 200) return 10;
-  if (amount >= 100) return 5;
+  if (amount >= 500) return 20;
+  if (amount >= 400) return 15;
+  if (amount >= 300) return 10;
+  if (amount >= 200) return 5;
+  if (amount >= 100) return 3;
   return 0;
 }
 

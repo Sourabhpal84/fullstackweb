@@ -223,6 +223,9 @@ let checkoutInFlightId = "";
 let placeOrderInFlight = false;
 let walletPointsAvailable = 0;
 let walletPointsRequested = 0;
+const WALLET_MAX_REDEEM_PERCENT = 10;
+const WALLET_MAX_REDEEM_POINTS = 30;
+const WALLET_MIN_REDEEM_ORDER = 199;
 let guestCartAuthPrompted = false;
 let orderTrackingUnsub = null;
 let orderTrackingUserId = "";
@@ -815,7 +818,8 @@ function calculateInvoicePricing(subtotal, basePricing = calculateCouponPricing(
   const taxableAmount = Math.max(0, Number(subtotal) - Number(basePricing.couponDiscount || 0) - offerDiscount);
   const gstAmount = Math.round(taxableAmount * gstPercent / 100);
   const beforeWallet = Math.max(0, Math.round(taxableAmount + gstAmount + handlingCharge + delivery));
-  const walletDiscount = offerApplied ? 0 : Math.max(0, Math.min(walletPointsRequested, Math.floor(beforeWallet * .2), walletPointsAvailable));
+  const walletCap = beforeWallet >= WALLET_MIN_REDEEM_ORDER ? Math.min(Math.floor(beforeWallet * WALLET_MAX_REDEEM_PERCENT / 100), WALLET_MAX_REDEEM_POINTS) : 0;
+  const walletDiscount = offerApplied ? 0 : Math.max(0, Math.min(walletPointsRequested, walletCap, walletPointsAvailable));
   const grandTotal = Math.max(0, beforeWallet - walletDiscount);
   return {
     ...basePricing,
@@ -862,7 +866,12 @@ function toggleWalletRedemption(){
     return;
   }
   const pricing = calculateInvoicePricing(getCartSubtotal());
-  walletPointsRequested = walletPointsRequested > 0 ? 0 : Math.min(walletPointsAvailable, Math.floor(pricing.beforeWallet * .2));
+  const walletCap = pricing.beforeWallet >= WALLET_MIN_REDEEM_ORDER ? Math.min(Math.floor(pricing.beforeWallet * WALLET_MAX_REDEEM_PERCENT / 100), WALLET_MAX_REDEEM_POINTS) : 0;
+  if(!walletCap){
+    toastError(`Pizza Points can be used on orders above ${formatCurrency(WALLET_MIN_REDEEM_ORDER)}.`);
+    return;
+  }
+  walletPointsRequested = walletPointsRequested > 0 ? 0 : Math.min(walletPointsAvailable, walletCap);
   document.getElementById("walletRedeemBox")?.classList.toggle("active", walletPointsRequested > 0);
   const btn = document.getElementById("walletToggleBtn");
   if(btn) btn.textContent = walletPointsRequested ? `Remove ${walletPointsRequested} points` : "Use points";
@@ -6802,11 +6811,11 @@ function showDeliveryFeedbackPopup(order){
   const popup = ensureFeedbackPopup();
   popup.dataset.orderId = order.id;
   const eligibleAmount = Number(order.subtotalAmount || order.subtotal || order.grandTotal || order.totalAmount || 0);
-  const rewardPoints = eligibleAmount >= 500 ? 50
-    : eligibleAmount >= 400 ? 40
-    : eligibleAmount >= 300 ? 25
-    : eligibleAmount >= 200 ? 10
-    : eligibleAmount >= 100 ? 5
+  const rewardPoints = eligibleAmount >= 500 ? 20
+    : eligibleAmount >= 400 ? 15
+    : eligibleAmount >= 300 ? 10
+    : eligibleAmount >= 200 ? 5
+    : eligibleAmount >= 100 ? 3
     : 0;
   const rewardBanner = popup.querySelector("#feedbackRewardBanner");
   if(rewardBanner) rewardBanner.textContent = rewardPoints

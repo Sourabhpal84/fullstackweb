@@ -7,8 +7,9 @@ const DEFAULT_SETTINGS = Object.freeze({
   walletRedemptionEnabled: true,
   referrerRewardPoints: 10,
   referredUserBonusPoints: 20,
-  walletMaxRedemptionPercent: 20,
-  walletMinimumOrderValue: 0,
+  walletMaxRedemptionPercent: 10,
+  walletMaxRedemptionPoints: 30,
+  walletMinimumOrderValue: 199,
   walletAppliesToDeliveryFee: false,
   walletPointExpiryDays: 60,
   birthdayRewardPoints: 0,
@@ -262,7 +263,9 @@ function calculateWalletRedemption({ orderValue, deliveryFee = 0, requestedPoint
   const subtotal = Math.max(0, money(orderValue));
   if (config.walletRedemptionEnabled === false || subtotal < Number(config.walletMinimumOrderValue || 0)) return 0;
   const eligible = config.walletAppliesToDeliveryFee === true ? subtotal : Math.max(0, subtotal - Number(deliveryFee || 0));
-  const cap = Math.floor(eligible * Number(config.walletMaxRedemptionPercent || 20) / 100);
+  const percentCap = Math.floor(eligible * Number(config.walletMaxRedemptionPercent || 10) / 100);
+  const hardCap = Math.max(0, Math.floor(Number(config.walletMaxRedemptionPoints || 30)));
+  const cap = hardCap ? Math.min(percentCap, hardCap) : percentCap;
   return Math.max(0, Math.min(Math.floor(Number(requestedPoints) || 0), Math.floor(Number(availablePoints) || 0), cap, Math.floor(subtotal)));
 }
 
