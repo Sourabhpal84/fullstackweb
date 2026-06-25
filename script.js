@@ -2642,8 +2642,18 @@ function scrollToBogoTarget(){
   const category = (activeBogoOffer?.eligibleCategories || []).find(Boolean);
   if(category){
     const targetId = `grid-cat-${normalizeCategoryId(category)}`;
-    if(document.getElementById(targetId)){
-      selectMenuCategory(targetId);
+    const target = document.getElementById(targetId);
+    if(target){
+      closeMenuBrowser();
+      document.getElementById("menuSection")?.scrollIntoView({ behavior:"smooth", block:"start" });
+      requestAnimationFrame(() => {
+        const sticky = document.querySelector(".sticky-area");
+        const offset = (sticky?.getBoundingClientRect().height || 0) + 10;
+        const top = target.getBoundingClientRect().top + window.scrollY - offset;
+        window.scrollTo({ top:Math.max(0, top), behavior:"smooth" });
+        target.classList.add("menu-category-active");
+        setTimeout(() => target.classList.remove("menu-category-active"), 1600);
+      });
       return;
     }
   }
