@@ -10021,6 +10021,20 @@ body .delivery-location-change{
   font-size:11px!important;
 }
 
+#combosSection .section-header h2,
+body #combosSection .section-header h2{
+  color:#ffffff!important;
+  -webkit-text-fill-color:#ffffff!important;
+  text-shadow:0 2px 10px rgba(0,0,0,.28)!important;
+}
+#combosSection .rail-head p,
+#combosSection .section-header p,
+body #combosSection .rail-head p,
+body #combosSection .section-header p{
+  color:#dbeafe!important;
+  opacity:1!important;
+}
+
 #combosSection .combo-feature-card,
 body #combosSection .combo-feature-card{
   background:linear-gradient(145deg,#fff8ee,#f8fbff)!important;
@@ -10143,5 +10157,114 @@ body #combosSection .combo-feature-visual:after{
     color:#ffffff!important;
     font-size:16px!important;
     font-weight:950!important;
+  }
+}
+
+/* Cart readability guard: keep checkout flow unchanged, only improve contrast. */
+body .cart-panel,
+body .cart-panel *{
+  text-shadow:none!important;
+}
+body .cart-panel{
+  color:#f8fafc!important;
+}
+body .cart-panel .cart-header,
+body .cart-panel .checkout-cart-column,
+body .cart-panel .checkout-details-column,
+body .cart-panel .cart-item-pro,
+body .cart-panel .coupon-box,
+body .cart-panel .total,
+body .cart-panel .delivery-policy-card,
+body .cart-panel .wallet-redeem-box,
+body .cart-panel .saved-address-box{
+  color:#f8fafc!important;
+}
+body .cart-panel .checkout-page-title small,
+body .cart-panel .cart-items-title,
+body .cart-panel label,
+body .cart-panel .coupon-box label,
+body .cart-panel .saved-address-label{
+  color:#fed7aa!important;
+  -webkit-text-fill-color:#fed7aa!important;
+  opacity:1!important;
+  font-weight:900!important;
+}
+body .cart-panel .checkout-page-title h3,
+body .cart-panel h3,
+body .cart-panel h4,
+body .cart-panel .cart-item-pro strong,
+body .cart-panel .cart-location-card strong,
+body .cart-panel .checkout-auth-phone strong,
+body .cart-panel .total,
+body .cart-panel .cart-price-breakdown b,
+body .cart-panel .cart-price-breakdown .grand span,
+body .cart-panel .cart-price-breakdown .grand b{
+  color:#ffffff!important;
+  -webkit-text-fill-color:#ffffff!important;
+  opacity:1!important;
+}
+body .cart-panel p,
+body .cart-panel small,
+body .cart-panel .cart-item-pro small,
+body .cart-panel .cart-location-card small,
+body .cart-panel .checkout-auth-phone span,
+body .cart-panel .cart-price-breakdown>div,
+body .cart-panel .delivery-policy-card p,
+body .cart-panel .delivery-policy-card p span,
+body .cart-panel #freeDeliveryHint,
+body .cart-panel #largeOrderAssistance{
+  color:#dbeafe!important;
+  -webkit-text-fill-color:#dbeafe!important;
+  opacity:1!important;
+}
+body .cart-panel .cart-line-actions>b,
+body .cart-panel .combo-price-row b{
+  color:#86efac!important;
+  -webkit-text-fill-color:#86efac!important;
+}
+body .cart-panel .cart-qty-controls span{
+  color:#ffffff!important;
+  -webkit-text-fill-color:#ffffff!important;
+}
+body .cart-panel input,
+body .cart-panel textarea,
+body .cart-panel select{
+  background:#ffffff!important;
+  color:#111827!important;
+  -webkit-text-fill-color:#111827!important;
+  border-color:rgba(255,255,255,.18)!important;
+}
+body .cart-panel input::placeholder,
+body .cart-panel textarea::placeholder{
+  color:#64748b!important;
+  -webkit-text-fill-color:#64748b!important;
+  opacity:1!important;
+}
+body .cart-panel .cart-location-card,
+body .cart-panel .coupon-box,
+body .cart-panel .total,
+body .cart-panel .delivery-policy-card,
+body .cart-panel .wallet-redeem-box,
+body .cart-panel .saved-address-box,
+body .cart-panel .checkout-auth-phone,
+body .cart-panel .checkout-name-field{
+  background:#121b2b!important;
+  border-color:rgba(255,255,255,.14)!important;
+}
+body .cart-panel .cart-price-breakdown .grand{
+  background:linear-gradient(135deg,#ff7a00,#f04455)!important;
+  color:#ffffff!important;
+}
+
+@media(max-width:560px){
+  body .cart-panel .cart-item-pro strong{
+    font-size:12px!important;
+    line-height:1.2!important;
+  }
+  body .cart-panel .cart-item-pro small,
+  body .cart-panel .cart-price-breakdown>div,
+  body .cart-panel .cart-location-card small{
+    font-size:10px!important;
+    line-height:1.25!important;
   }
 }
