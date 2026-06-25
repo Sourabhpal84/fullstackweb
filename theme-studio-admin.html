@@ -28,6 +28,27 @@
       <label>Hero subtitle<input id="heroSubtitle" value="Hot MAGNEETOZ favourites, cinematic tracking, and a checkout that feels effortless."></label>
       <label>Primary button text<input id="heroPrimaryButton" value="Explore Menu"></label>
       <label>Secondary button text<input id="heroSecondaryButton" value="Smart Search"></label>
+      <label>Hero display mode
+        <select id="heroDisplayMode"><option value="full">Text + image</option><option value="image_only">Image only</option></select>
+      </label>
+      <label>Hero image fit
+        <select id="heroImageFit"><option value="cover">Full cover</option><option value="contain">Original size / contain</option></select>
+      </label>
+      <label>Show kicker
+        <select id="showHeroKicker"><option value="true">Show</option><option value="false">Hide</option></select>
+      </label>
+      <label>Show title
+        <select id="showHeroTitle"><option value="true">Show</option><option value="false">Hide</option></select>
+      </label>
+      <label>Show subtitle
+        <select id="showHeroSubtitle"><option value="true">Show</option><option value="false">Hide</option></select>
+      </label>
+      <label>Show buttons
+        <select id="showHeroButtons"><option value="true">Show</option><option value="false">Hide</option></select>
+      </label>
+      <label>Show small picture section
+        <select id="showHeroShowcase"><option value="true">Show</option><option value="false">Hide</option></select>
+      </label>
       <label>Kicker color<input id="heroKickerColor" type="color" value="#67e8f9"></label>
       <label>Title color<input id="heroTitleColor" type="color" value="#ffffff"></label>
       <label>Subtitle color<input id="heroSubtitleColor" type="color" value="#ffffff"></label>
@@ -128,6 +149,9 @@ const heroDefaults={
     secondaryButton:"#ffffff"
   },
   images:[],
+  displayMode:"full",
+  imageFit:"cover",
+  visibility:{ kicker:true, title:true, subtitle:true, buttons:true, showcase:true },
   backgroundBlur:0,
   backgroundBlackIntensity:24
 };
@@ -421,6 +445,14 @@ function paintHeroForm(hero={}){
   heroSubtitle.value=("subtitle" in hero) ? hero.subtitle : heroDefaults.subtitle;
   heroPrimaryButton.value=("primaryButton" in hero) ? hero.primaryButton : heroDefaults.primaryButton;
   heroSecondaryButton.value=("secondaryButton" in hero) ? hero.secondaryButton : heroDefaults.secondaryButton;
+  heroDisplayMode.value=hero.displayMode || heroDefaults.displayMode;
+  heroImageFit.value=hero.imageFit || heroDefaults.imageFit;
+  const visibility={...heroDefaults.visibility,...(hero.visibility||{})};
+  showHeroKicker.value=visibility.kicker === false ? "false" : "true";
+  showHeroTitle.value=visibility.title === false ? "false" : "true";
+  showHeroSubtitle.value=visibility.subtitle === false ? "false" : "true";
+  showHeroButtons.value=visibility.buttons === false ? "false" : "true";
+  showHeroShowcase.value=visibility.showcase === false ? "false" : "true";
   const colors=hero.colors || {};
   heroKickerColor.value=colors.kicker || heroDefaults.colors.kicker;
   heroTitleColor.value=colors.title || heroDefaults.colors.title;
@@ -525,6 +557,15 @@ applyModeHero.onclick=async()=>{
       subtitle:heroSubtitle.value.trim(),
       primaryButton:heroPrimaryButton.value.trim(),
       secondaryButton:heroSecondaryButton.value.trim(),
+      displayMode:heroDisplayMode.value,
+      imageFit:heroImageFit.value,
+      visibility:{
+        kicker:showHeroKicker.value === "true",
+        title:showHeroTitle.value === "true",
+        subtitle:showHeroSubtitle.value === "true",
+        buttons:showHeroButtons.value === "true",
+        showcase:showHeroShowcase.value === "true"
+      },
       colors:{
         kicker:heroKickerColor.value,
         title:heroTitleColor.value,

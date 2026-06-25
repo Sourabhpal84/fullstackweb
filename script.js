@@ -332,6 +332,15 @@ function renderHeroPizzaSlider(images = [], imageSets = [], heroImages = []){
   }
 }
 
+function applyHeroLayoutSettings(hero = {}){
+  const heroSection = document.querySelector(".hero");
+  if(!heroSection) return;
+  const imageOnly = hero.displayMode === "image_only";
+  const containImage = hero.imageFit === "contain";
+  heroSection.classList.toggle("hero-image-only", imageOnly);
+  heroSection.classList.toggle("hero-image-contain", containImage);
+}
+
 function warmVisibleMenuImages(){
   const run = () => {
     document.querySelectorAll(".new-card img, .offer-card img, .combo-card img").forEach((img, index) => {
@@ -360,8 +369,10 @@ function syncHeroEmptyState(hero = {}){
     title:document.getElementById("heroTitleText"),
     subtitle:document.getElementById("heroSubtitleText")?.closest("p"),
     primaryButton:document.getElementById("heroPrimaryBtnText"),
-    secondaryButton:document.getElementById("heroSecondaryBtnText")?.closest("button")
+    secondaryButton:document.getElementById("heroSecondaryBtnText")?.closest("button"),
+    showcase:document.querySelector(".hero-showcase")
   };
+  const visibility = hero.visibility || {};
   if(!isManaged){
     Object.values(fieldMap).forEach(el => el?.classList.remove("hero-field-hidden"));
     document.querySelector(".hero-local-line")?.classList.remove("hero-field-hidden");
@@ -370,12 +381,18 @@ function syncHeroEmptyState(hero = {}){
   }
   const textValues = Object.entries(fieldMap).map(([key, el]) => {
     const value = String(hero[key] || "").trim();
-    el?.classList.toggle("hero-field-hidden", !value);
+    const visibleByToggle = key === "primaryButton" || key === "secondaryButton"
+      ? visibility.buttons !== false
+      : key === "showcase"
+        ? visibility.showcase !== false
+        : visibility[key] !== false;
+    const hidden = key === "showcase" ? !visibleByToggle : (!value || !visibleByToggle);
+    el?.classList.toggle("hero-field-hidden", hidden);
     return value;
   });
-  const isEmpty = textValues.every(value => !value);
+  const isEmpty = hero.displayMode === "image_only" || textValues.every(value => !value);
   heroSection.classList.toggle("hero-empty-text", isEmpty);
-  document.querySelector(".hero-local-line")?.classList.toggle("hero-field-hidden", isEmpty);
+  document.querySelector(".hero-local-line")?.classList.toggle("hero-field-hidden", isEmpty || visibility.subtitle === false);
 }
 
 function applyHeroColors(hero = {}){
@@ -2621,6 +2638,40 @@ function orderedGroupCategoryIds(group){
   return activeMenuCategory && ids.includes(activeMenuCategory) ? [activeMenuCategory] : [];
 }
 
+function scrollToBogoTarget(){
+  const category = (activeBogoOffer?.eligibleCategories || []).find(Boolean);
+  if(category){
+    const targetId = `grid-cat-${normalizeCategoryId(category)}`;
+    if(document.getElementById(targetId)){
+      selectMenuCategory(targetId);
+      return;
+    }
+  }
+  document.getElementById("offersSection")?.scrollIntoView({ behavior:"smooth", block:"start" });
+}
+
+function bindHeroOfferActions(){
+  const comboBtn = document.getElementById("heroComboJumpBtn");
+  const bogoBtn = document.getElementById("heroBogoJumpBtn");
+  comboBtn?.addEventListener("click", () => document.getElementById("combosSection")?.scrollIntoView({ behavior:"smooth", block:"start" }));
+  bogoBtn?.addEventListener("click", scrollToBogoTarget);
+}
+
+function updateHeroBogoButton(){
+  const bogoBtn = document.getElementById("heroBogoJumpBtn");
+  if(!bogoBtn) return;
+  if(!activeBogoOffer){
+    bogoBtn.textContent = "BOGO";
+    bogoBtn.disabled = true;
+    bogoBtn.title = "No BOGO offer live right now";
+    return;
+  }
+  const fallback = activeBogoOffer.type === "buy_2_get_1" ? "BUY 2 GET 1" : "BUY 1 GET 1";
+  bogoBtn.textContent = String(activeBogoOffer.offerName || fallback).toUpperCase();
+  bogoBtn.disabled = false;
+  bogoBtn.title = "View live BOGO offer";
+}
+
 function renderVisibleMenuCategories({ scroll = false } = {}){
   const group = menuCategoryGroups.find(item => item.key === activeMenuGroup) || menuCategoryGroups[0];
   const browser = document.getElementById("menuCategoryBrowser");
@@ -3026,6 +3077,7 @@ registerGlobalSnapshot(onSnapshot(doc(db, "settings", "theme"), snap => {
   });
   applyHeroColors(hero);
   applyHeroBackgroundBlur(hero);
+  applyHeroLayoutSettings(hero);
   syncHeroEmptyState(hero);
   renderHeroPizzaSlider(
     Array.isArray(hero.images) ? hero.images : [],
@@ -3455,6 +3507,7 @@ function useBogoOfferSnapshot(snapshot){
   }
   if(!activeBogoOffer) bogoOfferAccepted = false;
   renderOfferRail();
+  updateHeroBogoButton();
   if(menuListenerStarted){
     menuListenerStarted = false;
     loadMenu();
@@ -5477,6 +5530,8 @@ if(popup) popup.style.display="none";
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  bindHeroOfferActions();
+  updateHeroBogoButton();
 
   const allowBtn = document.getElementById("allowLocationBtn");
 

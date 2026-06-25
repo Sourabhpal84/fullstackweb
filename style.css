@@ -9597,6 +9597,75 @@ body .new-card .card-img{
   z-index:1!important;
 }
 
+/* Hero admin visibility and offer jump buttons */
+body .hero.hero-image-only .hero-content,
+body .hero.hero-image-only .hero-showcase,
+body .hero.hero-image-only .floating-food,
+body .hero.hero-image-only .cinema-glow,
+body .hero.hero-image-only .hero-bg{
+  display:none!important;
+}
+body .hero.hero-image-only{
+  min-height:min(78vh,760px)!important;
+  padding:0!important;
+  background:#05070b!important;
+}
+body .hero.hero-image-only::before,
+body .hero.hero-image-only::after{
+  display:none!important;
+}
+body .hero.hero-image-only #heroBgSlider{
+  opacity:1!important;
+  filter:none!important;
+}
+body .hero.hero-image-contain #heroBgSlider img{
+  object-fit:contain!important;
+  background:#05070b!important;
+}
+body .hero.hero-image-contain .hero-pizza-slider img{
+  object-fit:contain!important;
+}
+.hero-offer-actions{
+  width:min(1180px,calc(100% - 24px));
+  margin:12px auto 10px;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+.hero-offer-actions button{
+  min-width:0;
+  min-height:54px;
+  border:0;
+  border-radius:16px;
+  padding:0 12px;
+  color:#fff;
+  font-weight:950;
+  letter-spacing:.02em;
+  cursor:pointer;
+  box-shadow:0 14px 34px rgba(15,23,42,.18);
+}
+.hero-offer-actions button:first-child{background:linear-gradient(135deg,#ff7b00,#f04455)}
+.hero-offer-actions button:last-child{background:linear-gradient(135deg,#16a34a,#0ea5e9)}
+.hero-offer-actions button:disabled{
+  opacity:.55;
+  cursor:not-allowed;
+  filter:saturate(.55);
+}
+@media(max-width:560px){
+  .hero-offer-actions{
+    width:calc(100% - 20px);
+    gap:8px;
+  }
+  .hero-offer-actions button{
+    min-height:48px;
+    border-radius:14px;
+    font-size:12px;
+  }
+  body .hero.hero-image-only{
+    min-height:62vh!important;
+  }
+}
+
 body .new-card .bogo-menu-badge{
   position:absolute!important;
   left:10px!important;
