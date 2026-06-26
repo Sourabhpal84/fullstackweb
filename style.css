@@ -10474,3 +10474,54 @@ html body:not(.dark-mode):not(.dark-theme) main #combosSection .section-header p
   opacity:1!important;
   visibility:visible!important;
 }
+
+/* Light-theme final guard: combo rail heading text. */
+html body.light-theme main #combosSection .rail-head.combo-rail-head h2,
+html body:not(.dark-mode):not(.dark-theme) main #combosSection .rail-head.combo-rail-head h2{
+  color:#ffffff!important;
+  -webkit-text-fill-color:#ffffff!important;
+  opacity:1!important;
+  visibility:visible!important;
+  text-shadow:0 2px 12px rgba(0,0,0,.35)!important;
+}
+html body.light-theme main #combosSection .rail-head.combo-rail-head p,
+html body:not(.dark-mode):not(.dark-theme) main #combosSection .rail-head.combo-rail-head p{
+  color:#dbeafe!important;
+  -webkit-text-fill-color:#dbeafe!important;
+  opacity:1!important;
+  visibility:visible!important;
+}
+
+/* Hero swipe slider: auto continues, finger swipe can manually change slides. */
+.hero.hero-swipe-enabled{
+  touch-action:pan-y;
+  user-select:none;
+}
+.hero.hero-swipe-enabled #heroBgSlider img,
+.hero.hero-swipe-enabled #heroPizzaSlider img{
+  animation:none!important;
+  opacity:0!important;
+  transition:opacity .38s ease, transform .38s ease!important;
+  pointer-events:none;
+}
+.hero.hero-swipe-enabled #heroBgSlider img.hero-slide-active{
+  opacity:1!important;
+  transform:scale(1.03) translateX(0)!important;
+}
+.hero.hero-swipe-enabled #heroPizzaSlider img.hero-slide-active{
+  opacity:1!important;
+  transform:translateX(0) scale(1) rotate(-4deg)!important;
+}
+.hero.hero-swipe-enabled #heroBgSlider img:not(.hero-slide-active),
+.hero.hero-swipe-enabled #heroPizzaSlider img:not(.hero-slide-active){
+  opacity:0!important;
+}
+
+/* Compact BOGO badge text: B2G1 M L R */
+body .new-card .bogo-menu-badge{
+  min-height:22px!important;
+  padding:3px 7px!important;
+  font-size:8px!important;
+  letter-spacing:.01em!important;
+  max-width:calc(100% - 86px)!important;
+}

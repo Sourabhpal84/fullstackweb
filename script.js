@@ -236,6 +236,11 @@ let orderTrackingPausedForAuthRefresh = false;
 let menuDishesUnsub = null;
 let allMenuDishes = [];
 let smartAssistantIntent = "popular";
+let heroSliderTimer = null;
+let heroSliderIndex = 0;
+let heroSwipeStartX = 0;
+let heroSwipeStartY = 0;
+let heroSwipeMoved = false;
 
 function resetRazorpayCheckoutState({ clearCheckoutId = true } = {}){
   isOrderProcessing = false;
@@ -330,6 +335,67 @@ function renderHeroPizzaSlider(images = [], imageSets = [], heroImages = []){
     }).join("");
     bgSlider.style.setProperty("--slide-count", String(slides.length));
   }
+  setupHeroSwipeSlider(slides.length);
+}
+
+function setHeroSliderIndex(index = 0){
+  const bgSlides = [...document.querySelectorAll("#heroBgSlider img")];
+  const pizzaSlides = [...document.querySelectorAll("#heroPizzaSlider img")];
+  const count = Math.max(bgSlides.length, pizzaSlides.length);
+  if(!count) return;
+  heroSliderIndex = ((index % count) + count) % count;
+  [bgSlides, pizzaSlides].forEach(slides => {
+    slides.forEach((img, slideIndex) => {
+      img.classList.toggle("hero-slide-active", slideIndex === heroSliderIndex);
+    });
+  });
+}
+
+function startHeroSliderAuto(count = 0){
+  clearInterval(heroSliderTimer);
+  heroSliderTimer = null;
+  if(count <= 1) return;
+  heroSliderTimer = setInterval(() => setHeroSliderIndex(heroSliderIndex + 1), 4000);
+}
+
+function setupHeroSwipeSlider(count = 0){
+  const hero = document.getElementById("homeHero");
+  if(!hero) return;
+  hero.classList.toggle("hero-swipe-enabled", count > 1);
+  setHeroSliderIndex(0);
+  startHeroSliderAuto(count);
+  if(hero.dataset.swipeBound === "1") return;
+  hero.dataset.swipeBound = "1";
+  const restartAuto = () => startHeroSliderAuto(document.querySelectorAll("#heroBgSlider img").length);
+  hero.addEventListener("pointerdown", event => {
+    if(event.pointerType === "mouse" && event.button !== 0) return;
+    heroSwipeStartX = event.clientX;
+    heroSwipeStartY = event.clientY;
+    heroSwipeMoved = false;
+  }, { passive:true });
+  hero.addEventListener("pointermove", event => {
+    if(!heroSwipeStartX) return;
+    const dx = Math.abs(event.clientX - heroSwipeStartX);
+    const dy = Math.abs(event.clientY - heroSwipeStartY);
+    if(dx > 10 && dx > dy) heroSwipeMoved = true;
+  }, { passive:true });
+  hero.addEventListener("pointerup", event => {
+    if(!heroSwipeStartX) return;
+    const dx = event.clientX - heroSwipeStartX;
+    const dy = event.clientY - heroSwipeStartY;
+    heroSwipeStartX = 0;
+    heroSwipeStartY = 0;
+    if(Math.abs(dx) < 42 || Math.abs(dx) < Math.abs(dy)) return;
+    setHeroSliderIndex(heroSliderIndex + (dx < 0 ? 1 : -1));
+    restartAuto();
+    setTimeout(() => { heroSwipeMoved = false; }, 120);
+  }, { passive:true });
+  hero.addEventListener("click", event => {
+    if(!heroSwipeMoved) return;
+    event.preventDefault();
+    event.stopPropagation();
+    heroSwipeMoved = false;
+  }, true);
 }
 
 function applyHeroLayoutSettings(hero = {}){
@@ -2748,8 +2814,20 @@ function bogoDishEligible(d = {}){
 }
 
 function bogoSizeLabel(){
-  const sizes = (activeBogoOffer?.eligibleSizes || []).filter(Boolean);
-  return sizes.length ? sizes.join(", ") : "All sizes";
+  const codeBySize = {
+    regular:"R",
+    small:"R",
+    medium:"M",
+    large:"L"
+  };
+  const order = ["medium", "large", "regular", "small"];
+  const normalized = [...new Set((activeBogoOffer?.eligibleSizes || []).map(normalizeOfferSize).filter(Boolean))];
+  if(!normalized.length) return "ALL";
+  const ordered = [
+    ...order.filter(size => normalized.includes(size)),
+    ...normalized.filter(size => !order.includes(size))
+  ];
+  return ordered.map(size => codeBySize[size] || size.slice(0, 1).toUpperCase()).join(" ");
 }
 
 function bogoCardBadge(d = {}){
@@ -5601,13 +5679,25 @@ document.addEventListener("DOMContentLoaded", () => {
 
 });
 
+let scrollUiCache = {
+  categoryControls:null,
+  bottomNavigation:null,
+  lastCategoryScan:0
+};
+
 window.addEventListener("scroll", ()=>{
-  const categoryControls = document.querySelector(".sticky-area");
-  const bottomNavigation = document.querySelector(".bottom-nav");
-  categoryControls?.classList.remove("category-controls-hidden");
-  categoryControls?.classList.add("category-controls-visible");
-  bottomNavigation?.classList.remove("scroll-controls-hidden");
-  bottomNavigation?.classList.add("scroll-controls-visible");
+  scrollUiCache.categoryControls ||= document.querySelector(".sticky-area");
+  scrollUiCache.bottomNavigation ||= document.querySelector(".bottom-nav");
+  const categoryControls = scrollUiCache.categoryControls;
+  const bottomNavigation = scrollUiCache.bottomNavigation;
+  if(categoryControls && !categoryControls.classList.contains("category-controls-visible")){
+    categoryControls.classList.remove("category-controls-hidden");
+    categoryControls.classList.add("category-controls-visible");
+  }
+  if(bottomNavigation && !bottomNavigation.classList.contains("scroll-controls-visible")){
+    bottomNavigation.classList.remove("scroll-controls-hidden");
+    bottomNavigation.classList.add("scroll-controls-visible");
+  }
   if(menuBrowserHideOnNextScroll){
     hideMenuCategoryPicker();
     return;
@@ -5617,6 +5707,9 @@ window.addEventListener("scroll", ()=>{
   categoryScrollRaf = true;
   requestAnimationFrame(() => {
     categoryScrollRaf = false;
+    const now = performance.now();
+    if(now - scrollUiCache.lastCategoryScan < 120) return;
+    scrollUiCache.lastCategoryScan = now;
     let activeId = window.scrollY < 260 ? "menuSection" : "";
     for(const section of cachedCategorySections){
       const rect = section.getBoundingClientRect();
