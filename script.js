@@ -346,7 +346,16 @@ function setHeroSliderIndex(index = 0){
   heroSliderIndex = ((index % count) + count) % count;
   [bgSlides, pizzaSlides].forEach(slides => {
     slides.forEach((img, slideIndex) => {
-      img.classList.toggle("hero-slide-active", slideIndex === heroSliderIndex);
+      const active = slideIndex === heroSliderIndex;
+      img.classList.toggle("hero-slide-active", active);
+      img.style.setProperty("animation", "none", "important");
+      img.style.setProperty("opacity", active ? "1" : "0", "important");
+      img.style.setProperty("pointer-events", "none", "important");
+      img.style.setProperty("transition", "opacity .32s ease, transform .32s ease", "important");
+      img.style.setProperty("transform", active
+        ? (slides === bgSlides ? "scale(1.03) translateX(0)" : "translateX(0) scale(1) rotate(-4deg)")
+        : (slides === bgSlides ? "scale(1.06) translateX(18px)" : "translateX(18px) scale(.96) rotate(-4deg)"),
+        "important");
     });
   });
 }
@@ -367,6 +376,22 @@ function setupHeroSwipeSlider(count = 0){
   if(hero.dataset.swipeBound === "1") return;
   hero.dataset.swipeBound = "1";
   const restartAuto = () => startHeroSliderAuto(document.querySelectorAll("#heroBgSlider img").length);
+  const swipeTargets = [
+    hero,
+    document.getElementById("heroBgSlider"),
+    document.getElementById("heroPizzaSlider")
+  ].filter(Boolean);
+  const markSwipeStart = (clientX, clientY) => {
+    heroSwipeStartX = clientX;
+    heroSwipeStartY = clientY;
+    heroSwipeMoved = false;
+  };
+  const markSwipeMove = (clientX, clientY) => {
+    if(!heroSwipeStartX) return;
+    const dx = Math.abs(clientX - heroSwipeStartX);
+    const dy = Math.abs(clientY - heroSwipeStartY);
+    if(dx > 10 && dx > dy) heroSwipeMoved = true;
+  };
   const handleSwipeEnd = (clientX, clientY) => {
     if(!heroSwipeStartX) return;
     const dx = clientX - heroSwipeStartX;
@@ -376,43 +401,28 @@ function setupHeroSwipeSlider(count = 0){
     if(Math.abs(dx) < 42 || Math.abs(dx) < Math.abs(dy)) return;
     setHeroSliderIndex(heroSliderIndex + (dx < 0 ? 1 : -1));
     restartAuto();
-    setTimeout(() => { heroSwipeMoved = false; }, 120);
+    setTimeout(() => { heroSwipeMoved = false; }, 450);
   };
-  hero.addEventListener("pointerdown", event => {
-    if(event.pointerType === "mouse" && event.button !== 0) return;
-    heroSwipeStartX = event.clientX;
-    heroSwipeStartY = event.clientY;
-    heroSwipeMoved = false;
-  }, { passive:true });
-  hero.addEventListener("pointermove", event => {
-    if(!heroSwipeStartX) return;
-    const dx = Math.abs(event.clientX - heroSwipeStartX);
-    const dy = Math.abs(event.clientY - heroSwipeStartY);
-    if(dx > 10 && dx > dy) heroSwipeMoved = true;
-  }, { passive:true });
-  hero.addEventListener("pointerup", event => {
-    handleSwipeEnd(event.clientX, event.clientY);
-  }, { passive:true });
-  hero.addEventListener("touchstart", event => {
-    const touch = event.touches?.[0];
-    if(!touch) return;
-    heroSwipeStartX = touch.clientX;
-    heroSwipeStartY = touch.clientY;
-    heroSwipeMoved = false;
-  }, { passive:true });
-  hero.addEventListener("touchmove", event => {
-    if(!heroSwipeStartX) return;
-    const touch = event.touches?.[0];
-    if(!touch) return;
-    const dx = Math.abs(touch.clientX - heroSwipeStartX);
-    const dy = Math.abs(touch.clientY - heroSwipeStartY);
-    if(dx > 10 && dx > dy) heroSwipeMoved = true;
-  }, { passive:true });
-  hero.addEventListener("touchend", event => {
-    const touch = event.changedTouches?.[0];
-    if(!touch) return;
-    handleSwipeEnd(touch.clientX, touch.clientY);
-  }, { passive:true });
+  swipeTargets.forEach(target => {
+    target.addEventListener("pointerdown", event => {
+      if(event.pointerType === "mouse" && event.button !== 0) return;
+      markSwipeStart(event.clientX, event.clientY);
+    }, { passive:true });
+    target.addEventListener("pointermove", event => markSwipeMove(event.clientX, event.clientY), { passive:true });
+    target.addEventListener("pointerup", event => handleSwipeEnd(event.clientX, event.clientY), { passive:true });
+    target.addEventListener("touchstart", event => {
+      const touch = event.touches?.[0];
+      if(touch) markSwipeStart(touch.clientX, touch.clientY);
+    }, { passive:true });
+    target.addEventListener("touchmove", event => {
+      const touch = event.touches?.[0];
+      if(touch) markSwipeMove(touch.clientX, touch.clientY);
+    }, { passive:true });
+    target.addEventListener("touchend", event => {
+      const touch = event.changedTouches?.[0];
+      if(touch) handleSwipeEnd(touch.clientX, touch.clientY);
+    }, { passive:true });
+  });
   hero.addEventListener("click", event => {
     if(!heroSwipeMoved) return;
     event.preventDefault();
@@ -5679,6 +5689,12 @@ document.addEventListener("DOMContentLoaded", () => {
     openLocationSelector();
   });
   document.querySelector(".hero")?.addEventListener("click", event => {
+    if(heroSwipeMoved){
+      event.preventDefault();
+      event.stopPropagation();
+      heroSwipeMoved = false;
+      return;
+    }
     if(event.target.closest("button,a,select,input,textarea")) return;
     document.getElementById("combosSection")?.scrollIntoView({ behavior:"smooth", block:"start" });
   });
