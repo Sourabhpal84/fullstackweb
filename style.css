@@ -1,5 +1,5 @@
-ï»¿/* ============================================================
-   MAGNEETOZ â€” Premium UI Â· Cleaned, A11y-ready, Mobile-first
+/* ============================================================
+   MAGNEETOZ — Premium UI · Cleaned, A11y-ready, Mobile-first
    ============================================================ */
 
 /* ===== TOKENS ===== */
@@ -141,7 +141,7 @@ img[loading="lazy"] {
   #combosSection .combo-rail>.combo-card{flex-basis:88vw!important}
 }
 
-/* CART V2 FINAL CASCADE â€” intentionally last */
+/* CART V2 FINAL CASCADE — intentionally last */
 @media(max-width:760px){
   body .cart-panel{
     position:fixed!important;inset:0!important;display:grid!important;
@@ -203,7 +203,7 @@ img[loading="lazy"] {
 }
 
 /* =====================================================================
-   MAGNEETOZ CART V2 â€” isolated final checkout presentation
+   MAGNEETOZ CART V2 — isolated final checkout presentation
    ===================================================================== */
 body .cart-panel{
   --cart-bg:#0b1220;
@@ -7425,7 +7425,7 @@ body .cart-backdrop{display:none!important}
   body .checkout-details-column .saved-address-box{margin-top:0!important}
 }
 
-/* Definitive mobile cart layout â€” keep this last to override legacy checkout rules. */
+/* Definitive mobile cart layout — keep this last to override legacy checkout rules. */
 @media(max-width:760px){
   body .cart-panel{
     display:grid!important;
@@ -9271,7 +9271,7 @@ body #paymentMethodPopup #summaryFreeDelivery.blocked{background:#fee2e2!importa
 #locationSelectorPopup .location-search-row input{width:100%!important;height:52px!important;min-height:52px!important;margin:0!important;padding:0 15px!important;border:1px solid #e1e6ee!important;border-radius:16px!important;background:#fff!important;color:#172033!important;font:600 13px Poppins!important;box-shadow:0 8px 22px rgba(30,41,59,.06)!important;outline:none!important}
 #locationSelectorPopup .location-search-row input:focus{border-color:#ff7584!important;box-shadow:0 0 0 4px rgba(240,79,95,.1)!important}
 #locationSelectorPopup .location-search-row button{display:grid!important;place-items:center!important;width:50px!important;height:52px!important;min-height:52px!important;margin:0!important;padding:0!important;border:0!important;border-radius:16px!important;background:linear-gradient(135deg,#ff7a00,#f04f5f)!important;color:#fff!important;font-size:0!important;box-shadow:0 10px 24px rgba(240,79,95,.25)!important}
-#locationSelectorPopup .location-search-row button::after{content:"âŒ•";font-size:23px}
+#locationSelectorPopup .location-search-row button::after{content:"?";font-size:23px}
 #locationSelectorPopup .location-actions-box{padding:8px!important;border:1px solid #e7ebf1!important;border-radius:20px!important;background:rgba(255,255,255,.88)!important;box-shadow:0 14px 35px rgba(30,41,59,.07)!important}
 #locationSelectorPopup .location-primary-action,#locationSelectorPopup .location-add-action{display:grid!important;grid-template-columns:42px minmax(0,1fr) 20px!important;align-items:center!important;gap:10px!important;width:100%!important;min-height:64px!important;margin:0!important;padding:10px 11px!important;border:0!important;border-radius:15px!important;background:transparent!important;color:#172033!important;text-align:left!important;box-shadow:none!important}
 #locationSelectorPopup .location-primary-action{background:linear-gradient(100deg,#fff3ef,#fff)!important}
@@ -9996,159 +9996,134 @@ body .new-card .size-option em{
 }
 
 /* Final polish: combo featured card + location readability */
-body .delivery-location-strip{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .delivery-location-strip{
   background:linear-gradient(100deg,#101827,#17233d 58%,#24314e)!important;
 }
-body .delivery-location-copy small{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .delivery-location-copy small{
   color:#ffd09a!important;
   opacity:1!important;
 }
-body .delivery-location-copy strong{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .delivery-location-copy strong{
   color:#ffffff!important;
   -webkit-text-fill-color:#ffffff!important;
   font-size:14px!important;
   font-weight:950!important;
   text-shadow:0 1px 0 rgba(0,0,0,.25)!important;
 }
-body .delivery-location-copy em{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .delivery-location-copy em{
   color:#dbeafe!important;
   opacity:1!important;
   font-size:10px!important;
   font-weight:750!important;
 }
-body .delivery-location-change{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .delivery-location-change{
   color:#ffc27d!important;
   font-size:11px!important;
 }
 
-#combosSection .section-header h2,
-body #combosSection .section-header h2{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) #combosSection .section-header h2{
   color:#ffffff!important;
   -webkit-text-fill-color:#ffffff!important;
   text-shadow:0 2px 10px rgba(0,0,0,.28)!important;
 }
-#combosSection .rail-head p,
-#combosSection .section-header p,
-body #combosSection .rail-head p,
-body #combosSection .section-header p{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) #combosSection .rail-head p,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) #combosSection .section-header p{
   color:#dbeafe!important;
   opacity:1!important;
 }
 
-#combosSection .combo-feature-card,
-body #combosSection .combo-feature-card{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) #combosSection .combo-feature-card{
   background:linear-gradient(145deg,#fff8ee,#f8fbff)!important;
   border:1px solid rgba(255,123,0,.22)!important;
   box-shadow:0 18px 46px rgba(15,23,42,.16)!important;
   color:#111827!important;
 }
-#combosSection .combo-feature-copy,
-body #combosSection .combo-feature-copy{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) #combosSection .combo-feature-copy{
   background:transparent!important;
 }
-#combosSection .combo-badge,
-body #combosSection .combo-badge{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) #combosSection .combo-badge{
   background:#fff0d8!important;
   color:#c2410c!important;
   -webkit-text-fill-color:#c2410c!important;
 }
-#combosSection .combo-feature-copy>p,
-body #combosSection .combo-feature-copy>p{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) #combosSection .combo-feature-copy>p{
   color:#64748b!important;
 }
-#combosSection .combo-feature-copy h3,
-body #combosSection .combo-feature-copy h3{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) #combosSection .combo-feature-copy h3{
   color:#151827!important;
   -webkit-text-fill-color:#151827!important;
   text-shadow:none!important;
 }
-#combosSection .combo-feature-copy>strong,
-body #combosSection .combo-feature-copy>strong{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) #combosSection .combo-feature-copy>strong{
   color:#111827!important;
   -webkit-text-fill-color:#111827!important;
 }
-#combosSection .combo-highlights span,
-body #combosSection .combo-highlights span{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) #combosSection .combo-highlights span{
   background:#ffffff!important;
   color:#263247!important;
   box-shadow:0 8px 18px rgba(15,23,42,.08)!important;
 }
-#combosSection .combo-feature-price small,
-#combosSection .combo-feature-price s,
-body #combosSection .combo-feature-price small,
-body #combosSection .combo-feature-price s{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) #combosSection .combo-feature-price small,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) #combosSection .combo-feature-price s{
   color:#94a3b8!important;
 }
-#combosSection .combo-feature-price b,
-body #combosSection .combo-feature-price b{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) #combosSection .combo-feature-price b{
   color:#16a34a!important;
   -webkit-text-fill-color:#16a34a!important;
 }
-#combosSection .combo-feature-visual,
-body #combosSection .combo-feature-visual{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) #combosSection .combo-feature-visual{
   background:#080b10!important;
 }
-#combosSection .combo-feature-visual:after,
-body #combosSection .combo-feature-visual:after{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) #combosSection .combo-feature-visual:after{
   background:linear-gradient(0deg,rgba(0,0,0,.42),transparent 46%)!important;
 }
 
 @media(max-width:760px){
-  #combosSection .combo-feature-card,
-  body #combosSection .combo-feature-card{
+  :where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) #combosSection .combo-feature-card{
     display:flex!important;
     flex-direction:column!important;
     min-height:0!important;
     border-radius:18px!important;
     overflow:hidden!important;
   }
-  #combosSection .combo-feature-visual,
-  body #combosSection .combo-feature-visual{
+  :where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) #combosSection .combo-feature-visual{
     order:0!important;
     min-height:0!important;
     aspect-ratio:16/9!important;
   }
-  #combosSection .combo-feature-visual img,
-  body #combosSection .combo-feature-visual img{
+  :where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) #combosSection .combo-feature-visual img{
     display:block!important;
     width:100%!important;
     height:100%!important;
     object-fit:cover!important;
   }
-  #combosSection .combo-feature-copy,
-  body #combosSection .combo-feature-copy{
+  :where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) #combosSection .combo-feature-copy{
     order:1!important;
     padding:16px 16px 18px!important;
     gap:8px!important;
   }
-  #combosSection .combo-feature-copy>p,
-  body #combosSection .combo-feature-copy>p{
+  :where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) #combosSection .combo-feature-copy>p{
     margin:2px 0 0!important;
     font-size:13px!important;
     line-height:1.35!important;
   }
-  #combosSection .combo-feature-copy h3,
-  body #combosSection .combo-feature-copy h3{
+  :where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) #combosSection .combo-feature-copy h3{
     font-size:26px!important;
     line-height:1.08!important;
   }
-  #combosSection .combo-feature-copy>strong,
-  body #combosSection .combo-feature-copy>strong{
+  :where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) #combosSection .combo-feature-copy>strong{
     margin-top:0!important;
     font-size:14px!important;
     line-height:1.42!important;
   }
-  #combosSection .combo-highlights,
-  body #combosSection .combo-highlights{
+  :where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) #combosSection .combo-highlights{
     margin:4px 0!important;
     gap:6px!important;
   }
-  #combosSection .combo-feature-price,
-  body #combosSection .combo-feature-price{
+  :where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) #combosSection .combo-feature-price{
     margin-top:2px!important;
   }
-  #combosSection .combo-feature-copy>button,
-  body #combosSection .combo-feature-copy>button{
+  :where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) #combosSection .combo-feature-copy>button{
     min-height:48px!important;
     margin-top:6px!important;
     border-radius:16px!important;
@@ -10161,228 +10136,248 @@ body #combosSection .combo-feature-visual:after{
 }
 
 /* Cart readability guard: keep checkout flow unchanged, only improve contrast. */
-body .cart-panel,
-body .cart-panel *{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel *{
   text-shadow:none!important;
 }
-body .cart-panel{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel{
   color:#f8fafc!important;
 }
-body .cart-panel .cart-header,
-body .cart-panel .checkout-cart-column,
-body .cart-panel .checkout-details-column,
-body .cart-panel .cart-item-pro,
-body .cart-panel .coupon-box,
-body .cart-panel .total,
-body .cart-panel .delivery-policy-card,
-body .cart-panel .wallet-redeem-box,
-body .cart-panel .saved-address-box{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-header,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .checkout-cart-column,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .checkout-details-column,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-item-pro,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .coupon-box,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .total,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .delivery-policy-card,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .wallet-redeem-box,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .saved-address-box{
   color:#f8fafc!important;
 }
-body .cart-panel .checkout-page-title small,
-body .cart-panel .cart-items-title,
-body .cart-panel label,
-body .cart-panel .coupon-box label,
-body .cart-panel .saved-address-label{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .checkout-page-title small,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-items-title,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel label,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .coupon-box label,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .saved-address-label{
   color:#fed7aa!important;
   -webkit-text-fill-color:#fed7aa!important;
   opacity:1!important;
   font-weight:900!important;
 }
-body .cart-panel .checkout-page-title h3,
-body .cart-panel h3,
-body .cart-panel h4,
-body .cart-panel .cart-item-pro strong,
-body .cart-panel .cart-location-card strong,
-body .cart-panel .checkout-auth-phone strong,
-body .cart-panel .total,
-body .cart-panel .cart-price-breakdown b,
-body .cart-panel .cart-price-breakdown .grand span,
-body .cart-panel .cart-price-breakdown .grand b{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .checkout-page-title h3,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel h3,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel h4,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-item-pro strong,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-location-card strong,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .checkout-auth-phone strong,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .total,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-price-breakdown b,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-price-breakdown .grand span,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-price-breakdown .grand b{
   color:#ffffff!important;
   -webkit-text-fill-color:#ffffff!important;
   opacity:1!important;
 }
-body .cart-panel p,
-body .cart-panel small,
-body .cart-panel .cart-item-pro small,
-body .cart-panel .cart-location-card small,
-body .cart-panel .checkout-auth-phone span,
-body .cart-panel .cart-price-breakdown>div,
-body .cart-panel .delivery-policy-card p,
-body .cart-panel .delivery-policy-card p span,
-body .cart-panel #freeDeliveryHint,
-body .cart-panel #largeOrderAssistance{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel p,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel small,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-item-pro small,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-location-card small,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .checkout-auth-phone span,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-price-breakdown>div,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .delivery-policy-card p,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .delivery-policy-card p span,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel #freeDeliveryHint,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel #largeOrderAssistance{
   color:#dbeafe!important;
   -webkit-text-fill-color:#dbeafe!important;
   opacity:1!important;
 }
-body .cart-panel .cart-line-actions>b,
-body .cart-panel .combo-price-row b{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-line-actions>b,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .combo-price-row b{
   color:#86efac!important;
   -webkit-text-fill-color:#86efac!important;
 }
-body .cart-panel .cart-qty-controls span{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-qty-controls span{
   color:#ffffff!important;
   -webkit-text-fill-color:#ffffff!important;
 }
-body .cart-panel input,
-body .cart-panel textarea,
-body .cart-panel select{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel input,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel textarea,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel select{
   background:#ffffff!important;
   color:#111827!important;
   -webkit-text-fill-color:#111827!important;
   border-color:rgba(255,255,255,.18)!important;
 }
-body .cart-panel input::placeholder,
-body .cart-panel textarea::placeholder{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel input::placeholder,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel textarea::placeholder{
   color:#64748b!important;
   -webkit-text-fill-color:#64748b!important;
   opacity:1!important;
 }
-body .cart-panel .cart-location-card,
-body .cart-panel .coupon-box,
-body .cart-panel .total,
-body .cart-panel .delivery-policy-card,
-body .cart-panel .wallet-redeem-box,
-body .cart-panel .saved-address-box,
-body .cart-panel .checkout-auth-phone,
-body .cart-panel .checkout-name-field{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-location-card,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .coupon-box,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .total,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .delivery-policy-card,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .wallet-redeem-box,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .saved-address-box,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .checkout-auth-phone,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .checkout-name-field{
   background:#121b2b!important;
   border-color:rgba(255,255,255,.14)!important;
 }
-body .cart-panel .cart-price-breakdown .grand{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-price-breakdown .grand{
   background:linear-gradient(135deg,#ff7a00,#f04455)!important;
   color:#ffffff!important;
 }
 
 @media(max-width:560px){
-  body .cart-panel .cart-item-pro strong{
+  :where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-item-pro strong{
     font-size:12px!important;
     line-height:1.2!important;
   }
-  body .cart-panel .cart-item-pro small,
-  body .cart-panel .cart-price-breakdown>div,
-  body .cart-panel .cart-location-card small{
+  :where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-item-pro small,
+  :where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-price-breakdown>div,
+  :where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-location-card small{
     font-size:10px!important;
     line-height:1.25!important;
   }
 }
 
 /* Cart final contrast split: light item cards, dark checkout blocks. */
-body .cart-panel .cart-item-pro,
-body .cart-panel .checkout-cart-column .cart-item-pro{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-item-pro,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .checkout-cart-column .cart-item-pro{
   background:linear-gradient(145deg,#ffffff,#f8fafc)!important;
   border:1px solid rgba(255,123,0,.26)!important;
 }
-body .cart-panel .cart-item-pro strong,
-body .cart-panel .checkout-cart-column .cart-item-pro strong{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-item-pro strong,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .checkout-cart-column .cart-item-pro strong{
   color:#111827!important;
   -webkit-text-fill-color:#111827!important;
   font-weight:950!important;
 }
-body .cart-panel .cart-item-pro small,
-body .cart-panel .checkout-cart-column .cart-item-pro small{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-item-pro small,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .checkout-cart-column .cart-item-pro small{
   color:#64748b!important;
   -webkit-text-fill-color:#64748b!important;
   font-weight:800!important;
 }
-body .cart-panel .cart-item-pro .cart-line-actions>b,
-body .cart-panel .checkout-cart-column .cart-item-pro .cart-line-actions>b{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-item-pro .cart-line-actions>b,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .checkout-cart-column .cart-item-pro .cart-line-actions>b{
   color:#22c55e!important;
   -webkit-text-fill-color:#22c55e!important;
   font-weight:950!important;
 }
-body .cart-panel .cart-items-title{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-items-title{
   background:#fff7ed!important;
   color:#111827!important;
   -webkit-text-fill-color:#111827!important;
   border:1px solid rgba(255,123,0,.22)!important;
 }
-body .cart-panel .cart-items-title b{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-items-title b{
   color:#ffffff!important;
   -webkit-text-fill-color:#ffffff!important;
 }
-body .cart-panel .total{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .total{
   background:#111827!important;
   color:#ffffff!important;
   -webkit-text-fill-color:#ffffff!important;
   font-weight:950!important;
 }
-body .cart-panel .cart-location-card strong,
-body .cart-panel .coupon-box h3,
-body .cart-panel .coupon-box h4,
-body .cart-panel .delivery-policy-card summary,
-body .cart-panel .delivery-policy-card h3,
-body .cart-panel .wallet-redeem-box h3,
-body .cart-panel .wallet-redeem-box strong,
-body .cart-panel .checkout-name-field>span{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-location-card strong,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .coupon-box h3,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .coupon-box h4,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .delivery-policy-card summary,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .delivery-policy-card h3,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .wallet-redeem-box h3,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .wallet-redeem-box strong,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .checkout-name-field>span{
   color:#ffffff!important;
   -webkit-text-fill-color:#ffffff!important;
   opacity:1!important;
 }
-body .cart-panel .cart-location-card small,
-body .cart-panel .coupon-box p,
-body .cart-panel .coupon-box small,
-body .cart-panel .wallet-redeem-box small,
-body .cart-panel .checkout-name-field>small{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-location-card small,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .coupon-box p,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .coupon-box small,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .wallet-redeem-box small,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .checkout-name-field>small{
   color:#cbd5e1!important;
   -webkit-text-fill-color:#cbd5e1!important;
   opacity:1!important;
 }
-body .cart-panel .available-coupons,
-body .cart-panel .applied-coupon{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .available-coupons,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .applied-coupon{
   color:#dbeafe!important;
   -webkit-text-fill-color:#dbeafe!important;
 }
-body .cart-panel .cart-price-breakdown>div:not(.grand) span,
-body .cart-panel .cart-price-breakdown>div:not(.grand) b{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-price-breakdown>div:not(.grand) span,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-price-breakdown>div:not(.grand) b{
   color:#dbeafe!important;
   -webkit-text-fill-color:#dbeafe!important;
 }
 
 /* Exact cart text visibility fixes */
-body .cart-panel .cart-header h3,
-body .cart-panel .checkout-page-title h3{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .cart-header h3,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .checkout-page-title h3{
   color:#111827!important;
   -webkit-text-fill-color:#111827!important;
   opacity:1!important;
   font-weight:950!important;
 }
-body .cart-panel .checkout-page-title small{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .checkout-page-title small{
   color:#ff7a00!important;
   -webkit-text-fill-color:#ff7a00!important;
   opacity:1!important;
 }
-body .cart-panel #freeDeliveryHint,
-body .cart-panel #freeDeliveryHint *,
-body .cart-panel .delivery-campaign,
-body .cart-panel .delivery-campaign *{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel #freeDeliveryHint,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel #freeDeliveryHint *,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .delivery-campaign,
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .delivery-campaign *{
   color:#14532d!important;
   -webkit-text-fill-color:#14532d!important;
   opacity:1!important;
 }
-body .cart-panel .delivery-campaign{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel .delivery-campaign{
   background:linear-gradient(135deg,#dcfce7,#f0fdf4)!important;
   border:1px solid #86efac!important;
 }
-body .cart-panel #bogoOfferPanel>div{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel #bogoOfferPanel>div{
   background:#1f2937!important;
   border-color:#f59e0b!important;
 }
-body .cart-panel #bogoOfferPanel strong{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel #bogoOfferPanel strong{
   color:#ffffff!important;
   -webkit-text-fill-color:#ffffff!important;
   opacity:1!important;
   font-weight:950!important;
 }
-body .cart-panel #bogoOfferPanel small{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel #bogoOfferPanel small{
   color:#dbeafe!important;
   -webkit-text-fill-color:#dbeafe!important;
   opacity:1!important;
 }
-body .cart-panel #bogoOfferPanel button{
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) .cart-panel #bogoOfferPanel button{
   color:#ffffff!important;
   -webkit-text-fill-color:#ffffff!important;
   opacity:1!important;
+}
+
+/* Exact combo section heading visibility fix */
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) #combosSection .section-header h2,
+body.light-theme #combosSection .section-header h2,
+body:not(.dark-mode):not(.dark-theme) #combosSection .section-header h2{
+  display:block!important;
+  color:#ffffff!important;
+  -webkit-text-fill-color:#ffffff!important;
+  opacity:1!important;
+  visibility:visible!important;
+  text-shadow:0 2px 12px rgba(0,0,0,.35)!important;
+}
+:where(body.light-theme, body:not(.dark-mode):not(.dark-theme)) #combosSection .section-header p,
+body.light-theme #combosSection .section-header p,
+body:not(.dark-mode):not(.dark-theme) #combosSection .section-header p{
+  color:#dbeafe!important;
+  -webkit-text-fill-color:#dbeafe!important;
+  opacity:1!important;
+  visibility:visible!important;
 }
