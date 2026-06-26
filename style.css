@@ -10552,3 +10552,45 @@ body .new-card .bogo-menu-badge{
 #homeHero.hero-swipe-enabled #heroPizzaSlider img[data-hero-active="0"]{
   opacity:0!important;
 }
+
+/* Hero swipe dots */
+.hero-slider-dots{
+  position:absolute;
+  left:50%;
+  bottom:12px;
+  z-index:8;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  padding:6px 8px;
+  border-radius:999px;
+  background:rgba(8,12,20,.42);
+  border:1px solid rgba(255,255,255,.18);
+  transform:translateX(-50%);
+  backdrop-filter:blur(8px);
+}
+.hero-slider-dot{
+  width:7px;
+  height:7px;
+  min-width:7px;
+  min-height:7px;
+  padding:0;
+  border:0;
+  border-radius:999px;
+  background:rgba(255,255,255,.52);
+  cursor:pointer;
+  transition:width .22s ease,background .22s ease,transform .22s ease;
+}
+.hero-slider-dot.active{
+  width:22px;
+  background:#ff7a00;
+  transform:scale(1.02);
+}
+@media(max-width:760px){
+  .hero-slider-dots{
+    bottom:8px;
+    gap:6px;
+    padding:5px 7px;
+  }
+}
