@@ -10381,3 +10381,96 @@ body:not(.dark-mode):not(.dark-theme) #combosSection .section-header p{
   opacity:1!important;
   visibility:visible!important;
 }
+
+/* Polished performance pass: reduce mobile scroll jank without changing flows. */
+.premium-rails,
+.trust-board,
+.smart-food-assistant,
+.experience-grid,
+.category-block{
+  content-visibility:auto;
+  contain-intrinsic-size:1px 720px;
+}
+
+.new-card,
+.offer-card,
+.combo-card,
+.combo-feature-card,
+.category-tab,
+.category-nav a,
+.bottom-nav,
+.sticky-area,
+.cart-panel{
+  -webkit-backface-visibility:hidden;
+  backface-visibility:hidden;
+}
+
+@media(max-width:760px){
+  .new-card,
+  .offer-card,
+  .combo-card,
+  .combo-feature-card,
+  .premium-rails,
+  .trust-board,
+  .smart-food-assistant,
+  .experience-grid{
+    box-shadow:none!important;
+  }
+
+  .new-card::before,
+  .offer-card::before,
+  .combo-card::before{
+    display:none!important;
+  }
+
+  .new-card:hover,
+  .offer-card:hover,
+  .combo-card:hover,
+  .new-card:hover .card-img img,
+  .offer-card:hover img,
+  .combo-card:hover img{
+    transform:none!important;
+  }
+
+  .card-img,
+  .image-shell,
+  .category-tab-media,
+  .offer-card,
+  .combo-card{
+    animation:none!important;
+  }
+
+  .hero-content,
+  .floating-food,
+  .cinema-glow,
+  .reveal-on-scroll{
+    animation:none!important;
+  }
+
+  .reveal-on-scroll{
+    opacity:1!important;
+    transform:none!important;
+    transition:none!important;
+  }
+
+  .bottom-nav,
+  .sticky-area{
+    will-change:auto!important;
+  }
+}
+/* Light-theme final guard: combo heading must stay visible on dark combo band. */
+html body.light-theme main #combosSection .section-header h2,
+html body:not(.dark-mode):not(.dark-theme) main #combosSection .section-header h2{
+  color:#ffffff!important;
+  -webkit-text-fill-color:#ffffff!important;
+  opacity:1!important;
+  visibility:visible!important;
+  text-shadow:0 2px 12px rgba(0,0,0,.35)!important;
+}
+html body.light-theme main #combosSection .section-header p,
+html body:not(.dark-mode):not(.dark-theme) main #combosSection .section-header p{
+  color:#dbeafe!important;
+  -webkit-text-fill-color:#dbeafe!important;
+  opacity:1!important;
+  visibility:visible!important;
+}
