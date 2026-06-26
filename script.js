@@ -367,6 +367,17 @@ function setupHeroSwipeSlider(count = 0){
   if(hero.dataset.swipeBound === "1") return;
   hero.dataset.swipeBound = "1";
   const restartAuto = () => startHeroSliderAuto(document.querySelectorAll("#heroBgSlider img").length);
+  const handleSwipeEnd = (clientX, clientY) => {
+    if(!heroSwipeStartX) return;
+    const dx = clientX - heroSwipeStartX;
+    const dy = clientY - heroSwipeStartY;
+    heroSwipeStartX = 0;
+    heroSwipeStartY = 0;
+    if(Math.abs(dx) < 42 || Math.abs(dx) < Math.abs(dy)) return;
+    setHeroSliderIndex(heroSliderIndex + (dx < 0 ? 1 : -1));
+    restartAuto();
+    setTimeout(() => { heroSwipeMoved = false; }, 120);
+  };
   hero.addEventListener("pointerdown", event => {
     if(event.pointerType === "mouse" && event.button !== 0) return;
     heroSwipeStartX = event.clientX;
@@ -380,15 +391,27 @@ function setupHeroSwipeSlider(count = 0){
     if(dx > 10 && dx > dy) heroSwipeMoved = true;
   }, { passive:true });
   hero.addEventListener("pointerup", event => {
+    handleSwipeEnd(event.clientX, event.clientY);
+  }, { passive:true });
+  hero.addEventListener("touchstart", event => {
+    const touch = event.touches?.[0];
+    if(!touch) return;
+    heroSwipeStartX = touch.clientX;
+    heroSwipeStartY = touch.clientY;
+    heroSwipeMoved = false;
+  }, { passive:true });
+  hero.addEventListener("touchmove", event => {
     if(!heroSwipeStartX) return;
-    const dx = event.clientX - heroSwipeStartX;
-    const dy = event.clientY - heroSwipeStartY;
-    heroSwipeStartX = 0;
-    heroSwipeStartY = 0;
-    if(Math.abs(dx) < 42 || Math.abs(dx) < Math.abs(dy)) return;
-    setHeroSliderIndex(heroSliderIndex + (dx < 0 ? 1 : -1));
-    restartAuto();
-    setTimeout(() => { heroSwipeMoved = false; }, 120);
+    const touch = event.touches?.[0];
+    if(!touch) return;
+    const dx = Math.abs(touch.clientX - heroSwipeStartX);
+    const dy = Math.abs(touch.clientY - heroSwipeStartY);
+    if(dx > 10 && dx > dy) heroSwipeMoved = true;
+  }, { passive:true });
+  hero.addEventListener("touchend", event => {
+    const touch = event.changedTouches?.[0];
+    if(!touch) return;
+    handleSwipeEnd(touch.clientX, touch.clientY);
   }, { passive:true });
   hero.addEventListener("click", event => {
     if(!heroSwipeMoved) return;
