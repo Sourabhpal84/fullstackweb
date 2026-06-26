@@ -10525,3 +10525,30 @@ body .new-card .bogo-menu-badge{
   letter-spacing:.01em!important;
   max-width:calc(100% - 86px)!important;
 }
+
+/* Hero final swipe reliability guard. */
+#homeHero.hero-swipe-enabled{
+  touch-action:pan-y!important;
+  -webkit-user-select:none!important;
+  user-select:none!important;
+  cursor:grab;
+}
+#homeHero.hero-swipe-enabled:active{
+  cursor:grabbing;
+}
+#homeHero.hero-swipe-enabled #heroBgSlider,
+#homeHero.hero-swipe-enabled #heroPizzaSlider{
+  touch-action:pan-y!important;
+}
+#homeHero.hero-swipe-enabled #heroBgSlider img,
+#homeHero.hero-swipe-enabled #heroPizzaSlider img{
+  animation:none!important;
+}
+#homeHero.hero-swipe-enabled #heroBgSlider img[data-hero-active="1"],
+#homeHero.hero-swipe-enabled #heroPizzaSlider img[data-hero-active="1"]{
+  opacity:1!important;
+}
+#homeHero.hero-swipe-enabled #heroBgSlider img[data-hero-active="0"],
+#homeHero.hero-swipe-enabled #heroPizzaSlider img[data-hero-active="0"]{
+  opacity:0!important;
+}

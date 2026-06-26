@@ -241,6 +241,8 @@ let heroSliderIndex = 0;
 let heroSwipeStartX = 0;
 let heroSwipeStartY = 0;
 let heroSwipeMoved = false;
+let heroSwipeTracking = false;
+let heroSwipeCapturedAt = 0;
 
 function resetRazorpayCheckoutState({ clearCheckoutId = true } = {}){
   isOrderProcessing = false;
@@ -348,6 +350,7 @@ function setHeroSliderIndex(index = 0){
     slides.forEach((img, slideIndex) => {
       const active = slideIndex === heroSliderIndex;
       img.classList.toggle("hero-slide-active", active);
+      img.setAttribute("data-hero-active", active ? "1" : "0");
       img.style.setProperty("animation", "none", "important");
       img.style.setProperty("opacity", active ? "1" : "0", "important");
       img.style.setProperty("pointer-events", "none", "important");
@@ -376,6 +379,10 @@ function setupHeroSwipeSlider(count = 0){
   if(hero.dataset.swipeBound === "1") return;
   hero.dataset.swipeBound = "1";
   const restartAuto = () => startHeroSliderAuto(document.querySelectorAll("#heroBgSlider img").length);
+  const slideCount = () => Math.max(
+    document.querySelectorAll("#heroBgSlider img").length,
+    document.querySelectorAll("#heroPizzaSlider img").length
+  );
   const swipeTargets = [
     hero,
     document.getElementById("heroBgSlider"),
@@ -401,6 +408,7 @@ function setupHeroSwipeSlider(count = 0){
     if(Math.abs(dx) < 42 || Math.abs(dx) < Math.abs(dy)) return;
     setHeroSliderIndex(heroSliderIndex + (dx < 0 ? 1 : -1));
     restartAuto();
+    heroSwipeCapturedAt = Date.now();
     setTimeout(() => { heroSwipeMoved = false; }, 450);
   };
   swipeTargets.forEach(target => {
@@ -424,11 +432,46 @@ function setupHeroSwipeSlider(count = 0){
     }, { passive:true });
   });
   hero.addEventListener("click", event => {
-    if(!heroSwipeMoved) return;
+    if(!heroSwipeMoved && Date.now() - heroSwipeCapturedAt > 700) return;
     event.preventDefault();
     event.stopPropagation();
     heroSwipeMoved = false;
   }, true);
+  if(document.documentElement.dataset.heroDocumentSwipeBound !== "1"){
+    document.documentElement.dataset.heroDocumentSwipeBound = "1";
+    document.addEventListener("touchstart", event => {
+      const target = event.target?.closest?.("#homeHero");
+      if(!target) return;
+      if(event.target?.closest?.("button,a,select,input,textarea")) return;
+      const touch = event.touches?.[0];
+      if(!touch) return;
+      heroSwipeTracking = true;
+      markSwipeStart(touch.clientX, touch.clientY);
+    }, { passive:true, capture:true });
+    document.addEventListener("touchmove", event => {
+      if(!heroSwipeTracking) return;
+      const touch = event.touches?.[0];
+      if(!touch) return;
+      markSwipeMove(touch.clientX, touch.clientY);
+      if(heroSwipeMoved && slideCount() > 1){
+        event.preventDefault();
+      }
+    }, { passive:false, capture:true });
+    document.addEventListener("touchend", event => {
+      if(!heroSwipeTracking) return;
+      heroSwipeTracking = false;
+      const touch = event.changedTouches?.[0];
+      if(!touch) return;
+      handleSwipeEnd(touch.clientX, touch.clientY);
+    }, { passive:true, capture:true });
+    document.addEventListener("click", event => {
+      if(Date.now() - heroSwipeCapturedAt > 700) return;
+      if(!event.target?.closest?.("#homeHero")) return;
+      event.preventDefault();
+      event.stopPropagation();
+      heroSwipeMoved = false;
+    }, true);
+  }
 }
 
 function applyHeroLayoutSettings(hero = {}){
