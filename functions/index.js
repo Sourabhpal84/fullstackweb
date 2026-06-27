@@ -466,12 +466,23 @@ function compactImageUrl(value) {
 }
 
 function compactCartItem(item = {}) {
+  const rawExtras = Array.isArray(item.extras) ? item.extras : (Array.isArray(item.addOns) ? item.addOns : []);
+  const extras = rawExtras.slice(0, 20).map(extra => stripUndefined({
+    id: compactText(extra.id || extra.key || extra.name, 80),
+    name: compactText(extra.name, 120),
+    price: Number(extra.price || 0)
+  })).filter(extra => extra.name && extra.price >= 0);
   return stripUndefined({
     id: compactText(item.id, 120),
     name: compactText(item.name, 160),
     size: compactText(item.size, 80),
     variant: compactText(item.variant, 80),
     category: compactText(item.category, 120),
+    baseUnitPrice: Number(item.baseUnitPrice || item.unitPrice || 0),
+    unitPrice: Number(item.unitPrice || item.baseUnitPrice || 0),
+    extras,
+    addOns: extras,
+    extrasTotal: Number(item.extrasTotal || extras.reduce((sum, extra) => sum + Number(extra.price || 0), 0)),
     price: Number(item.price || 0),
     qty: Number(item.qty || item.quantity || 1),
     quantity: Number(item.quantity || item.qty || 1),
@@ -2585,19 +2596,14 @@ async function completeDeliveryTransaction({ orderId, rider, mode, codeRef, code
     if (doorstepOnlineDelivery && !doorstepOnlinePaymentProof) {
       throw Object.assign(new Error("Doorstep online payment is not verified"), { status: 409 });
     }
-    if (cashOrder && !settlementDone && !exceptionDelivery && !doorstepOnlineDelivery) {
-      throw Object.assign(new Error("Cash order requires company settlement or customer delivery code"), { status: 409 });
-    }
+    const cashDeliveredWithoutSettlement = cashOrder && !settlementDone && !doorstepOnlineDelivery;
     if (!cashOrder && !onlinePaid && !doorstepOnlineDelivery) throw Object.assign(new Error("Online payment is not verified"), { status: 409 });
-    if (!cashOrder && onlinePaid && !prepaidOtpDelivery && !doorstepOnlineDelivery && !doorstepOnlinePaid) {
-      throw Object.assign(new Error("Customer delivery OTP is required for prepaid order"), { status: 409 });
-    }
 
     const baseEarning = canonicalRiderEarning(order);
     const riderEarning = Math.max(0, baseEarning);
     const total = Number(order.totalAmount || order.finalAmount || 0);
     const treatedAsCashSettlement = cashOrder && !doorstepOnlineDelivery;
-    const grossCompanyDue = treatedAsCashSettlement && exceptionDelivery ? Math.max(0, total - riderEarning) : 0;
+    const grossCompanyDue = treatedAsCashSettlement && cashDeliveredWithoutSettlement ? Math.max(0, total - riderEarning) : 0;
     const walletRef = db.collection("riderWallet").doc(rider.riderId);
     const walletSnap = await transaction.get(walletRef);
     const walletBefore = netWalletState(walletSnap.exists ? walletSnap.data() : {
@@ -2625,14 +2631,18 @@ async function completeDeliveryTransaction({ orderId, rider, mode, codeRef, code
       companyDue,
       companySettlementGrossDue: grossCompanyDue,
       companySettlementPayoutAdjusted: earningsAdjustedToCompany,
-      cashSettlementPending: treatedAsCashSettlement ? exceptionDelivery : false,
-      settlementState: treatedAsCashSettlement ? (exceptionDelivery ? "SETTLEMENT_PENDING" : "SETTLEMENT_COMPLETED") : "PAID_ONLINE",
+      cashSettlementPending: treatedAsCashSettlement ? cashDeliveredWithoutSettlement : false,
+      settlementState: treatedAsCashSettlement ? (cashDeliveredWithoutSettlement ? "SETTLEMENT_PENDING" : "SETTLEMENT_COMPLETED") : "PAID_ONLINE",
       deliveryOtpStatus: codeRef ? "verified" : (order.deliveryOtpStatus || FieldValue.delete()),
       lastStatusUpdatedAt: FieldValue.serverTimestamp()
     };
-    if (exceptionDelivery) {
-      update.exceptionReason = "Rider delivered with customer authorization code before company settlement";
+    if (cashDeliveredWithoutSettlement) {
+      update.exceptionReason = exceptionDelivery
+        ? "Rider delivered with customer authorization code before company settlement"
+        : "Rider delivered directly before company settlement";
       update.settlementPendingRiderId = rider.riderId;
+    }
+    if (exceptionDelivery) {
       update.deliveryCodeVerifiedAt = FieldValue.serverTimestamp();
       update.deliveryCodeVerifiedBy = rider.riderId;
     }
@@ -2775,7 +2785,6 @@ async function findCandidateRiders(order = {}) {
   const onlineRiders = ridersSnap.docs
     .map(item => ({ id: item.id, ...item.data() }))
     .filter(rider => rider.approved === true && rider.active !== false)
-    .filter(rider => Number(rider.companyDue || rider.pendingCashSubmission || 0) <= 300)
     .filter(rider => riderPresence(rider).available);
 
   if (!hasOrderLocation) return onlineRiders.map(rider => ({
@@ -3273,10 +3282,6 @@ exports.acceptRiderRequest = onRequest(
         if (!orderSnap.exists) throw Object.assign(new Error("Order not found"), { status: 404 });
         const order = orderSnap.data() || {};
         const riderData = riderSnap.data() || {};
-        const remainingCompanyDue = Number(walletSnap.data()?.companySettlementDue ?? riderData.companyDue ?? riderData.pendingCashSubmission ?? 0);
-        if (remainingCompanyDue > 300) {
-          throw Object.assign(new Error(`Orders are paused. Please settle company due of ₹${roundMoney(remainingCompanyDue)} first.`), { status: 409 });
-        }
         if (order.assignedRiderId && order.assignedRiderId !== rider.riderId) throw Object.assign(new Error("Another rider already accepted this order"), { status: 409 });
         const activeOrderId = riderData.currentActiveOrderId || riderData.activeOrderId || "";
         if (activeOrderId && activeOrderId !== orderId) throw Object.assign(new Error("Complete current delivery first"), { status: 409 });
@@ -3485,24 +3490,9 @@ exports.riderMarkCashReceived = onRequest(
           paymentStage: "Cash Collected",
           lastStatusUpdatedAt: FieldValue.serverTimestamp()
         }, { actor: rider.riderId, source: "riderMarkCashReceived" });
-        createCustomerDeliveryCode({
-          transaction,
-          orderRef,
-          order: {
-            ...order,
-            paymentStatus: "collected",
-            paymentMethod: "cod",
-            amountToCollect: 0,
-            cashSettlementPending: true,
-            settlementState: "CASH_COLLECTED"
-          },
-          orderId,
-          rider,
-          purpose: "cod_exception"
-        });
         addOrderAudit(transaction, orderId, "CASH_COLLECTED", { riderId: rider.riderId, amount: Number(order.totalAmount || order.finalAmount || 0) });
       });
-      return sendJson(res, 200, { ok: true, codeGenerated: true });
+      return sendJson(res, 200, { ok: true, codeGenerated: false });
     } catch (error) {
       return sendJson(res, error.status || 500, { ok: false, error: error.message || "Cash collection failed" });
     }

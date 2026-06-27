@@ -907,8 +907,8 @@ function renderOrders(){
     const prepaidOnline = isPaidOnlineOrder(order);
     const unpaidOnline = isUnpaidOnlineOrder(order);
     const convertedCodPaid = isCodConvertedToOnlinePaid(order);
-    const prepaidOtpActive = prepaidOnline && !convertedCodPaid && order.deliveryOtpStatus === "active";
-    const prepaidOtpDone = prepaidOnline && (convertedCodPaid || prepaidOtpVerified(order));
+    const prepaidOtpActive = false;
+    const prepaidOtpDone = true;
     const paymentReady = isPaymentReady(order);
     const isCashOrder = isCashPayment(order.paymentMethod || order.paymentMode);
     const cashSettlementDone = isCashOrder && order.cashSettlementPending === false && !!order.codSettlementStatus;
@@ -916,20 +916,14 @@ function renderOrders(){
     const settlementNetPaid = Number(order.companySettlementNetPaid ?? order.companyRazorpaySettlementAmount ?? 0);
     const amountToCollect = prepaidOnline ? 0 : Number(order.amountToCollect ?? order.totalAmount ?? order.finalAmount ?? order.total ?? 0);
     const activeLocked = !!rider.currentActiveOrderId && rider.currentActiveOrderId !== order.id;
-    const companyDueNow = Number(currentWallet.companySettlementDue || rider.companyDue || rider.pendingCashSubmission || 0);
-    const settlementLocked = companyDueNow > 300;
     const requestLocked = activeLocked;
     const requestButtonLabel = activeLocked
       ? "Complete current delivery first"
-      : settlementLocked
-        ? `Settle due ${formatCurrency(companyDueNow)}`
-        : "Accept";
-    const requestButtonAction = settlementLocked
-      ? "settleCompanyDue(this)"
-      : `acceptRequest('${order.id}')`;
+      : "Accept";
+    const requestButtonAction = `acceptRequest('${order.id}')`;
     const isDelivered = order.status === "Delivered";
     const riderCollectedOnline = prepaidOnline && order.paymentCollectedBy === rider.riderId;
-    const canDeliver = !isDelivered && paymentReady && (convertedCodPaid || !isCashOrder || cashSettlementDone) && (!prepaidOnline || prepaidOtpDone || riderCollectedOnline || convertedCodPaid);
+    const canDeliver = !isDelivered && paymentReady && (convertedCodPaid || !isCashOrder || isCashCollectedOrder(order) || cashSettlementDone) && (!prepaidOnline || prepaidOtpDone || riderCollectedOnline || convertedCodPaid);
     const badgeClass = group === "Requests" ? "request" : group === "Delivered" ? "delivered" : group === "Out For Delivery" ? "out" : "assigned";
     return `
       <article class="glass order">
@@ -960,11 +954,8 @@ function renderOrders(){
           ${group === "Assigned" ? `<button class="btn-blue" onclick="pickupOrder('${order.id}')">Picked Up</button>` : ""}
           ${order.status === "Picked Up" ? `<button class="btn-blue" onclick="startDelivery('${order.id}')">Out For Delivery</button>` : ""}
           ${order.status === "Out For Delivery" ? `<button class="btn-green" onclick="reachNearby('${order.id}')">Reached Nearby</button>` : ""}
-          ${(order.status === "Reached Nearby" || order.status === "Collect Payment") && !prepaidOnline && !unpaidOnline ? `<button class="btn-green" onclick="markCashReceived('${order.id}')">Cash Received & Get Code</button><button class="btn-blue" onclick="collectOnline('${order.id}')">Online Payment</button>` : ""}
-          ${(["Out For Delivery","Reached Nearby","Collect Payment"].includes(order.status)) && prepaidOnline && !convertedCodPaid && !prepaidOtpActive && !prepaidOtpDone ? `<button class="btn-blue" onclick="requestPrepaidDeliveryOtp('${order.id}')">Request Delivery OTP</button>` : ""}
-          ${prepaidOtpActive ? `<button class="btn-green" onclick="completeWithCustomerCode('${order.id}')">Enter Delivery OTP</button>` : ""}
-          ${needsCompanySettlement(order) && !cashSettlementDone ? `<button class="btn-blue" onclick="payCompanyAndDeliver('${order.id}', ${dist || 1}, this)">Settle Company Payment</button>` : ""}
-          ${isCashCollectedOrder(order) ? `<button class="btn-green" onclick="deliverCashOrder('${order.id}')">Delivered — Get/Enter Customer Code</button>` : ""}
+          ${(order.status === "Reached Nearby" || order.status === "Collect Payment") && !prepaidOnline && !unpaidOnline ? `<button class="btn-green" onclick="markCashReceived('${order.id}')">Cash Received</button><button class="btn-blue" onclick="collectOnline('${order.id}')">Online Payment</button>` : ""}
+          ${isCashCollectedOrder(order) ? `<button class="btn-green" onclick="deliverCashOrder('${order.id}')">Delivered</button>` : ""}
           ${canDeliver && order.status !== "Out For Delivery" && !isDelivered ? `<button class="btn-green" onclick="deliver('${order.id}', ${dist || 1})">Delivered</button>` : ""}
           ${isDelivered ? `<button class="btn-green" disabled>Delivered</button>` : ""}
         </div>
@@ -1365,10 +1356,6 @@ window.startDelivery = async function(orderId){
     ...(location ? { riderLocation:location, riderLocationUpdatedAt:serverTimestamp(), riderStatus:"Rider is moving toward you" } : {})
   });
   startRiderLocationSharing();
-  const order = findOrderById(orderId);
-  if(order && isPaidOnlineOrder(order) && order.deliveryOtpStatus !== "active" && !prepaidOtpVerified(order)){
-    requestPrepaidDeliveryOtp(orderId).catch(error => console.warn("Auto delivery OTP request failed:", error));
-  }
 };
 
 window.pickupOrder = async function(orderId){
@@ -1379,12 +1366,6 @@ window.pickupOrder = async function(orderId){
 
 window.acceptRequest = async function(orderId){
   if(!rider) return;
-  const companyDueNow = Number(currentWallet.companySettlementDue || rider.companyDue || rider.pendingCashSubmission || 0);
-  const blockLimit = 300;
-  if(companyDueNow > blockLimit){
-    alert(`Orders are paused. Please settle company due of ${formatCurrency(companyDueNow)} first.`);
-    return;
-  }
   if(rider.currentActiveOrderId){
     alert("Complete current delivery first");
     return;
@@ -1414,16 +1395,12 @@ window.reachNearby = async function(orderId){
     reachedNearbyAt:serverTimestamp(),
     ...(location ? { riderLocation:location, riderLocationUpdatedAt:serverTimestamp(), riderStatus:"Rider is nearby" } : {})
   });
-  const order = findOrderById(orderId);
-  if(order && isPaidOnlineOrder(order) && order.deliveryOtpStatus !== "active" && !prepaidOtpVerified(order)){
-    requestPrepaidDeliveryOtp(orderId).catch(error => console.warn("Auto delivery OTP request failed:", error));
-  }
 };
 
 window.markCashReceived = async function(orderId){
   try{
-    const result = await callRiderFunction("riderMarkCashReceived", { orderId });
-    if(result.codeGenerated) alert("Cash recorded. Ask customer for the 4 digit delivery code, then complete delivery.");
+    await callRiderFunction("riderMarkCashReceived", { orderId });
+    alert("Cash recorded. Tap Delivered to complete the order.");
   }catch(error){
     alert(error?.message || "Unable to record cash collection.");
   }
@@ -1684,20 +1661,16 @@ window.deliver = async function(orderId){
 
 window.deliverCashOrder = async function(orderId){
   try{
-    let order = findOrderById(orderId) || {};
+    const order = findOrderById(orderId) || {};
     if(!isCashCollectedOrder(order)){
       alert("Cash must be collected before completing delivery.");
       return;
     }
-    if(!order.activeDeliveryCodeId || order.deliveryOtpStatus !== "active"){
-      await callRiderFunction("requestDeliveryExceptionCode", { orderId }, 20000);
-      alert("Customer code generated. Ask the customer to check their order tracking screen.");
-      const fresh = await getDoc(doc(db,"orders",orderId));
-      if(fresh.exists()) order = { id:fresh.id, ...fresh.data() };
-    }
-    await completeWithCustomerCode(orderId);
+    await callRiderFunction("completeRiderDelivery", { orderId, mode:"verified_payment" }, 25000);
+    alert("Delivery completed.");
+    stopRiderLocationSharing();
   }catch(error){
-    alert(error?.message || "Unable to generate or verify the customer delivery code.");
+    alert(error?.message || "Unable to mark delivered.");
   }
 };
 

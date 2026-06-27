@@ -15,6 +15,11 @@
     .filter-bar { display:flex; justify-content:center; flex-wrap:wrap; gap:10px; margin-bottom:30px; }
     .filter-bar button { background:var(--card); color:var(--accent); border:1px solid #1e2933; padding:10px 20px; border-radius:30px; cursor:pointer; font-weight:600; transition:0.3s; }
     .filter-bar button:hover, .filter-bar button.active { background:var(--accent); color:#000; box-shadow: 0 0 15px var(--accent); }
+    .date-filter { max-width:980px; margin:0 auto 18px; display:flex; justify-content:center; align-items:center; gap:10px; flex-wrap:wrap; background:#121821; border:1px solid #263241; border-radius:16px; padding:12px; }
+    .date-filter button,.date-filter input { min-height:42px; border-radius:12px; border:1px solid #334155; background:#0b0f14; color:#fff; padding:0 12px; font:inherit; font-weight:800; }
+    .date-filter button { cursor:pointer; color:var(--accent); }
+    .date-filter button:hover { border-color:var(--accent); }
+    .date-filter strong { color:var(--accent); font-size:13px; }
 
     .orders-grid { display:grid; gap:20px; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); }
     .order-card { background:var(--card); padding:20px; border-radius:20px; border:1px solid #1e2933; transition:0.3s; position:relative; }
@@ -28,6 +33,10 @@
     .order-card h3 { margin:0 0 10px; font-size:18px; }
     .info-row { font-size:13px; color:#aaa; margin-bottom:5px; display:flex; align-items:center; gap:8px; }
     .items-list { background:#0b0f14; padding:10px; border-radius:10px; margin:15px 0; font-size:12px; border-left:3px solid var(--accent); }
+    .item-line{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:start;padding:4px 0;color:#fff}
+    .item-line + .item-line{border-top:1px solid rgba(255,255,255,.08)}
+    .item-line b{color:var(--accent);white-space:nowrap}
+    .empty-orders{grid-column:1/-1;text-align:center;color:#94a3b8;background:#121821;border:1px dashed #334155;border-radius:18px;padding:28px;font-weight:800}
     
     .btn-group { display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:15px; }
     .btn-group button { padding:10px; border:none; border-radius:10px; cursor:pointer; font-weight:600; font-size:12px; transition:0.2s; }
@@ -215,6 +224,13 @@
   </section>
   <button class="delete-btn" onclick="deleteAllOrders()">Delete All Orders</button>
 
+  <div class="date-filter">
+    <button type="button" onclick="shiftOrderDate(-1)">Previous Day</button>
+    <label><strong>Order Date</strong> <input type="date" id="orderDateFilter" onchange="setOrderDate(this.value)"></label>
+    <button type="button" onclick="setOrderDate(todayKey())">Today</button>
+    <button type="button" onclick="shiftOrderDate(1)">Next Day</button>
+  </div>
+
   <div class="filter-bar" id="filters">
 
   <button onclick="loadOrders('All')">
@@ -303,6 +319,7 @@ let latestPendingOrders = [];
 let latestActiveOrders = [];
 let menuDishCache = [];
 let currentOrderFilter = "Pending";
+let currentOrderDateKey = todayKey();
 const FUNCTIONS_BASE_URL = "https://asia-south1-magneetoz.cloudfunctions.net";
 protectAdminPage();
 mountAdminLogout(document.body);
@@ -509,6 +526,88 @@ function formatCurrency(amount){
   }).format(Number(amount) || 0);
 }
 
+function escapeHTML(value = ""){
+  return String(value).replace(/[&<>"']/g, char => ({
+    "&":"&amp;",
+    "<":"&lt;",
+    ">":"&gt;",
+    '"':"&quot;",
+    "'":"&#39;"
+  }[char]));
+}
+
+function todayKey(){
+  const now = new Date();
+  return dateKeyFromDate(now);
+}
+
+function dateKeyFromDate(date){
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
+
+function orderDateKey(order = {}){
+  const millis = tsMillis(order.createdAt || order.orderCreatedAt || order.placedAt || order.timestamp || order.date);
+  return millis ? dateKeyFromDate(new Date(millis)) : "";
+}
+
+function setOrderDate(value){
+  currentOrderDateKey = value || todayKey();
+  const input = document.getElementById("orderDateFilter");
+  if(input) input.value = currentOrderDateKey;
+  loadOrders(currentOrderFilter || "Active");
+}
+
+window.setOrderDate = setOrderDate;
+
+window.todayKey = todayKey;
+
+window.shiftOrderDate = function(days){
+  const base = currentOrderDateKey ? new Date(`${currentOrderDateKey}T00:00:00`) : new Date();
+  base.setDate(base.getDate() + Number(days || 0));
+  setOrderDate(dateKeyFromDate(base));
+};
+
+function itemQty(item = {}){
+  return Number(item.qty ?? item.quantity ?? item.count ?? 1) || 1;
+}
+
+function itemUnitAmount(item = {}){
+  const direct = item.price ?? item.unitPrice ?? item.basePrice ?? item.selectedPrice ?? item.variantPrice ?? item.finalPrice;
+  if(Number(direct) > 0) return Number(direct);
+  const line = item.total ?? item.totalPrice ?? item.lineTotal ?? item.amount;
+  if(Number(line) > 0) return Number(line) / itemQty(item);
+  return 0;
+}
+
+function itemLineAmount(item = {}){
+  const line = item.total ?? item.totalPrice ?? item.lineTotal ?? item.amount;
+  if(Number(line) > 0) return Number(line);
+  return itemUnitAmount(item) * itemQty(item);
+}
+
+function itemExtras(item = {}){
+  const extras = Array.isArray(item.extras) ? item.extras : (Array.isArray(item.addOns) ? item.addOns : []);
+  return extras.filter(extra => extra && extra.name);
+}
+
+function renderOrderItems(items = []){
+  if(!Array.isArray(items) || !items.length) return "<div>No items found</div>";
+  return items.map(item => {
+    const qty = itemQty(item);
+    const unit = itemUnitAmount(item);
+    const line = itemLineAmount(item);
+    const itemName = escapeHTML(item.name || item.title || item.dishName || "Item");
+    const unitText = unit > 0 ? ` @ ${formatCurrency(unit)}` : "";
+    const amountText = line > 0 ? formatCurrency(line) : "-";
+    const extras = itemExtras(item);
+    const extrasText = extras.length
+      ? `<small style="grid-column:1/-1;color:#94a3b8;">Extras: ${extras.map(extra => `${escapeHTML(extra.name)} ${formatCurrency(extra.price)}`).join(", ")}</small>`
+      : "";
+    return `<div class="item-line"><span>• ${itemName} (x${qty})${unitText}</span><b>${amountText}</b>${extrasText}</div>`;
+  }).join("");
+}
+
 function paymentBadge(order = {}){
   const method = String(order.paymentMethod || order.paymentMode || "").toLowerCase();
   const status = String(order.paymentStatus || "").toLowerCase();
@@ -662,6 +761,11 @@ window.deleteAllOrders = async function(){
 
 window.loadOrders = function(filter) {
   currentOrderFilter = filter;
+  document.querySelectorAll("#filters button").forEach(btn => {
+    btn.classList.toggle("active", btn.textContent.trim() === filter || (filter === "Reached Nearby" && btn.textContent.trim() === "Nearby") || (filter === "Payment Completed" && btn.textContent.trim() === "Payment Done") || (filter === "Rider Accepted" && btn.textContent.trim() === "Rider Assigned"));
+  });
+  const dateInput = document.getElementById("orderDateFilter");
+  if(dateInput && !dateInput.value) dateInput.value = currentOrderDateKey;
   const q = query(collection(db, "orders"), where("orderSource", "==", "online"));
   ordersUnsub?.();
   ordersUnsub = onSnapshot(q, (snap) => {
@@ -670,17 +774,20 @@ window.loadOrders = function(filter) {
     const docs = [];
     snap.forEach(docSnap => docs.push(docSnap));
     const allOrders = docs.map(docSnap => ({ id:docSnap.id, ...docSnap.data() }));
-    latestPendingOrders = allOrders.filter(order => {
+    const dateOrders = allOrders.filter(order => orderDateKey(order) === currentOrderDateKey);
+    latestPendingOrders = dateOrders.filter(order => {
       const status = normalizeStatus(order.status || order.orderStatus || "Pending");
       return status === "Pending" && !isUnpaidOnline(order);
     });
-    latestActiveOrders = allOrders.filter(order => !terminalOrder(order.status || order.orderStatus || "Pending"));
+    latestActiveOrders = dateOrders.filter(order => !terminalOrder(order.status || order.orderStatus || "Pending"));
     syncIncomingOrderAlarm(latestPendingOrders);
     renderGoLiveChecklist();
+    let rendered = 0;
     docs
       .sort((a,b) => tsMillis(b.data().createdAt) - tsMillis(a.data().createdAt))
       .forEach(docSnap => {
       const d = docSnap.data();
+      if(orderDateKey(d) !== currentOrderDateKey) return;
       const displayStatus = normalizeStatus(d.status || d.orderStatus || "Pending");
       const paidProof = String(d.paymentStatus || "").toLowerCase() === "paid" || d.paymentCaptured === true || !!d.razorpayPaymentId;
       const method = paidProof ? "online" : String(d.paymentMethod || d.paymentMode || "").toLowerCase();
@@ -689,6 +796,7 @@ window.loadOrders = function(filter) {
       if(pendingOnlineDraft && filter !== "Payment Pending") return;
       if(filter === "Active" && terminalOrder(displayStatus)) return;
       if (filter !== "All" && filter !== "Active" && displayStatus !== normalizeStatus(filter)) return;
+      rendered += 1;
       const badge = paymentBadge(d);
       const paymentLocked = isUnpaidOnline(d);
       const waLink = displayStatus === "Pending" ? adminWhatsAppLink({ id:docSnap.id, ...d }) : "";
@@ -698,10 +806,11 @@ window.loadOrders = function(filter) {
           <span class="status-badge ${displayStatus}">${displayStatus}</span>
           <span class="payment-badge ${badge.cls}">${badge.label}</span>
           <h3>#${d.orderNumber || d.orderId} - ${d.customerName}</h3>
+          <div class="info-row">📅 ${orderDateKey(d) || "No date"}</div>
           <div class="info-row">📞 ${d.phone}</div>
           ${waLink ? `<a class="wa-alert-btn" href="${waLink}" target="_blank" rel="noopener">Send admin WhatsApp alert</a>` : ""}
           <div class="info-row">🏠 ${d.address}</div>
-          <div class="items-list">${d.items.map(i => `• ${i.name} (x${i.qty})`).join('<br>')}</div>
+          <div class="items-list">${renderOrderItems(d.items)}</div>
           <div style="font-weight:700; color:var(--accent);">Total: ${formatCurrency(d.totalAmount)}</div>
           <div class="assigned-rider">
             Order value: ${formatCurrency(d.subtotalAmount || d.subtotal || 0)}<br>
@@ -772,6 +881,9 @@ window.loadOrders = function(filter) {
 </div>
         </div>`;
     });
+    if(!rendered){
+      container.innerHTML = `<div class="empty-orders">No ${filter.toLowerCase()} orders for ${currentOrderDateKey}.</div>`;
+    }
   }, error => console.warn("[FIRESTORE LISTENER] Admin orders failed", error));
 }
 

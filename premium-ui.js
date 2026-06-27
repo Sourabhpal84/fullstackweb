@@ -124,16 +124,76 @@ function renderRecentSearches(){
     .join("");
 }
 
+function normalizeSearchText(value = ""){
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function searchTokens(value = ""){
+  return normalizeSearchText(value)
+    .split(" ")
+    .filter(token => token.length > 1);
+}
+
+function fuzzySearchScore(item, cleanTerm){
+  if(!cleanTerm) return 100;
+  const haystack = normalizeSearchText(`${item.name} ${item.desc} ${item.category}`);
+  const tokens = searchTokens(cleanTerm);
+  let score = 0;
+  if(haystack.includes(cleanTerm)) score += 120;
+  tokens.forEach(token => {
+    if(haystack.includes(token)) score += token.length > 3 ? 42 : 24;
+    if(item.name.toLowerCase().includes(token)) score += 35;
+    if(item.category.toLowerCase().includes(token)) score += 28;
+  });
+  const intentMap = [
+    { keys:["pizza","piza","pizaa","slice","cheese","corn","capsicum","paneer","tomato"], boost:["pizza","cheese","paneer","corn","capsicum"] },
+    { keys:["burger","burgar","sandwich","wrap"], boost:["burger","sandwich"] },
+    { keys:["fries","fry","snack","side","garlic","bread"], boost:["fries","garlic","bread","side"] },
+    { keys:["combo","meal","offer","deal","family","pack"], boost:["combo","meal","pack","offer"] },
+    { keys:["drink","cold","coke","cola","beverage","shake"], boost:["drink","cold","beverage","shake"] },
+    { keys:["spicy","hot","chilli","chili","masala","peri"], boost:["spicy","hot","chilli","masala","peri"] },
+    { keys:["veg","vegetarian"], boost:["veg","paneer","corn","capsicum","mushroom"] }
+  ];
+  intentMap.forEach(group => {
+    if(group.keys.some(key => cleanTerm.includes(key))){
+      group.boost.forEach(word => {
+        if(haystack.includes(word)) score += 30;
+      });
+    }
+  });
+  return score;
+}
+
 function renderSearch(term){
   const host = $("#smartSearchResults");
   if(!host) return;
-  const clean = term.trim().toLowerCase();
-  const results = cards()
-    .filter(item => !clean || `${item.name} ${item.desc} ${item.category}`.toLowerCase().includes(clean))
+  const clean = normalizeSearchText(term);
+  const allCards = cards();
+  let results = allCards
+    .map(item => ({ ...item, score:fuzzySearchScore(item, clean) }))
+    .filter(item => !clean || item.score > 0)
+    .sort((a,b) => b.score - a.score)
     .slice(0, 9);
 
+  if(clean && results.length < 4){
+    const already = new Set(results.map(item => item.card));
+    const fallback = allCards
+      .filter(item => !already.has(item.card))
+      .map(item => ({
+        ...item,
+        score:fuzzySearchScore(item, "pizza combo cheese popular")
+      }))
+      .sort((a,b) => b.score - a.score)
+      .slice(0, 9 - results.length);
+    results = [...results, ...fallback];
+  }
+
   if(!results.length){
-    host.innerHTML = `<div class="search-result"><strong>No exact match</strong><span>Try pizza, combo, cheese, or garlic.</span></div>`;
+    host.innerHTML = `<div class="search-result"><strong>Suggestions loading</strong><span>Menu items will appear here in a moment.</span></div>`;
     return;
   }
 

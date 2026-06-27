@@ -218,6 +218,15 @@ const CHECKOUT_LOCATION_MAX_AGE_MS = 60 * 1000;
 const CHECKOUT_LOCATION_REUSE_MAX_AGE_MS = 15 * 60 * 1000;
 const DISTANCE_CACHE_MAX_AGE_MS = 60 * 1000;
 const DEFAULT_FREE_DELIVERY_MIN = 199;
+const EXTRA_TOPPINGS = Object.freeze([
+  { id:"extra_tomato", name:"Extra Tomato", price:20 },
+  { id:"extra_onion", name:"Extra Onion", price:20 },
+  { id:"extra_capsicum", name:"Extra Capsicum", price:20 },
+  { id:"extra_sweet_corn", name:"Extra Sweet Corn", price:20 },
+  { id:"extra_jalapeno", name:"Extra Jalapeno", price:20 },
+  { id:"extra_black_olives", name:"Extra Black Olives", price:20 },
+  { id:"extra_cheese", name:"Extra Cheese", price:40 }
+]);
 let resumeCheckoutAfterAuth = false;
 let checkoutInFlightId = "";
 let placeOrderInFlight = false;
@@ -1460,6 +1469,7 @@ function addDishObjectToCart(dish = {}, qty = 1){
     qty,
     category:dish.category || "Recommended",
     image:normalizeImageUrl(dish.image),
+    baseUnitPrice:variant.price,
     unitPrice:variant.price,
     price:variant.price * qty
   });
@@ -2328,17 +2338,70 @@ async function saveCustomerProfile(user){
   }
 }
 
+function normalizeCartExtras(extras = []){
+  const allowed = new Map(EXTRA_TOPPINGS.map(item => [item.id, item]));
+  return (Array.isArray(extras) ? extras : [])
+    .map(extra => {
+      const id = String(extra.id || extra.key || extra.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+      const canonical = allowed.get(id) || EXTRA_TOPPINGS.find(item => item.name.toLowerCase() === String(extra.name || "").toLowerCase());
+      if(!canonical) return null;
+      return { id:canonical.id, name:canonical.name, price:Number(canonical.price || 0) };
+    })
+    .filter(Boolean)
+    .filter((extra, index, arr) => arr.findIndex(item => item.id === extra.id) === index);
+}
+
+function extrasTotalPerUnit(extras = []){
+  return normalizeCartExtras(extras).reduce((sum, extra) => sum + Number(extra.price || 0), 0);
+}
+
+function normalizeCartItemPricing(item = {}){
+  const qty = Math.max(1, Number(item.qty || item.quantity || 1) || 1);
+  const existingExtras = normalizeCartExtras(item.extras || item.addOns || item.addons || item.extraToppings);
+  const baseUnitPrice = Number(item.baseUnitPrice || item.unitPrice || (qty ? Number(item.price || 0) / qty - extrasTotalPerUnit(existingExtras) : item.price) || 0);
+  const extrasTotal = extrasTotalPerUnit(existingExtras);
+  return {
+    ...item,
+    qty,
+    quantity:qty,
+    baseUnitPrice,
+    unitPrice:baseUnitPrice,
+    extras:existingExtras,
+    addOns:existingExtras,
+    extrasTotal,
+    price:Math.round((baseUnitPrice + extrasTotal) * qty)
+  };
+}
+
+function cartItemTotal(item = {}){
+  const normalized = normalizeCartItemPricing(item);
+  return normalized.price;
+}
+
+function normalizeCartPricing(){
+  cart = (Array.isArray(cart) ? cart : []).map(normalizeCartItemPricing);
+}
+
 function compactCartForStorage(items = []){
   return (Array.isArray(items) ? items : []).map(item => {
     const image = String(item.image || item.imageUrl || item.thumbnail || "");
+    const qty = Number(item.qty || item.quantity || 1);
+    const baseUnitPrice = Number(item.baseUnitPrice || item.unitPrice || (qty ? Number(item.price || 0) / qty : item.price) || 0);
+    const extras = normalizeCartExtras(item.extras || item.addOns || item.addons || item.extraToppings);
+    const extrasTotal = extrasTotalPerUnit(extras);
     return {
       id:String(item.id || "").slice(0, 120),
       name:String(item.name || "").slice(0, 160),
       size:String(item.size || "").slice(0, 80),
       category:String(item.category || "").slice(0, 120),
-      price:Number(item.price || 0),
-      qty:Number(item.qty || item.quantity || 1),
-      quantity:Number(item.quantity || item.qty || 1),
+      baseUnitPrice,
+      unitPrice:baseUnitPrice,
+      extras,
+      addOns:extras,
+      extrasTotal,
+      price:cartItemTotal({ ...item, qty, baseUnitPrice, unitPrice:baseUnitPrice, extras }),
+      qty,
+      quantity:qty,
       image:!image || /^data:/i.test(image) ? "" : image.slice(0, 700)
     };
   });
@@ -3871,6 +3934,7 @@ registerGlobalSnapshot(onSnapshot(query(collection(db, "combos"), orderBy("creat
 }));
 
 function getCartSubtotal(){
+  normalizeCartPricing();
   return cart.reduce((sum, item) => sum + item.price, 0);
 }
 
@@ -4432,6 +4496,11 @@ async function createOrderSafely({ paymentMethod, paymentStatus, paymentId = "",
           name:item.name,
           size:item.size,
           category:item.category,
+          baseUnitPrice:item.baseUnitPrice,
+          unitPrice:item.unitPrice,
+          extras:item.extras || [],
+          addOns:item.addOns || item.extras || [],
+          extrasTotal:item.extrasTotal || 0,
           price:item.price,
           qty:item.qty,
           quantity:item.quantity,
@@ -4497,20 +4566,7 @@ async function buildPaidOnlineOrderDraft(){
   const deliveryRulePaid = calculateDistanceDeliveryPricing(deliveryDistance, subtotal);
   const checkoutId = checkoutInFlightId || `co_${user.uid}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   checkoutInFlightId = checkoutId;
-  const safeCartImage = value => {
-    const url = String(value || "");
-    if(!url || /^data:/i.test(url)) return "";
-    return url.slice(0, 700);
-  };
-  const itemsSnapshot = cart.map(item => ({
-    id:item.id || "",
-    name:item.name || "",
-    price:Number(item.price || 0),
-    qty:Number(item.qty || item.quantity || 1),
-    quantity:Number(item.quantity || item.qty || 1),
-    image:safeCartImage(item.image || item.imageUrl || item.thumbnail || ""),
-    category:item.category || ""
-  }));
+  const itemsSnapshot = compactCartForStorage(cart);
 
   return {
     idempotencyKey:`${checkoutSignature("Online")}|${checkoutId}`,
@@ -4605,6 +4661,7 @@ window.removeCoupon = function(){
 
 function updateCart() {
 
+  normalizeCartPricing();
   let itemsHTML = "";
   let total = 0;
   const totalQty = cart.reduce((sum, item) => sum + (Number(item.qty) || 1), 0);
@@ -4614,12 +4671,25 @@ function updateCart() {
 
   cart.forEach((item, index) => {
     total += item.price;
+    const extras = normalizeCartExtras(item.extras);
+    const extrasText = extras.length
+      ? `<small class="cart-extras-summary">Extras: ${extras.map(extra => `${escapeHTML(extra.name)} ${formatCurrency(extra.price)}`).join(", ")}</small>`
+      : "";
+    const extrasControls = EXTRA_TOPPINGS.map(extra => {
+      const checked = extras.some(selected => selected.id === extra.id);
+      return `<label><input type="checkbox" ${checked ? "checked" : ""} onchange="toggleCartExtra(${index}, '${extra.id}', this.checked)"> <span>${escapeHTML(extra.name)}</span><b>${formatCurrency(extra.price)}</b></label>`;
+    }).join("");
     itemsHTML += `
   <div class="cart-item cart-item-pro">
     <img src="${escapeHTML(normalizeImageUrl(item.image))}" alt="${escapeHTML(item.name)}" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
     <div>
       <strong>${escapeHTML(item.name)}</strong><br>
-      <small>${escapeHTML(item.size || "Regular")} x ${item.qty}</small>
+      <small>${escapeHTML(item.size || "Regular")} x ${item.qty} • Base ${formatCurrency(item.baseUnitPrice || item.unitPrice || 0)}</small>
+      ${extrasText}
+      <details class="cart-extras-picker">
+        <summary>Extra Toppings / Add-ons</summary>
+        <div>${extrasControls}</div>
+      </details>
     </div>
     <div class="cart-line-actions">
       <b>${formatCurrency(item.price)}</b>
@@ -4693,7 +4763,7 @@ function updateCart() {
 function changeCartItemQty(index, delta){
   const item = cart[index];
   if(!item) return;
-  const unit = Number(item.unitPrice || (item.qty ? item.price / item.qty : item.price)) || 0;
+  const unit = Number(item.baseUnitPrice || item.unitPrice || (item.qty ? item.price / item.qty : item.price)) || 0;
   const nextQty = Number(item.qty || 1) + delta;
   if(nextQty <= 0){
     cart.splice(index, 1);
@@ -4702,10 +4772,28 @@ function changeCartItemQty(index, delta){
     return;
   }
   item.qty = nextQty;
+  item.quantity = nextQty;
+  item.baseUnitPrice = unit;
   item.unitPrice = unit;
-  item.price = Math.round(unit * item.qty);
+  Object.assign(item, normalizeCartItemPricing(item));
   updateCart();
 }
+
+window.toggleCartExtra = function(index, extraId, checked){
+  const item = cart[index];
+  if(!item) return;
+  const extra = EXTRA_TOPPINGS.find(option => option.id === extraId);
+  if(!extra) return;
+  const selected = normalizeCartExtras(item.extras);
+  const next = checked
+    ? [...selected, extra]
+    : selected.filter(option => option.id !== extraId);
+  item.extras = normalizeCartExtras(next);
+  item.addOns = item.extras;
+  Object.assign(item, normalizeCartItemPricing(item));
+  if(activeCoupon) validateActiveCoupon();
+  updateCart();
+};
 
 function removeItem(index) {
   cart.splice(index, 1);
@@ -4854,6 +4942,7 @@ function addToCartFull(btn, name){
     qty,
     category: card.dataset.dishCategory || "",
     image: card.dataset.dishImage || card.querySelector("img")?.getAttribute("src") || "logo_tran.jpeg",
+    baseUnitPrice: price,
     unitPrice: price,
     price: price * qty
   });
@@ -4888,6 +4977,7 @@ function addToCartSimple(btn, name){
     qty,
     category: card.dataset.dishCategory || "",
     image: card.dataset.dishImage || card.querySelector("img")?.getAttribute("src") || "logo_tran.jpeg",
+    baseUnitPrice: price,
     unitPrice: price,
     price
   });
@@ -4918,6 +5008,7 @@ window.addComboToCart = function(id){
     qty:1,
     category:"Combo",
     image:combo.image || "logo_tran.jpeg",
+    baseUnitPrice:price,
     unitPrice:price,
     price,
     comboId:id,
@@ -5029,7 +5120,7 @@ if(!name || !address){
 await timedStep("placeOrder:saveCustomerProfile", () => saveCustomerProfile(auth.currentUser || cachedAuthUser));
 await timedStep("placeOrder:saveAddressBook", () => saveCurrentAddressToBook().catch(error => console.warn("Address book save skipped", error)));
 
-const subtotal = cart.reduce((sum,item)=>sum+item.price,0);
+const subtotal = getCartSubtotal();
 
 // ⭐ Minimum order check
 if(subtotal < deliveryPricingSettings.minimumOrderValue){
@@ -5146,7 +5237,7 @@ async function prepareOrderSummary(options = {}) {
 
   logDistanceDebug("prepare_order_summary");
 
-  const subtotal = cart.reduce((sum, item) => sum + item.price, 0);
+  const subtotal = getCartSubtotal();
 
   if (subtotal > 2000) {
     alert(`For large orders above ${formatCurrency(2000)} please contact via WhatsApp`);
@@ -5286,7 +5377,7 @@ isOrderProcessing = true;
 razorpayInFlight = true;
 lastOrderSignature = signature;
 
-const subtotal = cart.reduce((s,i)=>s+i.price,0);
+const subtotal = getCartSubtotal();
 
 if(!(await timedStep("upiOrder:ensureDeliveryEligible", () => ensureDeliveryEligible()))){
 resetRazorpayCheckoutState();
@@ -6426,13 +6517,16 @@ order.status === "Delivered"
 
         ${
           (order.items || [])
-          .map(item=>`
+          .map(item=>{
+            const extras = orderItemExtras(item);
+            return `
 
             <div class="order-item">
 
               <span>
-                ${item.name}
+                ${escapeHTML(item.name || "Item")}
                 × ${item.qty}
+                ${extras.length ? `<small>Extras: ${extras.map(extra => `${escapeHTML(extra.name)} ${formatCurrency(extra.price)}`).join(", ")}</small>` : ""}
               </span>
 
               <strong>
@@ -6441,7 +6535,7 @@ order.status === "Delivered"
 
             </div>
 
-          `).join("")
+          `}).join("")
         }
 
       </div>
@@ -6843,6 +6937,11 @@ function invoiceRows(order = {}){
   };
 }
 
+function orderItemExtras(item = {}){
+  const extras = Array.isArray(item.extras) ? item.extras : (Array.isArray(item.addOns) ? item.addOns : []);
+  return extras.filter(extra => extra && extra.name);
+}
+
 window.downloadInvoicePDF = async function(orderId){
   const localOrder = liveOrders.find(order => order.id === orderId);
   let order = localOrder;
@@ -6868,9 +6967,13 @@ window.downloadInvoicePDF = async function(orderId){
     const unit = qty ? total / qty : total;
     const size = item.size ? `<div class="muted">Size: ${escapeHTML(item.size)}</div>` : "";
     const combo = item.comboName ? `<div class="muted">Combo: ${escapeHTML(item.comboName)}</div>` : "";
+    const extras = orderItemExtras(item);
+    const extrasLine = extras.length
+      ? `<div class="muted">Extras: ${extras.map(extra => `${escapeHTML(extra.name)} ${money(extra.price)}`).join(", ")}</div>`
+      : "";
     const itemName = cleanInvoiceItemName(item.name || "Item");
     return `<tr>
-      <td><strong>${escapeHTML(itemName)}</strong>${size}${combo}</td>
+      <td><strong>${escapeHTML(itemName)}</strong>${size}${combo}${extrasLine}</td>
       <td>${qty}</td>
       <td>${money(unit)}</td>
       <td>${money(total)}</td>
