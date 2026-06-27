@@ -168,19 +168,20 @@ let appPricing = {
 };
 let deliveryPricingSettings = {
   freeDeliveryEnabled:true,
-  minimumOrderValue:99,
+  minimumOrderValue:0,
   flatDeliveryFee:30,
   maxDeliveryDistanceKm:6,
   whatsappNumber:"918303614331",
   zones:[
-    { maxKm:1, threshold:99 },
-    { maxKm:2, threshold:149 },
-    { maxKm:3, threshold:199 },
-    { maxKm:4, threshold:249 },
-    { maxKm:6, threshold:299 }
+    { maxKm:1, threshold:149, fee:30 },
+    { maxKm:2, threshold:199, fee:30 },
+    { maxKm:3, threshold:249, fee:30 },
+    { maxKm:4, threshold:299, fee:40 },
+    { maxKm:5, threshold:349, fee:50 },
+    { maxKm:6, threshold:399, fee:50 }
   ]
 };
-const DELIVERY_RULE_VERSION = "flat-30-base-minimum-v2";
+const DELIVERY_RULE_VERSION = "zone-fee-base-threshold-v3";
 let isOrderProcessing = false;
 let lastOrderSignature = null;
 let razorpayInFlight = false;
@@ -2115,6 +2116,11 @@ window.selectSavedAddressCard = function(index){
   applySavedAddress(String(index));
 };
 
+function deliverySettingNumber(value, fallback, legacyValue){
+  const parsed = Math.max(0, Number(value ?? fallback));
+  return parsed === legacyValue ? fallback : parsed;
+}
+
 window.editSavedAddressCard = function(index){
   const select = document.getElementById("savedAddressSelect");
   if(select) select.value = String(index);
@@ -3230,16 +3236,17 @@ registerGlobalSnapshot(onSnapshot(
     deliveryPricingSettings = {
       ...deliveryPricingSettings,
       freeDeliveryEnabled:data.freeDeliveryEnabled !== false,
-      minimumOrderValue:Math.max(0, Number(data.minimumOrderValue ?? 99)),
-      flatDeliveryFee:Math.max(0, Number(data.flatDeliveryFee ?? 30)) === 24 ? 30 : Math.max(0, Number(data.flatDeliveryFee ?? 30)),
+      minimumOrderValue:Math.max(0, Number(data.minimumOrderValue ?? 0)) === 99 ? 0 : Math.max(0, Number(data.minimumOrderValue ?? 0)),
+      flatDeliveryFee:deliverySettingNumber(data.flatDeliveryFee, 30, 24),
       maxDeliveryDistanceKm:MAX_DELIVERY_DISTANCE,
       whatsappNumber:String(data.whatsappNumber || deliveryPricingSettings.whatsappNumber).replace(/\D/g,""),
       zones:[
-        { maxKm:1, threshold:Math.max(0, Number(data.zone1Threshold ?? 99)) },
-        { maxKm:2, threshold:Math.max(0, Number(data.zone2Threshold ?? 149)) },
-        { maxKm:3, threshold:Math.max(0, Number(data.zone3Threshold ?? 199)) },
-        { maxKm:4, threshold:Math.max(0, Number(data.zone4Threshold ?? 249)) },
-        { maxKm:MAX_DELIVERY_DISTANCE, threshold:Math.max(0, Number(data.zone5Threshold ?? 299)) }
+        { maxKm:1, threshold:deliverySettingNumber(data.zone1Threshold, 149, 99), fee:deliverySettingNumber(data.zone1Fee, 30, 24) },
+        { maxKm:2, threshold:deliverySettingNumber(data.zone2Threshold, 199, 149), fee:deliverySettingNumber(data.zone2Fee, 30, 24) },
+        { maxKm:3, threshold:deliverySettingNumber(data.zone3Threshold, 249, 199), fee:deliverySettingNumber(data.zone3Fee, 30, 24) },
+        { maxKm:4, threshold:deliverySettingNumber(data.zone4Threshold, 299, 249), fee:deliverySettingNumber(data.zone4Fee, 40, 24) },
+        { maxKm:5, threshold:deliverySettingNumber(data.zone5Threshold, 349, 299), fee:deliverySettingNumber(data.zone5Fee, 50, 24) },
+        { maxKm:MAX_DELIVERY_DISTANCE, threshold:deliverySettingNumber(data.zone6Threshold, 399, 299), fee:deliverySettingNumber(data.zone6Fee, 50, 24) }
       ]
     };
     updateCart();
@@ -3664,9 +3671,9 @@ function calculateDistanceDeliveryPricing(distanceKm = deliveryDistance, subtota
   const serviceable = locationAvailable && distance <= maxDistance;
   const zone = locationAvailable ? deliveryPricingSettings.zones.find(item => distance <= item.maxKm) : null;
   const threshold = Math.max(0, Number(zone?.threshold) || 0);
-  const minimumOrderValue = Math.max(0, Number(deliveryPricingSettings.minimumOrderValue) || 99);
+  const minimumOrderValue = Math.max(0, Number(deliveryPricingSettings.minimumOrderValue ?? 0));
   const minimumOrderMet = deliveryEligibleSubtotal >= minimumOrderValue;
-  const baseCharge = Math.max(0, Number(deliveryPricingSettings.flatDeliveryFee) || 30);
+  const baseCharge = Math.max(0, Number(zone?.fee ?? deliveryPricingSettings.flatDeliveryFee) || 30);
   const campaignFree = serviceable && minimumOrderMet && deliveryPricingSettings.freeDeliveryEnabled && deliveryEligibleSubtotal >= threshold;
   return {
     serviceable,
@@ -4264,7 +4271,7 @@ function renderDeliveryCampaign(subtotal = getCartSubtotal()){
   const blocked = deliveryDistance > 0 && !pricing.serviceable;
   document.querySelectorAll("[aria-label='Place order'], #codBtn, #upiBtn").forEach(button => {
     button.disabled = blocked || !pricing.minimumOrderMet;
-    button.title = blocked ? "Sorry, we are not available at your location yet." : !pricing.minimumOrderMet ? "Minimum order value is ₹99 before extra toppings." : "";
+    button.title = blocked ? "Sorry, we are not available at your location yet." : !pricing.minimumOrderMet ? "Minimum base order value not met." : "";
   });
 }
 
@@ -4377,8 +4384,6 @@ async function createOrderSafely({ paymentMethod, paymentStatus, paymentId = "",
 
   const subtotal = getCartSubtotal();
   const baseSubtotal = getCartBaseSubtotal();
-  if(baseSubtotal < 99) throw new Error("Minimum order value is ₹99 before extra toppings.");
-
   if(!(await timedStep("createOrderSafely:ensureDeliveryEligible", () => ensureDeliveryEligible()))) throw new Error("Delivery is not available for this location.");
   if(!calculateDeliveryCharge(subtotal, baseSubtotal)) throw new Error("Delivery is not available for this location.");
   let securedDelivery;
@@ -4478,7 +4483,7 @@ async function createOrderSafely({ paymentMethod, paymentStatus, paymentId = "",
         freeDeliveryThreshold:Number(securedDelivery.freeDeliveryThreshold || 0),
         amountNeededForFreeDelivery:Number(securedDelivery.amountNeededForFreeDelivery || 0),
         deliveryServiceable:securedDelivery.deliveryServiceable !== false,
-        minimumOrderValue:Number(securedDelivery.minimumOrderValue || 99),
+        minimumOrderValue:Number(securedDelivery.minimumOrderValue || 0),
         deliveryRuleVersion:securedDelivery.deliveryRuleVersion || DELIVERY_RULE_VERSION,
         couponId:activeCoupon?.id || "",
         couponCode:activeCoupon?.code || "",
@@ -4587,7 +4592,6 @@ async function buildPaidOnlineOrderDraft(){
 
   const subtotal = getCartSubtotal();
   const baseSubtotal = getCartBaseSubtotal();
-  if(baseSubtotal < 99) throw new Error("Minimum order value is ₹99 before extra toppings.");
   if(!(await ensureDeliveryEligible())) throw new Error("Delivery is not available for this location.");
   if(!calculateDeliveryCharge(subtotal, baseSubtotal)) throw new Error("Delivery is not available for this location.");
 
@@ -5872,7 +5876,7 @@ alert("Add "+formatCurrency(amount)+" more to place order");
 return;
 }
 
-text.innerText = `Minimum order value is ₹99 before extra toppings. Add ${formatCurrency(amount)} more in base items.`;
+text.innerText = `Minimum base order value not met. Add ${formatCurrency(amount)} more in base items.`;
 
 popup.style.display = "flex";
 

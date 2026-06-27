@@ -8,15 +8,19 @@ const test = (subtotal, distanceKm, expectedFee, expectedFree) => {
   assert.strictEqual(result.freeDeliveryApplied, expectedFree);
 };
 
-test(99, .8, 0, true);
-test(120, 1.5, 30, false);
-test(149, 2, 0, true);
-test(180, 3, 30, false);
-test(249, 4, 0, true);
-test(280, 5, 30, false);
-test(299, 6, 0, true);
+test(99, .8, 30, false);
+test(149, .8, 0, true);
+test(180, 1.5, 30, false);
+test(199, 2, 0, true);
+test(220, 3, 30, false);
+test(249, 3, 0, true);
+test(280, 4, 40, false);
+test(299, 4, 0, true);
+test(320, 5, 50, false);
+test(349, 5, 0, true);
+test(380, 6, 50, false);
+test(399, 6, 0, true);
 
-assert.strictEqual(calculateDeliveryPricing({ subtotal:98, distanceKm:1, settings }).minimumOrderMet, false);
-assert.strictEqual(calculateDeliveryPricing({ subtotal:109, eligibleSubtotal:49, distanceKm:1, settings }).minimumOrderMet, false);
+assert.strictEqual(calculateDeliveryPricing({ subtotal:109, eligibleSubtotal:49, distanceKm:1, settings }).deliveryFee, 30);
 assert.strictEqual(calculateDeliveryPricing({ subtotal:299, distanceKm:6.01, settings }).deliveryServiceable, false);
 console.log("delivery pricing tests passed");

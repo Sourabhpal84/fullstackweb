@@ -608,7 +608,7 @@ function compactOrderDraft(draft = {}, cartSnapshot = []) {
     freeDeliveryThreshold: Number(draft.freeDeliveryThreshold || 0),
     amountNeededForFreeDelivery: Number(draft.amountNeededForFreeDelivery || 0),
     deliveryServiceable: draft.deliveryServiceable !== false,
-    minimumOrderValue: Number(draft.minimumOrderValue || 99),
+    minimumOrderValue: Number(draft.minimumOrderValue || 0),
     deliveryRuleVersion: compactText(draft.deliveryRuleVersion, 80),
     distanceKm: Number(draft.distanceKm || draft.deliveryDistance || 0),
     gstPercent: Number(draft.gstPercent || 0),

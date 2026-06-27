@@ -1,21 +1,28 @@
 "use strict";
 
-const DELIVERY_RULE_VERSION = "flat-30-base-minimum-v2";
+const DELIVERY_RULE_VERSION = "zone-fee-base-threshold-v3";
+
+function settingNumber(value, fallback, legacyValue) {
+  const parsed = Math.max(0, Number(value ?? fallback));
+  return parsed === legacyValue ? fallback : parsed;
+}
 
 function normalizeDeliverySettings(data = {}) {
-  const configuredFlatFee = Math.max(0, Number(data.flatDeliveryFee ?? 30));
+  const configuredFlatFee = settingNumber(data.flatDeliveryFee, 30, 24);
+  const configuredMinimum = Math.max(0, Number(data.minimumOrderValue ?? 0));
   return {
-    minimumOrderValue: Math.max(0, Number(data.minimumOrderValue ?? 99)),
-    flatDeliveryFee: configuredFlatFee === 24 ? 30 : configuredFlatFee,
+    minimumOrderValue: configuredMinimum === 99 ? 0 : configuredMinimum,
+    flatDeliveryFee: configuredFlatFee,
     maxDistanceKm: Math.max(0.1, Number(data.maxDeliveryDistanceKm || data.maxDistance || 6)),
     freeDeliveryEnabled: data.freeDeliveryEnabled !== false,
     whatsappNumber: String(data.whatsappNumber || "918303614331").replace(/\D/g, ""),
     zones: [
-      { maxKm: 1, threshold: Math.max(0, Number(data.zone1Threshold ?? 99)) },
-      { maxKm: 2, threshold: Math.max(0, Number(data.zone2Threshold ?? 149)) },
-      { maxKm: 3, threshold: Math.max(0, Number(data.zone3Threshold ?? 199)) },
-      { maxKm: 4, threshold: Math.max(0, Number(data.zone4Threshold ?? 249)) },
-      { maxKm: 6, threshold: Math.max(0, Number(data.zone5Threshold ?? 299)) }
+      { maxKm: 1, threshold: settingNumber(data.zone1Threshold, 149, 99), fee: settingNumber(data.zone1Fee, 30, 24) },
+      { maxKm: 2, threshold: settingNumber(data.zone2Threshold, 199, 149), fee: settingNumber(data.zone2Fee, 30, 24) },
+      { maxKm: 3, threshold: settingNumber(data.zone3Threshold, 249, 199), fee: settingNumber(data.zone3Fee, 30, 24) },
+      { maxKm: 4, threshold: settingNumber(data.zone4Threshold, 299, 249), fee: settingNumber(data.zone4Fee, 40, 24) },
+      { maxKm: 5, threshold: settingNumber(data.zone5Threshold, 349, 299), fee: settingNumber(data.zone5Fee, 50, 24) },
+      { maxKm: 6, threshold: settingNumber(data.zone6Threshold, 399, 299), fee: settingNumber(data.zone6Fee, 50, 24) }
     ]
   };
 }
@@ -30,12 +37,14 @@ function calculateDeliveryPricing({ distanceKm, subtotal, eligibleSubtotal, sett
   const threshold = Number(zone?.threshold || 0);
   const minimumMet = eligibleOrderValue >= settings.minimumOrderValue;
   const freeDeliveryApplied = serviceable && minimumMet && settings.freeDeliveryEnabled && eligibleOrderValue >= threshold;
-  const deliveryFee = serviceable && minimumMet && !freeDeliveryApplied ? settings.flatDeliveryFee : 0;
+  const zoneFee = Math.max(0, Number(zone?.fee ?? settings.flatDeliveryFee) || 0);
+  const deliveryFee = serviceable && minimumMet && !freeDeliveryApplied ? zoneFee : 0;
 
   return {
     distanceKm: locationAvailable ? distance : 0,
     deliveryFee,
     deliveryCharge: deliveryFee,
+    baseCharge: zoneFee,
     freeDeliveryApplied,
     freeDeliveryThreshold: threshold,
     eligibleSubtotal: eligibleOrderValue,

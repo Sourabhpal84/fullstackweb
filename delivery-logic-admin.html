@@ -58,13 +58,20 @@ button{border:0;border-radius:13px;min-height:44px;padding:0 14px;font:900 12px 
       <label>Delivery Radius KM<input id="maxDeliveryDistanceKm" type="number"></label>
       <label class="check"><input id="freeDeliveryEnabled" type="checkbox"> Enable free delivery campaign</label>
       <div class="fields">
-        <label>Minimum order value<input id="minimumOrderValue" type="number" min="0"></label>
+        <label>Hard minimum order value<input id="minimumOrderValue" type="number" min="0"></label>
         <label>Flat delivery charge<input id="flatDeliveryFee" type="number" min="0"></label>
         <label>0–1 KM free above<input id="zone1Threshold" type="number" min="0"></label>
+        <label>0–1 KM charge<input id="zone1Fee" type="number" min="0"></label>
         <label>1–2 KM free above<input id="zone2Threshold" type="number" min="0"></label>
+        <label>1–2 KM charge<input id="zone2Fee" type="number" min="0"></label>
         <label>2–3 KM free above<input id="zone3Threshold" type="number" min="0"></label>
+        <label>2–3 KM charge<input id="zone3Fee" type="number" min="0"></label>
         <label>3–4 KM free above<input id="zone4Threshold" type="number" min="0"></label>
-        <label>4–6 KM free above<input id="zone5Threshold" type="number" min="0"></label>
+        <label>3–4 KM charge<input id="zone4Fee" type="number" min="0"></label>
+        <label>4–5 KM free above<input id="zone5Threshold" type="number" min="0"></label>
+        <label>4–5 KM charge<input id="zone5Fee" type="number" min="0"></label>
+        <label>5–6 KM free above<input id="zone6Threshold" type="number" min="0"></label>
+        <label>5–6 KM charge<input id="zone6Fee" type="number" min="0"></label>
         <label>WhatsApp number<input id="whatsappNumber" inputmode="tel"></label>
       </div>
       <button type="submit">Save Distance Settings</button>
@@ -88,6 +95,10 @@ mountAdminLogout(document.querySelector(".head"));
 const pricingKeys = [];
 const pricingChecks = [];
 const money = amount => new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0}).format(Number(amount)||0);
+const deliverySettingNumber = (value, fallback, legacyValue) => {
+  const parsed = Math.max(0, Number(value ?? fallback));
+  return parsed === legacyValue ? fallback : parsed;
+};
 
 onSnapshot(doc(db,"settings","pricing"), snap => {
   const data = snap.exists() ? snap.data() : {};
@@ -112,13 +123,20 @@ onSnapshot(doc(db,"settings","delivery"), snap => {
   maxDistance.value = data.maxDeliveryDistanceKm || data.maxDistance || 6;
   maxDeliveryDistanceKm.value = data.maxDeliveryDistanceKm || data.maxDistance || 6;
   freeDeliveryEnabled.checked = data.freeDeliveryEnabled !== false;
-  minimumOrderValue.value = data.minimumOrderValue ?? 99;
-  flatDeliveryFee.value = data.flatDeliveryFee ?? 30;
-  zone1Threshold.value = data.zone1Threshold ?? 99;
-  zone2Threshold.value = data.zone2Threshold ?? 149;
-  zone3Threshold.value = data.zone3Threshold ?? 199;
-  zone4Threshold.value = data.zone4Threshold ?? 249;
-  zone5Threshold.value = data.zone5Threshold ?? 299;
+  minimumOrderValue.value = (data.minimumOrderValue ?? 0) === 99 ? 0 : (data.minimumOrderValue ?? 0);
+  flatDeliveryFee.value = deliverySettingNumber(data.flatDeliveryFee, 30, 24);
+  zone1Threshold.value = deliverySettingNumber(data.zone1Threshold, 149, 99);
+  zone1Fee.value = deliverySettingNumber(data.zone1Fee, 30, 24);
+  zone2Threshold.value = deliverySettingNumber(data.zone2Threshold, 199, 149);
+  zone2Fee.value = deliverySettingNumber(data.zone2Fee, 30, 24);
+  zone3Threshold.value = deliverySettingNumber(data.zone3Threshold, 249, 199);
+  zone3Fee.value = deliverySettingNumber(data.zone3Fee, 30, 24);
+  zone4Threshold.value = deliverySettingNumber(data.zone4Threshold, 299, 249);
+  zone4Fee.value = deliverySettingNumber(data.zone4Fee, 40, 24);
+  zone5Threshold.value = deliverySettingNumber(data.zone5Threshold, 349, 299);
+  zone5Fee.value = deliverySettingNumber(data.zone5Fee, 50, 24);
+  zone6Threshold.value = deliverySettingNumber(data.zone6Threshold, 399, 299);
+  zone6Fee.value = deliverySettingNumber(data.zone6Fee, 50, 24);
   whatsappNumber.value = data.whatsappNumber || "918303614331";
 });
 
@@ -161,13 +179,20 @@ deliveryForm.addEventListener("submit", async event => {
     allIndia:false,
     vipDeliveryEnabled:false,
     freeDeliveryEnabled:freeDeliveryEnabled.checked
-    ,minimumOrderValue:Number(minimumOrderValue.value) || 99
+    ,minimumOrderValue:Number(minimumOrderValue.value) || 0
     ,flatDeliveryFee:Number(flatDeliveryFee.value) || 30
     ,zone1Threshold:Number(zone1Threshold.value) || 0
+    ,zone1Fee:Number(zone1Fee.value) || 30
     ,zone2Threshold:Number(zone2Threshold.value) || 0
+    ,zone2Fee:Number(zone2Fee.value) || 30
     ,zone3Threshold:Number(zone3Threshold.value) || 0
+    ,zone3Fee:Number(zone3Fee.value) || 30
     ,zone4Threshold:Number(zone4Threshold.value) || 0
+    ,zone4Fee:Number(zone4Fee.value) || 40
     ,zone5Threshold:Number(zone5Threshold.value) || 0
+    ,zone5Fee:Number(zone5Fee.value) || 50
+    ,zone6Threshold:Number(zone6Threshold.value) || 0
+    ,zone6Fee:Number(zone6Fee.value) || 50
     ,whatsappNumber:whatsappNumber.value.replace(/\D/g,"")
   }, { merge:true });
   alert("Distance settings saved.");
