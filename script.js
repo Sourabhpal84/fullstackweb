@@ -3693,6 +3693,29 @@ function calculateDistanceDeliveryPricing(distanceKm = deliveryDistance, subtota
   };
 }
 
+function getDeliveryPolicyRows(){
+  const zones = Array.isArray(deliveryPricingSettings.zones) ? deliveryPricingSettings.zones : [];
+  return zones
+    .map((zone, index) => {
+      const fromKm = index === 0 ? 0 : Number(zones[index - 1]?.maxKm) || 0;
+      const toKm = Number(zone?.maxKm) || 0;
+      const threshold = Math.max(0, Number(zone?.threshold) || 0);
+      const fee = Math.max(0, Number(zone?.fee ?? deliveryPricingSettings.flatDeliveryFee) || 0);
+      if(!toKm || toKm <= fromKm) return "";
+      return `<p><b>${fromKm}-${toKm} KM</b><span>Free above ${formatCurrency(threshold)}, else ${formatCurrency(fee)}</span></p>`;
+    })
+    .filter(Boolean);
+}
+
+function renderDeliveryPolicyRules(){
+  const host = document.getElementById("deliveryPolicyRules");
+  if(!host) return;
+  const rows = getDeliveryPolicyRows();
+  rows.push(`<p><b>Note</b><span>Free delivery rule uses base item amount only</span></p>`);
+  rows.push(`<p><b>Above ${deliveryPricingSettings.maxDeliveryDistanceKm || 6} KM</b><span>Not Available</span></p>`);
+  host.innerHTML = rows.join("");
+}
+
 // function calculateDeliveryCharge(subtotal){
 
 // // minimum order
@@ -4235,6 +4258,7 @@ function validateActiveCoupon(){
 }
 
 function renderDeliveryCampaign(subtotal = getCartSubtotal()){
+  renderDeliveryPolicyRules();
   const pricing = calculateDistanceDeliveryPricing(deliveryDistance, subtotal);
   const eligibleSubtotal = Number(pricing.eligibleSubtotal ?? getCartBaseSubtotal());
   const hosts = [document.getElementById("freeDeliveryHint")].filter(Boolean);
