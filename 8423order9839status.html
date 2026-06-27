@@ -573,7 +573,7 @@ function itemQty(item = {}){
 }
 
 function itemUnitAmount(item = {}){
-  const direct = item.price ?? item.unitPrice ?? item.basePrice ?? item.selectedPrice ?? item.variantPrice ?? item.finalPrice;
+  const direct = item.baseUnitPrice ?? item.unitPrice ?? item.basePrice ?? item.selectedPrice ?? item.variantPrice ?? item.finalPrice;
   if(Number(direct) > 0) return Number(direct);
   const line = item.total ?? item.totalPrice ?? item.lineTotal ?? item.amount;
   if(Number(line) > 0) return Number(line) / itemQty(item);
@@ -591,20 +591,36 @@ function itemExtras(item = {}){
   return extras.filter(extra => extra && extra.name);
 }
 
+function itemCrust(item = {}){
+  if(item.crust && typeof item.crust === "object"){
+    return item.crust.label || item.crust.name || "Pan Crust";
+  }
+  return item.crustType || item.selectedCrust || "Pan Crust";
+}
+
+function itemBaseLineAmount(item = {}){
+  const qty = itemQty(item);
+  const base = itemUnitAmount(item);
+  if(base > 0) return base * qty;
+  const extrasTotal = itemExtras(item).reduce((sum, extra) => sum + Number(extra.price || 0), 0) * qty;
+  return Math.max(0, itemLineAmount(item) - extrasTotal);
+}
+
 function renderOrderItems(items = []){
   if(!Array.isArray(items) || !items.length) return "<div>No items found</div>";
   return items.map(item => {
     const qty = itemQty(item);
-    const unit = itemUnitAmount(item);
     const line = itemLineAmount(item);
     const itemName = escapeHTML(item.name || item.title || item.dishName || "Item");
-    const unitText = unit > 0 ? ` @ ${formatCurrency(unit)}` : "";
     const amountText = line > 0 ? formatCurrency(line) : "-";
     const extras = itemExtras(item);
+    const baseLine = itemBaseLineAmount(item);
+    const crustText = `<small style="grid-column:1/-1;color:#94a3b8;">Crust: ${escapeHTML(itemCrust(item))}</small>`;
+    const baseText = `<small style="grid-column:1/-1;color:#94a3b8;">Base: ${formatCurrency(baseLine)}</small>`;
     const extrasText = extras.length
-      ? `<small style="grid-column:1/-1;color:#94a3b8;">Extras: ${extras.map(extra => `${escapeHTML(extra.name)} ${formatCurrency(extra.price)}`).join(", ")}</small>`
+      ? `<small style="grid-column:1/-1;color:#94a3b8;">Extras: ${extras.map(extra => `${escapeHTML(extra.name)} ${formatCurrency(Number(extra.price || 0) * qty)}`).join(", ")}</small>`
       : "";
-    return `<div class="item-line"><span>• ${itemName} (x${qty})${unitText}</span><b>${amountText}</b>${extrasText}</div>`;
+    return `<div class="item-line"><span>• ${itemName} (x${qty})</span><b>${amountText}</b>${crustText}${baseText}${extrasText}</div>`;
   }).join("");
 }
 

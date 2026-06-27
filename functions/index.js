@@ -478,6 +478,17 @@ function compactCartItem(item = {}) {
     size: compactText(item.size, 80),
     variant: compactText(item.variant, 80),
     category: compactText(item.category, 120),
+    crust: item.crust && typeof item.crust === "object" ? {
+      id: compactText(item.crust.id || item.selectedCrust || "pan", 40),
+      label: compactText(item.crust.label || item.crustType || "Pan Crust", 80),
+      description: compactText(item.crust.description || "", 120)
+    } : {
+      id: compactText(item.selectedCrust || "pan", 40),
+      label: compactText(item.crustType || "Pan Crust", 80),
+      description: compactText(item.crustDescription || "", 120)
+    },
+    crustType: compactText(item.crustType || item.crust?.label || "Pan Crust", 80),
+    selectedCrust: compactText(item.selectedCrust || item.crust?.id || "pan", 40),
     baseUnitPrice: Number(item.baseUnitPrice || item.unitPrice || 0),
     unitPrice: Number(item.unitPrice || item.baseUnitPrice || 0),
     extras,
@@ -498,8 +509,20 @@ function cartSubtotalFromSnapshot(items = []) {
   return roundMoney((Array.isArray(items) ? items : []).reduce((sum, item) => sum + Number(item.price || 0), 0));
 }
 
+function cartBaseSubtotalFromSnapshot(items = []) {
+  return roundMoney((Array.isArray(items) ? items : []).reduce((sum, item) => {
+    const qty = Number(item.qty || item.quantity || 1);
+    const extras = Array.isArray(item.extras) ? item.extras : (Array.isArray(item.addOns) ? item.addOns : []);
+    const extrasTotal = extras.reduce((extraSum, extra) => extraSum + Number(extra.price || 0), 0) * qty;
+    const baseUnit = Number(item.baseUnitPrice || item.unitPrice || 0);
+    const baseLine = baseUnit > 0 ? baseUnit * qty : Math.max(0, Number(item.price || 0) - extrasTotal);
+    return sum + baseLine;
+  }, 0));
+}
+
 async function secureDeliveryDraft(draft, cartSnapshot) {
   const subtotal = cartSubtotalFromSnapshot(cartSnapshot);
+  const baseSubtotal = cartBaseSubtotalFromSnapshot(cartSnapshot);
   if (Math.abs(subtotal - Number(draft.subtotalAmount || draft.subtotal || 0)) > 0.01) {
     throw Object.assign(new Error("Cart subtotal changed. Please refresh checkout."), { status: 409 });
   }
@@ -512,9 +535,9 @@ async function secureDeliveryDraft(draft, cartSnapshot) {
     calculateGoogleRouteDistance({ origin: draft.restaurantLocation, destination: draft.location })
   ]);
   const settings = normalizeDeliverySettings(settingsSnap.exists ? settingsSnap.data() : {});
-  const delivery = calculateDeliveryPricing({ distanceKm: route.distanceKm, subtotal, settings });
+  const delivery = calculateDeliveryPricing({ distanceKm: route.distanceKm, subtotal, eligibleSubtotal: baseSubtotal, settings });
   if (!delivery.minimumOrderMet) {
-    throw Object.assign(new Error("Minimum order value is ₹99."), { status: 409 });
+    throw Object.assign(new Error("Minimum order value is ₹99 before extra toppings."), { status: 409 });
   }
   if (!delivery.deliveryServiceable) {
     throw Object.assign(new Error("Sorry, we are not available at your location yet."), { status: 409 });
@@ -527,7 +550,7 @@ async function secureDeliveryDraft(draft, cartSnapshot) {
   const gstAmount = Math.round(taxableAmount * gstPercent / 100);
   const total = Math.max(0, roundMoney(taxableAmount + gstAmount + handlingCharge + delivery.deliveryFee));
   return {
-    ...draft, subtotalAmount: subtotal, subtotal,
+    ...draft, subtotalAmount: subtotal, subtotal, baseSubtotalAmount: baseSubtotal, baseSubtotal,
     deliveryDistance: route.distanceKm, actualRoadDistance: route.distanceKm,
     distanceSource: route.source || "google_routes_backend",
     distanceKm: route.distanceKm,
@@ -563,6 +586,7 @@ function compactOrderDraft(draft = {}, cartSnapshot = []) {
     location: draft.location || null,
     items,
     subtotalAmount: Number(draft.subtotalAmount || draft.subtotal || 0),
+    baseSubtotalAmount: Number(draft.baseSubtotalAmount || draft.baseSubtotal || 0),
     totalAmount: Number(draft.totalAmount || draft.grandTotal || draft.finalAmount || 0),
     deliveryDistance: Number(draft.deliveryDistance || 0),
     actualRoadDistance: Number(draft.actualRoadDistance || 0),
@@ -591,6 +615,7 @@ function compactOrderDraft(draft = {}, cartSnapshot = []) {
     gstAmount: Number(draft.gstAmount || 0),
     handlingCharge: Number(draft.handlingCharge || 0),
     subtotal: Number(draft.subtotal || draft.subtotalAmount || 0),
+    baseSubtotal: Number(draft.baseSubtotal || draft.baseSubtotalAmount || 0),
     grandTotal: Number(draft.grandTotal || draft.totalAmount || 0),
     finalAmount: Number(draft.finalAmount || draft.grandTotal || draft.totalAmount || 0),
     orderSource: compactText(draft.orderSource || "online", 80),

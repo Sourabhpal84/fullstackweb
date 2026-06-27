@@ -169,7 +169,7 @@ let appPricing = {
 let deliveryPricingSettings = {
   freeDeliveryEnabled:true,
   minimumOrderValue:99,
-  flatDeliveryFee:24,
+  flatDeliveryFee:30,
   maxDeliveryDistanceKm:6,
   whatsappNumber:"918303614331",
   zones:[
@@ -180,7 +180,7 @@ let deliveryPricingSettings = {
     { maxKm:6, threshold:299 }
   ]
 };
-const DELIVERY_RULE_VERSION = "flat-24-zones-v1";
+const DELIVERY_RULE_VERSION = "flat-30-base-minimum-v2";
 let isOrderProcessing = false;
 let lastOrderSignature = null;
 let razorpayInFlight = false;
@@ -227,6 +227,11 @@ const EXTRA_TOPPINGS = Object.freeze([
   { id:"extra_black_olives", name:"Extra Black Olives", price:20 },
   { id:"extra_cheese", name:"Extra Cheese", price:40 }
 ]);
+const CRUST_OPTIONS = Object.freeze([
+  { id:"thin", label:"Thin Crust", description:"Crispy & Crunchy" },
+  { id:"pan", label:"Pan Crust", description:"Soft & Fluffy" }
+]);
+const DEFAULT_CRUST_ID = "pan";
 let resumeCheckoutAfterAuth = false;
 let checkoutInFlightId = "";
 let placeOrderInFlight = false;
@@ -1518,8 +1523,9 @@ function renderSmartAssistant(intent = smartAssistantIntent){
   const chips = document.getElementById("smartAssistantChips");
   if(!results) return;
   const subtotal = getCartSubtotal();
-  const freeDeliveryTarget = calculateDistanceDeliveryPricing(deliveryDistance, subtotal).threshold || DEFAULT_FREE_DELIVERY_MIN;
-  const neededForFree = Math.max(0, freeDeliveryTarget - subtotal);
+  const baseSubtotal = getCartBaseSubtotal();
+  const freeDeliveryTarget = calculateDistanceDeliveryPricing(deliveryDistance, subtotal, baseSubtotal).threshold || DEFAULT_FREE_DELIVERY_MIN;
+  const neededForFree = Math.max(0, freeDeliveryTarget - baseSubtotal);
   const dishes = [...allMenuDishes]
     .sort((a, b) => scoreSmartDish(b, intent) - scoreSmartDish(a, intent))
     .slice(0, 4);
@@ -2355,9 +2361,19 @@ function extrasTotalPerUnit(extras = []){
   return normalizeCartExtras(extras).reduce((sum, extra) => sum + Number(extra.price || 0), 0);
 }
 
+function normalizeCrust(value){
+  const raw = typeof value === "object" && value ? (value.id || value.type || value.label || value.name) : value;
+  const key = String(raw || DEFAULT_CRUST_ID).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+  const option = CRUST_OPTIONS.find(item => item.id === key)
+    || CRUST_OPTIONS.find(item => item.label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") === key)
+    || CRUST_OPTIONS.find(item => item.id === DEFAULT_CRUST_ID);
+  return { ...option };
+}
+
 function normalizeCartItemPricing(item = {}){
   const qty = Math.max(1, Number(item.qty || item.quantity || 1) || 1);
   const existingExtras = normalizeCartExtras(item.extras || item.addOns || item.addons || item.extraToppings);
+  const crust = normalizeCrust(item.crust || item.crustType || item.selectedCrust);
   const baseUnitPrice = Number(item.baseUnitPrice || item.unitPrice || (qty ? Number(item.price || 0) / qty - extrasTotalPerUnit(existingExtras) : item.price) || 0);
   const extrasTotal = extrasTotalPerUnit(existingExtras);
   return {
@@ -2368,6 +2384,9 @@ function normalizeCartItemPricing(item = {}){
     unitPrice:baseUnitPrice,
     extras:existingExtras,
     addOns:existingExtras,
+    crust,
+    crustType:crust.label,
+    selectedCrust:crust.id,
     extrasTotal,
     price:Math.round((baseUnitPrice + extrasTotal) * qty)
   };
@@ -2388,6 +2407,7 @@ function compactCartForStorage(items = []){
     const qty = Number(item.qty || item.quantity || 1);
     const baseUnitPrice = Number(item.baseUnitPrice || item.unitPrice || (qty ? Number(item.price || 0) / qty : item.price) || 0);
     const extras = normalizeCartExtras(item.extras || item.addOns || item.addons || item.extraToppings);
+    const crust = normalizeCrust(item.crust || item.crustType || item.selectedCrust);
     const extrasTotal = extrasTotalPerUnit(extras);
     return {
       id:String(item.id || "").slice(0, 120),
@@ -2398,6 +2418,9 @@ function compactCartForStorage(items = []){
       unitPrice:baseUnitPrice,
       extras,
       addOns:extras,
+      crust,
+      crustType:crust.label,
+      selectedCrust:crust.id,
       extrasTotal,
       price:cartItemTotal({ ...item, qty, baseUnitPrice, unitPrice:baseUnitPrice, extras }),
       qty,
@@ -3208,7 +3231,7 @@ registerGlobalSnapshot(onSnapshot(
       ...deliveryPricingSettings,
       freeDeliveryEnabled:data.freeDeliveryEnabled !== false,
       minimumOrderValue:Math.max(0, Number(data.minimumOrderValue ?? 99)),
-      flatDeliveryFee:Math.max(0, Number(data.flatDeliveryFee ?? 24)),
+      flatDeliveryFee:Math.max(0, Number(data.flatDeliveryFee ?? 30)) === 24 ? 30 : Math.max(0, Number(data.flatDeliveryFee ?? 30)),
       maxDeliveryDistanceKm:MAX_DELIVERY_DISTANCE,
       whatsappNumber:String(data.whatsappNumber || deliveryPricingSettings.whatsappNumber).replace(/\D/g,""),
       zones:[
@@ -3611,9 +3634,9 @@ function calculateDistance(){
 }
 
 /* ================= DELIVERY LOGIC ================= */
-function calculateDeliveryCharge(subtotal){
+function calculateDeliveryCharge(subtotal, eligibleSubtotal = getCartBaseSubtotal()){
 
-const pricing = calculateDistanceDeliveryPricing(deliveryDistance, subtotal);
+const pricing = calculateDistanceDeliveryPricing(deliveryDistance, subtotal, eligibleSubtotal);
 
 if(!pricing.minimumOrderMet){
 
@@ -3633,17 +3656,18 @@ return true;
 
 }
 
-function calculateDistanceDeliveryPricing(distanceKm = deliveryDistance, subtotal = getCartSubtotal()){
+function calculateDistanceDeliveryPricing(distanceKm = deliveryDistance, subtotal = getCartSubtotal(), eligibleSubtotal = getCartBaseSubtotal()){
   const distance = Math.max(0, Number(distanceKm) || 0);
+  const deliveryEligibleSubtotal = Math.max(0, Number(eligibleSubtotal) || 0);
   const maxDistance = Math.max(0, Number(deliveryPricingSettings.maxDeliveryDistanceKm) || 6);
   const locationAvailable = distance > 0;
   const serviceable = locationAvailable && distance <= maxDistance;
   const zone = locationAvailable ? deliveryPricingSettings.zones.find(item => distance <= item.maxKm) : null;
   const threshold = Math.max(0, Number(zone?.threshold) || 0);
   const minimumOrderValue = Math.max(0, Number(deliveryPricingSettings.minimumOrderValue) || 99);
-  const minimumOrderMet = subtotal >= minimumOrderValue;
-  const baseCharge = Math.max(0, Number(deliveryPricingSettings.flatDeliveryFee) || 24);
-  const campaignFree = serviceable && minimumOrderMet && deliveryPricingSettings.freeDeliveryEnabled && subtotal >= threshold;
+  const minimumOrderMet = deliveryEligibleSubtotal >= minimumOrderValue;
+  const baseCharge = Math.max(0, Number(deliveryPricingSettings.flatDeliveryFee) || 30);
+  const campaignFree = serviceable && minimumOrderMet && deliveryPricingSettings.freeDeliveryEnabled && deliveryEligibleSubtotal >= threshold;
   return {
     serviceable,
     locationAvailable,
@@ -3651,11 +3675,12 @@ function calculateDistanceDeliveryPricing(distanceKm = deliveryDistance, subtota
     baseCharge,
     deliveryCharge:serviceable && minimumOrderMet && !campaignFree ? baseCharge : 0,
     freeDeliveryDiscount:campaignFree ? baseCharge : 0,
-    remaining:Math.max(0, threshold - subtotal),
+    eligibleSubtotal:deliveryEligibleSubtotal,
+    remaining:Math.max(0, threshold - deliveryEligibleSubtotal),
     minimumOrderValue,
     minimumOrderMet,
-    minimumRemaining:Math.max(0, minimumOrderValue - subtotal),
-    progress:threshold ? Math.min(100, Math.round(subtotal / threshold * 100)) : 0,
+    minimumRemaining:Math.max(0, minimumOrderValue - deliveryEligibleSubtotal),
+    progress:threshold ? Math.min(100, Math.round(deliveryEligibleSubtotal / threshold * 100)) : 0,
     freeDelivery:campaignFree,
     deliveryRuleVersion:DELIVERY_RULE_VERSION
   };
@@ -3938,6 +3963,11 @@ function getCartSubtotal(){
   return cart.reduce((sum, item) => sum + item.price, 0);
 }
 
+function getCartBaseSubtotal(){
+  normalizeCartPricing();
+  return cart.reduce((sum, item) => sum + (Number(item.baseUnitPrice || item.unitPrice || 0) * Number(item.qty || item.quantity || 1)), 0);
+}
+
 function couponExpired(coupon){
   const expiry = timestampToMillis(coupon.expiryDate);
   return expiry > 0 && Date.now() > expiry;
@@ -4199,9 +4229,10 @@ function validateActiveCoupon(){
 
 function renderDeliveryCampaign(subtotal = getCartSubtotal()){
   const pricing = calculateDistanceDeliveryPricing(deliveryDistance, subtotal);
+  const eligibleSubtotal = Number(pricing.eligibleSubtotal ?? getCartBaseSubtotal());
   const hosts = [document.getElementById("freeDeliveryHint")].filter(Boolean);
   const message = !pricing.minimumOrderMet
-    ? `Add ${formatCurrency(pricing.minimumRemaining)} more to reach minimum order value.`
+    ? `Add ${formatCurrency(pricing.minimumRemaining)} more in base items to reach minimum order value.`
     : !deliveryDistance
       ? "Enable location to check delivery availability."
       : !pricing.serviceable
@@ -4211,7 +4242,7 @@ function renderDeliveryCampaign(subtotal = getCartSubtotal()){
           : `Delivery charge ${formatCurrency(pricing.baseCharge)} applied. Add ${formatCurrency(pricing.remaining)} more for FREE delivery 🚚`;
   const markup = `<div class="delivery-campaign ${pricing.freeDelivery ? "unlocked" : ""} ${!pricing.serviceable && deliveryDistance ? "blocked" : ""}">
     <strong>${message}</strong>
-    ${pricing.minimumOrderMet && pricing.serviceable && !pricing.freeDelivery ? `<div class="delivery-progress-meta"><span>${formatCurrency(subtotal)} / ${formatCurrency(pricing.threshold)}</span><span>${pricing.progress}%</span></div><div class="delivery-progress"><i style="width:${pricing.progress}%"></i></div>` : ""}
+    ${pricing.minimumOrderMet && pricing.serviceable && !pricing.freeDelivery ? `<div class="delivery-progress-meta"><span>${formatCurrency(eligibleSubtotal)} / ${formatCurrency(pricing.threshold)}</span><span>${pricing.progress}%</span></div><div class="delivery-progress"><i style="width:${pricing.progress}%"></i></div>` : ""}
   </div>`;
   hosts.forEach(host => host.innerHTML = markup);
   const largeOrder = document.getElementById("largeOrderAssistance");
@@ -4233,7 +4264,7 @@ function renderDeliveryCampaign(subtotal = getCartSubtotal()){
   const blocked = deliveryDistance > 0 && !pricing.serviceable;
   document.querySelectorAll("[aria-label='Place order'], #codBtn, #upiBtn").forEach(button => {
     button.disabled = blocked || !pricing.minimumOrderMet;
-    button.title = blocked ? "Sorry, we are not available at your location yet." : !pricing.minimumOrderMet ? "Minimum order value is ₹99." : "";
+    button.title = blocked ? "Sorry, we are not available at your location yet." : !pricing.minimumOrderMet ? "Minimum order value is ₹99 before extra toppings." : "";
   });
 }
 
@@ -4345,10 +4376,11 @@ async function createOrderSafely({ paymentMethod, paymentStatus, paymentId = "",
   if(!["cod", "online", "upi"].includes(normalizedPaymentMethod)) throw new Error("Invalid payment method");
 
   const subtotal = getCartSubtotal();
-  if(subtotal < 99) throw new Error("Minimum order value is ₹99.");
+  const baseSubtotal = getCartBaseSubtotal();
+  if(baseSubtotal < 99) throw new Error("Minimum order value is ₹99 before extra toppings.");
 
   if(!(await timedStep("createOrderSafely:ensureDeliveryEligible", () => ensureDeliveryEligible()))) throw new Error("Delivery is not available for this location.");
-  if(!calculateDeliveryCharge(subtotal)) throw new Error("Delivery is not available for this location.");
+  if(!calculateDeliveryCharge(subtotal, baseSubtotal)) throw new Error("Delivery is not available for this location.");
   let securedDelivery;
   try{
     securedDelivery = await timedStep("createOrderSafely:validateDeliveryPricing", () => callPaymentFunction("validateDeliveryPricing", {
@@ -4356,16 +4388,18 @@ async function createOrderSafely({ paymentMethod, paymentStatus, paymentId = "",
       orderDraft:{
         userId:user.uid,
         subtotalAmount:subtotal,
+        baseSubtotalAmount:baseSubtotal,
         subtotal,
+        baseSubtotal,
         couponDiscount:calculateCouponPricing(subtotal).couponDiscount,
         restaurantLocation:getRestaurantLocation(),
         location:userLocation
       }
     }, 18000));
   }catch(error){
-    const localRule = calculateDistanceDeliveryPricing(deliveryDistance, subtotal);
+    const localRule = calculateDistanceDeliveryPricing(deliveryDistance, subtotal, baseSubtotal);
     const safeDistance = Number(actualRoadDistance || deliveryDistance || localRule.distance || 0);
-    const safeCharge = Number(localRule.deliveryCharge ?? calculateDeliveryCharge(subtotal) ?? 0);
+    const safeCharge = Number(localRule.deliveryCharge ?? calculateDeliveryCharge(subtotal, baseSubtotal) ?? 0);
     if(!Number.isFinite(safeDistance) || safeDistance <= 0 || !Number.isFinite(safeCharge) || safeCharge < 0){
       throw error;
     }
@@ -4394,7 +4428,7 @@ async function createOrderSafely({ paymentMethod, paymentStatus, paymentId = "",
   if(!inventory.ok) throw new Error(inventory.message);
 
   const pricing = calculateInvoicePricing(subtotal);
-  const deliveryRule = calculateDistanceDeliveryPricing(deliveryDistance, subtotal);
+  const deliveryRule = calculateDistanceDeliveryPricing(deliveryDistance, subtotal, baseSubtotal);
   const orderTotalBeforeWallet = pricing.beforeWallet;
   const restaurantAssignment = {
   restaurantId: "primary",
@@ -4432,6 +4466,7 @@ async function createOrderSafely({ paymentMethod, paymentStatus, paymentId = "",
         addressLng:fields.lng || userLocation?.lng || null,
         items:itemsSnapshot,
         subtotalAmount:subtotal,
+        baseSubtotalAmount:baseSubtotal,
         totalAmount:orderTotalBeforeWallet,
         deliveryDistance,
         ...deliveryMetrics(),
@@ -4457,6 +4492,7 @@ async function createOrderSafely({ paymentMethod, paymentStatus, paymentId = "",
         gstAmount:pricing.gstAmount,
         handlingCharge:pricing.handlingCharge,
         subtotal,
+        baseSubtotal,
         grandTotal:orderTotalBeforeWallet,
         invoiceNumber:buildInvoiceNumber(orderRef.id),
         invoiceGeneratedAt:serverTimestamp(),
@@ -4550,9 +4586,10 @@ async function buildPaidOnlineOrderDraft(){
   if(!fields.name || !fields.address) throw new Error("Fill name & address");
 
   const subtotal = getCartSubtotal();
-  if(subtotal < 99) throw new Error("Minimum order value is ₹99.");
+  const baseSubtotal = getCartBaseSubtotal();
+  if(baseSubtotal < 99) throw new Error("Minimum order value is ₹99 before extra toppings.");
   if(!(await ensureDeliveryEligible())) throw new Error("Delivery is not available for this location.");
-  if(!calculateDeliveryCharge(subtotal)) throw new Error("Delivery is not available for this location.");
+  if(!calculateDeliveryCharge(subtotal, baseSubtotal)) throw new Error("Delivery is not available for this location.");
 
   validateActiveCoupon();
   const [usageValidation, inventory] = await Promise.all([
@@ -4563,7 +4600,7 @@ async function buildPaidOnlineOrderDraft(){
   if(!inventory.ok) throw new Error(inventory.message);
 
   const pricing = calculateInvoicePricing(subtotal);
-  const deliveryRulePaid = calculateDistanceDeliveryPricing(deliveryDistance, subtotal);
+  const deliveryRulePaid = calculateDistanceDeliveryPricing(deliveryDistance, subtotal, baseSubtotal);
   const checkoutId = checkoutInFlightId || `co_${user.uid}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   checkoutInFlightId = checkoutId;
   const itemsSnapshot = compactCartForStorage(cart);
@@ -4583,6 +4620,7 @@ async function buildPaidOnlineOrderDraft(){
       addressLng:fields.lng || userLocation?.lng || null,
       items:itemsSnapshot,
       subtotalAmount:subtotal,
+      baseSubtotalAmount:baseSubtotal,
       totalAmount:pricing.grandTotal,
       deliveryDistance,
       ...deliveryMetrics(),
@@ -4608,6 +4646,7 @@ async function buildPaidOnlineOrderDraft(){
       gstAmount:pricing.gstAmount,
       handlingCharge:pricing.handlingCharge,
       subtotal,
+      baseSubtotal,
       grandTotal:pricing.grandTotal,
       finalAmount:pricing.grandTotal,
       orderSource:"online",
@@ -4672,20 +4711,35 @@ function updateCart() {
   cart.forEach((item, index) => {
     total += item.price;
     const extras = normalizeCartExtras(item.extras);
-    const extrasText = extras.length
-      ? `<small class="cart-extras-summary">Extras: ${extras.map(extra => `${escapeHTML(extra.name)} ${formatCurrency(extra.price)}`).join(", ")}</small>`
-      : "";
+    const baseLineTotal = Number(item.baseUnitPrice || item.unitPrice || 0) * Number(item.qty || 1);
+    const extrasLineTotal = extrasTotalPerUnit(extras) * Number(item.qty || 1);
+    const priceBreakdown = `
+      <div class="cart-item-price-breakdown">
+        <p><span>${escapeHTML(item.name)} base</span><b>${formatCurrency(baseLineTotal)}</b></p>
+        ${extras.map(extra => `<p><span>${escapeHTML(extra.name)}</span><b>${formatCurrency(Number(extra.price || 0) * Number(item.qty || 1))}</b></p>`).join("")}
+        ${extrasLineTotal > 0 ? `<p class="cart-item-total"><span>Item total</span><b>${formatCurrency(item.price)}</b></p>` : ""}
+      </div>
+    `;
     const extrasControls = EXTRA_TOPPINGS.map(extra => {
       const checked = extras.some(selected => selected.id === extra.id);
       return `<label><input type="checkbox" ${checked ? "checked" : ""} onchange="toggleCartExtra(${index}, '${extra.id}', this.checked)"> <span>${escapeHTML(extra.name)}</span><b>${formatCurrency(extra.price)}</b></label>`;
     }).join("");
+    const crust = normalizeCrust(item.crust);
+    const crustControls = CRUST_OPTIONS.map(option => `
+      <label>
+        <input type="radio" name="cart-crust-${index}" ${crust.id === option.id ? "checked" : ""} onchange="setCartCrust(${index}, '${option.id}')">
+        <span>${escapeHTML(option.label)}</span>
+        <small>${escapeHTML(option.description)}</small>
+      </label>
+    `).join("");
     itemsHTML += `
   <div class="cart-item cart-item-pro">
     <img src="${escapeHTML(normalizeImageUrl(item.image))}" alt="${escapeHTML(item.name)}" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
     <div>
       <strong>${escapeHTML(item.name)}</strong><br>
-      <small>${escapeHTML(item.size || "Regular")} x ${item.qty} • Base ${formatCurrency(item.baseUnitPrice || item.unitPrice || 0)}</small>
-      ${extrasText}
+      <small>${escapeHTML(item.size || "Regular")} x ${item.qty} • ${escapeHTML(crust.label)}</small>
+      <div class="cart-crust-picker" aria-label="Crust option">${crustControls}</div>
+      ${priceBreakdown}
       <details class="cart-extras-picker">
         <summary>Extra Toppings / Add-ons</summary>
         <div>${extrasControls}</div>
@@ -4792,6 +4846,17 @@ window.toggleCartExtra = function(index, extraId, checked){
   item.addOns = item.extras;
   Object.assign(item, normalizeCartItemPricing(item));
   if(activeCoupon) validateActiveCoupon();
+  updateCart();
+};
+
+window.setCartCrust = function(index, crustId){
+  const item = cart[index];
+  if(!item) return;
+  const crust = normalizeCrust(crustId);
+  item.crust = crust;
+  item.crustType = crust.label;
+  item.selectedCrust = crust.id;
+  Object.assign(item, normalizeCartItemPricing(item));
   updateCart();
 };
 
@@ -5121,11 +5186,12 @@ await timedStep("placeOrder:saveCustomerProfile", () => saveCustomerProfile(auth
 await timedStep("placeOrder:saveAddressBook", () => saveCurrentAddressToBook().catch(error => console.warn("Address book save skipped", error)));
 
 const subtotal = getCartSubtotal();
+const baseSubtotal = getCartBaseSubtotal();
 
 // ⭐ Minimum order check
-if(subtotal < deliveryPricingSettings.minimumOrderValue){
+if(baseSubtotal < deliveryPricingSettings.minimumOrderValue){
 
-showMinOrderPopup(deliveryPricingSettings.minimumOrderValue - subtotal);
+showMinOrderPopup(deliveryPricingSettings.minimumOrderValue - baseSubtotal);
 
 return false;
 
@@ -5134,7 +5200,7 @@ return false;
 if(!(await timedStep("placeOrder:ensureDeliveryEligible", () => ensureDeliveryEligible()))) return;
 
 // delivery condition check
-if(!calculateDeliveryCharge(subtotal)){
+if(!calculateDeliveryCharge(subtotal, baseSubtotal)){
 return;
 }
 
@@ -5238,12 +5304,13 @@ async function prepareOrderSummary(options = {}) {
   logDistanceDebug("prepare_order_summary");
 
   const subtotal = getCartSubtotal();
+  const baseSubtotal = getCartBaseSubtotal();
 
   if (subtotal > 2000) {
     alert(`For large orders above ${formatCurrency(2000)} please contact via WhatsApp`);
   }
 
-  if (!calculateDeliveryCharge(subtotal)) return;
+  if (!calculateDeliveryCharge(subtotal, baseSubtotal)) return;
 
   const pricing = calculateInvoicePricing(subtotal);
 
@@ -5378,13 +5445,14 @@ razorpayInFlight = true;
 lastOrderSignature = signature;
 
 const subtotal = getCartSubtotal();
+const baseSubtotal = getCartBaseSubtotal();
 
 if(!(await timedStep("upiOrder:ensureDeliveryEligible", () => ensureDeliveryEligible()))){
 resetRazorpayCheckoutState();
 return;
 }
 
-if(!calculateDeliveryCharge(subtotal)){
+if(!calculateDeliveryCharge(subtotal, baseSubtotal)){
 resetRazorpayCheckoutState();
 return;
 }
@@ -5804,7 +5872,7 @@ alert("Add "+formatCurrency(amount)+" more to place order");
 return;
 }
 
-text.innerText = `Minimum order value is ₹99. Add ${formatCurrency(amount)} more.`;
+text.innerText = `Minimum order value is ₹99 before extra toppings. Add ${formatCurrency(amount)} more in base items.`;
 
 popup.style.display = "flex";
 
@@ -6526,7 +6594,7 @@ order.status === "Delivered"
               <span>
                 ${escapeHTML(item.name || "Item")}
                 × ${item.qty}
-                ${extras.length ? `<small>Extras: ${extras.map(extra => `${escapeHTML(extra.name)} ${formatCurrency(extra.price)}`).join(", ")}</small>` : ""}
+                ${orderItemBreakdownHTML(item)}
               </span>
 
               <strong>
@@ -6942,6 +7010,26 @@ function orderItemExtras(item = {}){
   return extras.filter(extra => extra && extra.name);
 }
 
+function orderItemBaseLineTotal(item = {}){
+  const qty = Number(item.qty || item.quantity || 1);
+  const extras = orderItemExtras(item);
+  const extrasTotal = extras.reduce((sum, extra) => sum + Number(extra.price || 0), 0) * qty;
+  const storedBase = Number(item.baseUnitPrice || item.unitPrice || 0);
+  if(storedBase > 0) return storedBase * qty;
+  return Math.max(0, Number(item.price || 0) - extrasTotal);
+}
+
+function orderItemBreakdownHTML(item = {}, moneyFormatter = formatCurrency){
+  const qty = Number(item.qty || item.quantity || 1);
+  const extras = orderItemExtras(item);
+  const crust = normalizeCrust(item.crust || item.crustType || item.selectedCrust);
+  const lines = [`Crust: ${crust.label} - ${crust.description}`, `Base: ${moneyFormatter(orderItemBaseLineTotal(item))}`];
+  extras.forEach(extra => {
+    lines.push(`${extra.name}: ${moneyFormatter(Number(extra.price || 0) * qty)}`);
+  });
+  return lines.map(line => `<small>${escapeHTML(line)}</small>`).join("");
+}
+
 window.downloadInvoicePDF = async function(orderId){
   const localOrder = liveOrders.find(order => order.id === orderId);
   let order = localOrder;
@@ -6964,16 +7052,20 @@ window.downloadInvoicePDF = async function(orderId){
   const rows = (order.items || []).map(item => {
     const qty = Number(item.qty || 1);
     const total = Number(item.price || 0);
-    const unit = qty ? total / qty : total;
+    const baseTotal = orderItemBaseLineTotal(item);
+    const unit = qty ? baseTotal / qty : baseTotal;
     const size = item.size ? `<div class="muted">Size: ${escapeHTML(item.size)}</div>` : "";
     const combo = item.comboName ? `<div class="muted">Combo: ${escapeHTML(item.comboName)}</div>` : "";
+    const crust = normalizeCrust(item.crust || item.crustType || item.selectedCrust);
+    const crustLine = `<div class="muted">Crust: ${escapeHTML(crust.label)} - ${escapeHTML(crust.description)}</div>`;
     const extras = orderItemExtras(item);
     const extrasLine = extras.length
-      ? `<div class="muted">Extras: ${extras.map(extra => `${escapeHTML(extra.name)} ${money(extra.price)}`).join(", ")}</div>`
+      ? `<div class="muted">Extras: ${extras.map(extra => `${escapeHTML(extra.name)} ${money(Number(extra.price || 0) * qty)}`).join(", ")}</div>`
       : "";
+    const baseLine = `<div class="muted">Base: ${money(baseTotal)}</div>`;
     const itemName = cleanInvoiceItemName(item.name || "Item");
     return `<tr>
-      <td><strong>${escapeHTML(itemName)}</strong>${size}${combo}${extrasLine}</td>
+      <td><strong>${escapeHTML(itemName)}</strong>${size}${combo}${crustLine}${baseLine}${extrasLine}</td>
       <td>${qty}</td>
       <td>${money(unit)}</td>
       <td>${money(total)}</td>

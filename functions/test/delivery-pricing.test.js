@@ -9,13 +9,14 @@ const test = (subtotal, distanceKm, expectedFee, expectedFree) => {
 };
 
 test(99, .8, 0, true);
-test(120, 1.5, 24, false);
+test(120, 1.5, 30, false);
 test(149, 2, 0, true);
-test(180, 3, 24, false);
+test(180, 3, 30, false);
 test(249, 4, 0, true);
-test(280, 5, 24, false);
+test(280, 5, 30, false);
 test(299, 6, 0, true);
 
 assert.strictEqual(calculateDeliveryPricing({ subtotal:98, distanceKm:1, settings }).minimumOrderMet, false);
+assert.strictEqual(calculateDeliveryPricing({ subtotal:109, eligibleSubtotal:49, distanceKm:1, settings }).minimumOrderMet, false);
 assert.strictEqual(calculateDeliveryPricing({ subtotal:299, distanceKm:6.01, settings }).deliveryServiceable, false);
 console.log("delivery pricing tests passed");

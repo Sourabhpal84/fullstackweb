@@ -113,7 +113,7 @@ onSnapshot(doc(db,"settings","delivery"), snap => {
   maxDeliveryDistanceKm.value = data.maxDeliveryDistanceKm || data.maxDistance || 6;
   freeDeliveryEnabled.checked = data.freeDeliveryEnabled !== false;
   minimumOrderValue.value = data.minimumOrderValue ?? 99;
-  flatDeliveryFee.value = data.flatDeliveryFee ?? 24;
+  flatDeliveryFee.value = data.flatDeliveryFee ?? 30;
   zone1Threshold.value = data.zone1Threshold ?? 99;
   zone2Threshold.value = data.zone2Threshold ?? 149;
   zone3Threshold.value = data.zone3Threshold ?? 199;
@@ -162,7 +162,7 @@ deliveryForm.addEventListener("submit", async event => {
     vipDeliveryEnabled:false,
     freeDeliveryEnabled:freeDeliveryEnabled.checked
     ,minimumOrderValue:Number(minimumOrderValue.value) || 99
-    ,flatDeliveryFee:Number(flatDeliveryFee.value) || 24
+    ,flatDeliveryFee:Number(flatDeliveryFee.value) || 30
     ,zone1Threshold:Number(zone1Threshold.value) || 0
     ,zone2Threshold:Number(zone2Threshold.value) || 0
     ,zone3Threshold:Number(zone3Threshold.value) || 0
