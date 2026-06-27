@@ -10705,3 +10705,53 @@ html body:not(.dark-mode):not(.dark-theme) #combosSection .combo-feature-visual{
 .cart-extras-picker b{color:#fff;font-size:10px;white-space:nowrap}
 .order-item small{display:block;margin-top:3px;color:#94a3b8;font-size:11px;line-height:1.35}
 @media(max-width:520px){.cart-extras-picker>div{grid-template-columns:1fr}}
+
+/* Extra toppings visibility fix */
+body .cart-panel .cart-extras-picker,
+body.light-theme .cart-panel .cart-extras-picker,
+body:not(.dark-mode):not(.dark-theme) .cart-panel .cart-extras-picker{
+  background:#fff7ed!important;
+  border:1px solid #fed7aa!important;
+  box-shadow:none!important;
+}
+body .cart-panel .cart-extras-picker summary,
+body.light-theme .cart-panel .cart-extras-picker summary,
+body:not(.dark-mode):not(.dark-theme) .cart-panel .cart-extras-picker summary{
+  color:#c2410c!important;
+  -webkit-text-fill-color:#c2410c!important;
+  opacity:1!important;
+  text-shadow:none!important;
+}
+body .cart-panel .cart-extras-picker label,
+body.light-theme .cart-panel .cart-extras-picker label,
+body:not(.dark-mode):not(.dark-theme) .cart-panel .cart-extras-picker label{
+  background:#ffffff!important;
+  color:#172033!important;
+  -webkit-text-fill-color:#172033!important;
+  border:1px solid #ffedd5!important;
+  opacity:1!important;
+  text-shadow:none!important;
+}
+body .cart-panel .cart-extras-picker label span,
+body.light-theme .cart-panel .cart-extras-picker label span,
+body:not(.dark-mode):not(.dark-theme) .cart-panel .cart-extras-picker label span{
+  color:#172033!important;
+  -webkit-text-fill-color:#172033!important;
+  opacity:1!important;
+  font-weight:900!important;
+}
+body .cart-panel .cart-extras-picker label b,
+body.light-theme .cart-panel .cart-extras-picker label b,
+body:not(.dark-mode):not(.dark-theme) .cart-panel .cart-extras-picker label b{
+  color:#16a34a!important;
+  -webkit-text-fill-color:#16a34a!important;
+  opacity:1!important;
+  font-weight:950!important;
+}
+body .cart-panel .cart-extras-summary,
+body.light-theme .cart-panel .cart-extras-summary,
+body:not(.dark-mode):not(.dark-theme) .cart-panel .cart-extras-summary{
+  color:#334155!important;
+  -webkit-text-fill-color:#334155!important;
+  opacity:1!important;
+}
