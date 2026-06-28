@@ -2741,7 +2741,14 @@ function categoryImageMarkup(category = {}, label = "MAGNEETOZ category"){
 }
 
 function inferMenuGroup(category = {}){
-  const raw = String(category.parent || category.group || category.type || category.mainCategory || category.name || "Recommended").trim();
+  const explicitGroup = String(category.parent || category.group || category.mainCategory || "").trim();
+  if(explicitGroup){
+    return {
+      key:normalizeCategoryId(explicitGroup),
+      label:explicitGroup
+    };
+  }
+  const raw = String(category.type || category.name || "Recommended").trim();
   const text = raw.toLowerCase();
   const groups = [
     { key:"pizza", label:"Pizza", terms:["pizza","pizaa","piza"] },
@@ -2755,6 +2762,16 @@ function inferMenuGroup(category = {}){
   if(found) return found;
   const firstWord = raw.split(/[\s/-]+/).filter(Boolean)[0] || "Recommended";
   return { key:normalizeCategoryId(firstWord), label:firstWord.charAt(0).toUpperCase() + firstWord.slice(1) };
+}
+
+function directCategoryForGroup(group = {}){
+  const categories = Array.isArray(group.categories) ? group.categories : [];
+  if(categories.length === 1) return categories[0];
+  const sameNameCategories = categories.filter(category => normalizeCategoryId(category.name) === normalizeCategoryId(group.label));
+  if(sameNameCategories.length) return sameNameCategories[0];
+  const directCategories = categories.filter(category => category.buttonIsCategory === true);
+  if(directCategories.length === categories.length && directCategories[0]) return directCategories[0];
+  return null;
 }
 
 function buildMenuCategoryGroups(categories = []){
@@ -2809,11 +2826,12 @@ function renderMenuGroupNav(groups = []){
     button.addEventListener("click", () => {
       document.querySelectorAll("[data-menu-action]").forEach(item => item.classList.remove("active"));
       const group = menuCategoryGroups.find(item => item.key === button.dataset.menuGroup);
-      if(group?.categories?.length === 1){
+      const directCategory = directCategoryForGroup(group);
+      if(directCategory){
         document.querySelectorAll("[data-menu-group]").forEach(item => item.classList.toggle("active", item.dataset.menuGroup === group.key));
         menuBrowserOpen = true;
         activeMenuGroup = group.key;
-        selectMenuCategory(group.categories[0].id);
+        selectMenuCategory(directCategory.id);
         return;
       }
       selectMenuGroup(button.dataset.menuGroup, true);
