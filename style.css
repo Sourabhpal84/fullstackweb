@@ -10777,3 +10777,12 @@ body.dark-mode .cart-crust-picker label,body.dark-theme .cart-crust-picker label
 body.dark-mode .cart-crust-picker span,body.dark-theme .cart-crust-picker span{color:#fff!important;-webkit-text-fill-color:#fff!important}
 body.dark-mode .cart-crust-picker small,body.dark-theme .cart-crust-picker small{color:#cbd5e1!important;-webkit-text-fill-color:#cbd5e1!important}
 @media(max-width:420px){.cart-crust-picker{grid-template-columns:1fr}}
+
+/* Auth-aware header actions */
+body:not(.auth-success) .auth-only{display:none!important}
+body.auth-success .auth-login-action{display:none!important}
+#headerAuthBtn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px;padding:0 14px;border:0;border-radius:999px;background:linear-gradient(135deg,#ff7a00,#f04455);color:#fff;font-weight:900;box-shadow:0 10px 24px rgba(240,68,85,.24)}
+body:not(.auth-success) #headerAuthBtn{display:inline-flex!important}
+body.auth-success #headerAuthBtn{display:none!important}
+@media(max-width:560px){#headerAuthBtn{min-height:36px;padding:0 10px;font-size:11px}.bottom-nav .auth-only{display:none!important}body.auth-success .bottom-nav .auth-only{display:flex!important}}
+body #headerAuthBtn.auth-state-action{display:inline-flex!important}

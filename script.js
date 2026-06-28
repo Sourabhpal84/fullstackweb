@@ -1243,7 +1243,10 @@ async function getLocationPermissionState(){
 }
 
 function geolocationErrorMessage(error){
-  if(error?.code === 1) return "Location permission blocked hai. Browser settings me location allow karke retry karein.";
+  const isiPhone = /iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+  if(error?.code === 1) return isiPhone
+    ? "iPhone me location blocked hai. Safari/Chrome settings me Location Allow karein, ya address search/manual address use karein."
+    : "Location permission blocked hai. Browser settings me location allow karke retry karein.";
   if(error?.code === 2) return "GPS signal weak hai. Please GPS/location ON rakhein ya address search karke select karein.";
   if(error?.code === 3 || /timed out|timeout/i.test(error?.message || "")) return "Location fetch slow ho raha hai. Please retry karein, ya address search/manual address use karein.";
   if(/not supported/i.test(error?.message || "")) return "Is browser me location support nahi hai. Please address search/manual address use karein.";
@@ -6101,15 +6104,6 @@ onAuthStateChanged(auth,(user)=>{
   if(user){
     mergeGuestCartWithUser(user).then(async () => {
       if(resumeCheckoutAfterAuth) persistGuestState();
-      const choiceVersionBeforeGps = checkoutLocationChoiceVersion;
-      await fetchFreshCurrentLocation({
-        updateAddress:true,
-        source:"fresh_gps:login",
-        expectedChoiceVersion:choiceVersionBeforeGps
-      }).catch(error => {
-        setLocationUiState("permission", geolocationErrorMessage(error));
-      });
-      if(checkoutLocationChoiceVersion !== choiceVersionBeforeGps) return;
       await saveLoginCurrentLocation(user).catch(error => console.warn("Login location save skipped", error));
     });
 

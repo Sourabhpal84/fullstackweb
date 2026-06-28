@@ -115,10 +115,32 @@ function setButton(button, busy, busyText){
   button.textContent = busy ? busyText : button.dataset.idleText;
 }
 
+function syncAuthControls(user){
+  const loggedIn = !!user;
+  document.body.classList.toggle("is-guest", !loggedIn);
+  document.body.classList.toggle("is-logged-in", loggedIn);
+  document.querySelectorAll(".auth-login-action").forEach(button => {
+    button.hidden = loggedIn;
+    button.setAttribute("aria-hidden", loggedIn ? "true" : "false");
+  });
+  document.querySelectorAll(".auth-only").forEach(element => {
+    element.hidden = !loggedIn;
+    element.setAttribute("aria-hidden", loggedIn ? "false" : "true");
+  });
+  const headerAuthBtn = $("headerAuthBtn");
+  if(headerAuthBtn){
+    headerAuthBtn.textContent = loggedIn ? "🚪 Logout" : "🔐 Login";
+    headerAuthBtn.title = loggedIn ? "Logout from MAGNEETOZ" : "Login to MAGNEETOZ";
+    headerAuthBtn.hidden = false;
+    headerAuthBtn.setAttribute("aria-hidden", "false");
+  }
+}
+
 function setAuthView(user){
   const popup = $("authPopup");
   const app = $("mainWebsite");
   document.body.classList.remove("auth-loading");
+  syncAuthControls(user);
 
   if(user){
     cleanupOtpSession({ keepRecaptcha:true });
@@ -161,6 +183,11 @@ function openAuthPopup(reason = "checkout"){
   setAuthStatus("Enter mobile number", "info");
   $("phoneNumber")?.focus();
   window.dispatchEvent(new CustomEvent("magneetoz:auth-required", { detail:{ reason } }));
+}
+
+function authPopupVisible(){
+  const popup = $("authPopup");
+  return !!(popup && popup.style.display !== "none");
 }
 
 function closeAuthPopup(){
@@ -565,6 +592,22 @@ function bindAuthUI(){
   $("resendOtpBtn")?.addEventListener("click", sendOTP);
   $("verifyOtpBtn")?.addEventListener("click", verifyOTP);
   $("closeAuthPopup")?.addEventListener("click", closeAuthPopup);
+  document.querySelectorAll(".auth-login-action").forEach(button => {
+    button.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      openAuthPopup(button.id === "headerAuthBtn" ? "header_login" : "login");
+    });
+  });
+  $("headerAuthBtn")?.addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    if(auth.currentUser){
+      logout();
+      return;
+    }
+    openAuthPopup("header_login");
+  });
   $("otp")?.addEventListener("input", () => {
     const code = setOtpValue($("otp")?.value || "", { autoVerify:true });
     if(code.length < 6) setAuthStatus("Auto-detecting OTP...", "info");
@@ -573,6 +616,16 @@ function bindAuthUI(){
     if(event.key === "Enter") verifyOTP();
   });
 }
+
+document.addEventListener("click", event => {
+  if(auth.currentUser) return;
+  if(authPopupVisible()) return;
+  const target = event.target;
+  if(target?.closest?.("#authPopup,#recaptcha-container,.auth-login-action,.auth-state-action,[data-auth-free],a[href^='tel:'],a[href^='mailto:']")) return;
+  openAuthPopup("site_click");
+  event.preventDefault();
+  event.stopPropagation();
+}, true);
 
 document.body.classList.add("auth-loading");
 bindAuthUI();

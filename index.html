@@ -418,6 +418,10 @@ Verify OTP
     📦 Track Order
   </button>
 
+  <button id="headerAuthBtn" class="track-order-btn auth-state-action" type="button">
+    🔐 Login
+  </button>
+
   <!-- MENU BUTTON -->
   <button id="menuToggleBtn" class="menu-toggle-btn">
 
@@ -430,7 +434,11 @@ Verify OTP
   <!-- DROPDOWN -->
   <div id="headerDropdown" class="header-dropdown">
 
-    <button onclick="location.href='profile.html'">
+    <button id="dropdownLoginBtn" class="auth-login-action" type="button">
+      🔐 Login / Signup
+    </button>
+
+    <button id="dropdownProfileBtn" class="auth-only" onclick="location.href='profile.html'">
       👤 My Profile & Pizza Points
     </button>
 
@@ -438,7 +446,7 @@ Verify OTP
       📦 Track Orders
     </button>
 
-    <button onclick="logout()">
+    <button id="dropdownLogoutBtn" class="auth-only" onclick="logout()">
       🚪 Logout
     </button>
 
@@ -688,7 +696,7 @@ Verify OTP
       <button type="button" data-scroll-target="#menuSection">☰<span>Menu</span></button>
       <button type="button" id="bottomSearchBtn">✕<span>Search</span></button>
       <button type="button" onclick="toggleCart()">🛒<span>Cart</span></button>
-      <button type="button" id="profileBtn">♡<span>Profile</span></button>
+      <button type="button" id="profileBtn" class="auth-only">♡<span>Profile</span></button>
     </nav>
 
     <!-- FLOATING CART -->
