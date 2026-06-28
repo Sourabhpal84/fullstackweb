@@ -1242,18 +1242,43 @@ async function getLocationPermissionState(){
   }
 }
 
-function requestFreshGpsPosition(){
+function geolocationErrorMessage(error){
+  if(error?.code === 1) return "Location permission blocked hai. Browser settings me location allow karke retry karein.";
+  if(error?.code === 2) return "GPS signal weak hai. Please GPS/location ON rakhein ya address search karke select karein.";
+  if(error?.code === 3 || /timed out|timeout/i.test(error?.message || "")) return "Location fetch slow ho raha hai. Please retry karein, ya address search/manual address use karein.";
+  if(/not supported/i.test(error?.message || "")) return "Is browser me location support nahi hai. Please address search/manual address use karein.";
+  return "Location fetch nahi ho pa raha. Please retry karein, ya address search/manual address use karein.";
+}
+
+function requestGpsPosition(options = {}){
   return new Promise((resolve, reject) => {
     if(!navigator.geolocation){
       reject(new Error("Geolocation not supported"));
       return;
     }
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
+    navigator.geolocation.getCurrentPosition(resolve, reject, options);
+  });
+}
+
+async function requestFreshGpsPosition(){
+  try{
+    return await requestGpsPosition({
       enableHighAccuracy:true,
       maximumAge:0,
-      timeout:10000
+      timeout:16000
     });
-  });
+  }catch(firstError){
+    console.warn("[LOCATION]", { event:"high_accuracy_gps_failed_retrying_balanced", error:firstError?.message || String(firstError), code:firstError?.code });
+    if(firstError?.code === 1) throw firstError;
+    return requestGpsPosition({
+      enableHighAccuracy:false,
+      maximumAge:2 * 60 * 1000,
+      timeout:12000
+    }).catch(secondError => {
+      secondError.firstGpsError = firstError;
+      throw secondError;
+    });
+  }
 }
 
 async function reverseGeocodeFreshLocation(location){
@@ -1271,7 +1296,7 @@ function showLastSavedLocation(reason = "fresh_location_failed"){
   const saved = normalizeCustomerLocation(readJSON(LOCATION_CACHE_KEY, null), "last_saved");
   console.warn("[LOCATION]", { event:"show_last_saved_location", reason, saved });
   if(!saved){
-    setLocationUiState("permission", "Please enable location permission and GPS, then retry.");
+    setLocationUiState("permission", "Location nahi mili. Address search/manual address use kar sakte hain.");
     return null;
   }
   userLocation = saved;
@@ -1323,7 +1348,7 @@ async function fetchFreshCurrentLocation({ updateAddress = true, source = "fresh
     return userLocation;
   }catch(error){
     console.warn("[LOCATION]", { event:"fresh_location_failed", error:error?.message || String(error), code:error?.code, source });
-    setLocationUiState("permission", "Please enable location permission and GPS, then retry.");
+    setLocationUiState("permission", geolocationErrorMessage(error));
     showLastSavedLocation(error?.message || "fresh_location_failed");
     throw error;
   }
@@ -2184,16 +2209,14 @@ async function useCurrentLocationForAddress(){
   const btn = document.getElementById("useCurrentLocationBtn");
   const status = document.getElementById("locationStatus");
   try{
-    if(!auth.currentUser){
-      alert("Please login first so we can save your delivery address.");
-      await window.requireMagneetozAuth?.("address");
-      if(!auth.currentUser) return;
-    }
     if(btn) btn.disabled = true;
     if(status) status.textContent = "Detecting your current location…";
     await fetchFreshCurrentLocation({ updateAddress:true, source:"fresh_gps:address_button" });
   }catch(error){
-    alert("Please enable location permission and GPS, then retry.");
+    const message = geolocationErrorMessage(error);
+    if(status) status.textContent = message;
+    showLocationAddressForm();
+    alert(message);
   }finally{
     if(btn) btn.disabled = false;
   }
@@ -3549,9 +3572,11 @@ async function ensureDeliveryEligible(){
     await timedStep("ensureDeliveryEligible:getCurrentPosition", () => getUserLocation()).catch(() => null);
   }
   if(!hasSelectedCheckoutLocation() && !isFreshCustomerLocation(CHECKOUT_LOCATION_REUSE_MAX_AGE_MS)){
-    updateCustomerDistanceBanner("📍 Enable location to see your distance from our kitchen");
-    showServiceAreaPopup("Please turn on location so we can check the exact road distance from our kitchen to your address.", {
-      title:"Location Permission Needed",
+    updateCustomerDistanceBanner("📍 Select current location or search your address to check delivery.");
+    openLocationSelector();
+    showLocationAddressForm();
+    showServiceAreaPopup("Current location nahi mil pa rahi. Please location allow karke retry karein, ya address search/manual address select karein.", {
+      title:"Location Needed",
       icon:"📍",
       showContact:false,
       showRadius:false
@@ -3561,7 +3586,8 @@ async function ensureDeliveryEligible(){
   }
   const hasRouteDistance = await timedStep("ensureDeliveryEligible:refreshDeliveryDistance", () => refreshDeliveryDistance({ force:true, maxAgeMs:0, routeTimeoutMs:12000 }));
   if(!hasRouteDistance || distanceSource !== "google_routes_backend"){
-    showServiceAreaPopup("We could not calculate the road route to your location. Please refresh your location and try again.", {
+    openLocationSelector();
+    showServiceAreaPopup("Road route calculate nahi ho pa raha. Please address search se exact area select karein ya current location retry karein.", {
       title:"Route Check Failed",
       icon:"🛣️",
       showContact:false,
@@ -3599,8 +3625,11 @@ async function acceptLocation() {
     toastSuccess?.("Current location updated");
   }catch(error){
     console.log(error);
-    updateCustomerDistanceBanner("📍 Please enable location permission and GPS, then retry.");
-    alert("Please enable location permission and GPS, then retry.");
+    const message = geolocationErrorMessage(error);
+    updateCustomerDistanceBanner(`📍 ${message}`);
+    openLocationSelector();
+    showLocationAddressForm();
+    alert(message);
   }finally{
     if(btn){
       btn.innerText = "Allow Location";
@@ -5957,8 +5986,11 @@ document.addEventListener("DOMContentLoaded", () => {
     try{
       if(btn) btn.textContent = "Detecting...";
       await fetchFreshCurrentLocation({ updateAddress:true, source:"fresh_gps:refresh_button" });
-    }catch{
-      alert("Please enable location permission and GPS, then retry.");
+    }catch(error){
+      const message = geolocationErrorMessage(error);
+      openLocationSelector();
+      showLocationAddressForm();
+      alert(message);
     }finally{
       if(btn) btn.textContent = "↻ Refresh Location";
     }
@@ -6074,8 +6106,8 @@ onAuthStateChanged(auth,(user)=>{
         updateAddress:true,
         source:"fresh_gps:login",
         expectedChoiceVersion:choiceVersionBeforeGps
-      }).catch(() => {
-        setLocationUiState("permission", "Please enable location permission and GPS, then retry.");
+      }).catch(error => {
+        setLocationUiState("permission", geolocationErrorMessage(error));
       });
       if(checkoutLocationChoiceVersion !== choiceVersionBeforeGps) return;
       await saveLoginCurrentLocation(user).catch(error => console.warn("Login location save skipped", error));
