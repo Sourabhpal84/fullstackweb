@@ -218,6 +218,14 @@
 .category-edit-image-box img{width:72px;height:72px;object-fit:cover;border-radius:14px;background:#fff;margin-bottom:8px}
 .category-edit-image-box strong,.category-edit-image-box small{display:block}.category-edit-image-box small{color:#94a3b8;margin:4px 0 8px}
 .category-edit-status{min-height:18px;color:#22c55e;font-size:11px;font-weight:800}
+.category-helper-card{margin:10px 0 14px;padding:12px;border:1px solid #25334a;border-radius:14px;background:#0b1220;color:#cbd5e1}
+.category-helper-card strong{display:block;color:#22c55e;margin-bottom:5px}
+.category-helper-card small{display:block;color:#94a3b8;line-height:1.45}
+.category-mode-card{display:grid;gap:8px;margin:10px 0 12px;padding:12px;border:1px solid #334155;border-radius:14px;background:#020617}
+.category-mode-card label{display:flex;align-items:flex-start;gap:9px;margin:0;color:#f8fafc;font-weight:800;cursor:pointer}
+.category-mode-card input{width:auto;margin-top:3px;accent-color:#22c55e}
+.category-mode-card small{display:block;margin-left:25px;color:#94a3b8;line-height:1.45}
+.field-hint{display:block;margin:-6px 0 8px;color:#94a3b8;font-size:11px;line-height:1.4}
 @media(max-width:560px){.dish-edit-image{grid-template-columns:78px minmax(0,1fr)}.dish-edit-image img{width:78px;height:72px}}
 @media(max-width:640px){
   .sidebar{padding:10px 12px;align-items:flex-start;flex-direction:column;gap:9px}
@@ -254,22 +262,35 @@
   <div id="dashboardSection" style="display:none;"></div>
 
   <div id="categorySection">
-    <h3>Add Category</h3>
-    <input id="mainTypeName" placeholder="Food Button Name e.g. Pizza, Burger, Sandwich">
-    <input id="mainTypeImage" placeholder="Food Button Image URL (optional)">
-    <input id="catName" placeholder="Category Name">
+    <h3>Add Menu Button / Category</h3>
+    <div class="category-helper-card">
+      <strong>Easy setup</strong>
+      <small>Pizza ke andar Regular / Cheese Burst jaisi sub-categories rakh sakte ho. Garlic Bread ya Drinks jaisi cheez me button khud category ban sakta hai.</small>
+    </div>
+    <input id="mainTypeName" placeholder="Menu Button Name e.g. Pizza, Garlic Bread, Drinks" oninput="syncButtonCategoryName()">
+    <span class="field-hint">Ye top button me dikhega.</span>
+    <input id="mainTypeImage" placeholder="Button Image URL (optional)">
+    <div class="category-mode-card">
+      <label>
+        <input id="sameAsMainType" type="checkbox" checked onchange="syncButtonCategoryName(true)">
+        Button itself is category
+      </label>
+      <small>Garlic Bread / Drinks ke liye ON rakho. Pizza jaisi cheez me OFF karke sub-category name likho.</small>
+    </div>
+    <input id="catName" placeholder="Sub-category Name e.g. Regular Pizza, Cheese Burst" oninput="syncButtonCategoryName()">
+    <span class="field-hint">Agar checkbox ON hai to ye button name ke same rahega.</span>
     <input id="catImage" placeholder="Category Image URL or upload below">
     <div class="upload-box category-upload-box" id="categoryUploadBox">
       <input id="categoryImageFile" type="file" accept="image/*" hidden>
       <div id="categoryUploadPrompt">
         <strong>Upload category image</strong>
-        <span>Shown in top category tabs</span>
+        <span>Button/category photo ke liye image upload karo</span>
       </div>
       <img id="categoryPreview" alt="Category preview" style="display:none">
       <div class="upload-progress"><i id="categoryUploadProgress"></i></div>
       <small id="categoryUploadStatus">Firebase Storage upload ready</small>
     </div>
-    <button class="btn-green" onclick="addCategory()">Add</button>
+    <button class="btn-green" onclick="addCategory()">Add Button / Category</button>
 
     <div id="categoryList" class="sortable"></div>
   </div>
@@ -819,8 +840,28 @@ window.toggleType = function(){
   sizeBox.style.display = type.value==="multiple"?"block":"none";
 }
 
+window.syncButtonCategoryName = function(force = false){
+  const sameAsMain = document.getElementById("sameAsMainType");
+  const mainInput = document.getElementById("mainTypeName");
+  const categoryInput = document.getElementById("catName");
+  if(!sameAsMain || !mainInput || !categoryInput) return;
+  if(sameAsMain.checked){
+    categoryInput.value = mainInput.value;
+    categoryInput.readOnly = true;
+    categoryInput.placeholder = "Same as button name";
+  }else{
+    categoryInput.readOnly = false;
+    categoryInput.placeholder = "Sub-category Name e.g. Regular Pizza, Cheese Burst";
+    if(force && normalizeUnicodeText(categoryInput.value) === normalizeUnicodeText(mainInput.value)){
+      categoryInput.value = "";
+    }
+  }
+}
+window.syncButtonCategoryName(true);
+
 /* ➕ CATEGORY */
 window.addCategory = async function(){
+  syncButtonCategoryName();
   const mainType = normalizeUnicodeText(mainTypeName.value);
   const mainImage = normalizeUnicodeText(mainTypeImage.value || uploadedCategoryImageUrl || catImage.value);
   const cleanName = normalizeUnicodeText(catName.value);
@@ -839,6 +880,7 @@ await addDoc(collection(db,"categories"),{
   mainCategory: mainType,
   groupImage: mainImage,
   groupImageSet: mainImage === uploadedCategoryImageSet?.url ? uploadedCategoryImageSet : null,
+  buttonIsCategory: document.getElementById("sameAsMainType")?.checked === true,
   active:true,
   order: snap.size + 1   // ⭐ IMPORTANT
 });
@@ -846,6 +888,8 @@ await addDoc(collection(db,"categories"),{
   mainTypeName.value="";
   mainTypeImage.value="";
   catName.value="";
+  document.getElementById("sameAsMainType").checked = true;
+  syncButtonCategoryName(true);
   catImage.value="";
   uploadedCategoryImageUrl = "";
   uploadedCategoryImageSet = null;
@@ -888,7 +932,7 @@ onSnapshot(collection(db,"categories"), snap=>{
       <img src="${escapeHTML(categoryImage || 'logo_tran.jpeg')}" alt="${escapeHTML(c.name || "Category")}" style="width:48px;height:48px;border-radius:50%;object-fit:cover;background:#fff;" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
       <div>
         <b>${escapeHTML(c.name || "Category")}</b>
-        <small style="display:block;color:#94a3b8;">Food Button: ${escapeHTML(buttonName || "Not set")}</small>
+        <small style="display:block;color:#94a3b8;">Menu Button: ${escapeHTML(buttonName || "Not set")} • ${c.buttonIsCategory || c.name === buttonName ? "Direct category" : "Sub-category"}</small>
       </div>
     </div>
 
@@ -921,8 +965,8 @@ onSnapshot(collection(db,"categories"), snap=>{
 
     <div class="category-edit-panel" id="categoryEdit-${docSnap.id}">
       <div class="category-edit-grid">
-        <input id="editCategoryName-${docSnap.id}" value="${escapeHTML(c.name || "")}" placeholder="Category Name">
-        <input id="editButtonName-${docSnap.id}" value="${escapeHTML(buttonName || "")}" placeholder="Food Button Name">
+        <input id="editCategoryName-${docSnap.id}" value="${escapeHTML(c.name || "")}" placeholder="Category / Sub-category Name">
+        <input id="editButtonName-${docSnap.id}" value="${escapeHTML(buttonName || "")}" placeholder="Menu Button Name">
         <input id="editCategoryImage-${docSnap.id}" value="${escapeHTML(categoryImage || "")}" placeholder="Category Photo URL">
         <input id="editButtonImage-${docSnap.id}" value="${escapeHTML(buttonImage || "")}" placeholder="Food Button Photo URL">
       </div>
@@ -930,14 +974,14 @@ onSnapshot(collection(db,"categories"), snap=>{
         <div class="category-edit-image-box">
           <img id="editCategoryPreview-${docSnap.id}" src="${escapeHTML(categoryImage || "logo_tran.jpeg")}" alt="Category photo" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
           <strong>Category photo</strong>
-          <small>Shown in category button/sub-category.</small>
+          <small>Shown in category or sub-category.</small>
           <input id="editCategoryFile-${docSnap.id}" type="file" accept="image/*" hidden onchange="uploadEditedCategoryPhoto('${docSnap.id}','category',this.files?.[0])">
           <button type="button" class="soft" onclick="document.getElementById('editCategoryFile-${docSnap.id}').click()">Upload Category Photo</button>
         </div>
         <div class="category-edit-image-box">
           <img id="editButtonPreview-${docSnap.id}" src="${escapeHTML(buttonImage || "logo_tran.jpeg")}" alt="Food button photo" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
           <strong>Food button photo</strong>
-          <small>Shown on main Pizza/Burger/Sandwich button.</small>
+          <small>Shown on main Pizza/Garlic Bread/Drinks button.</small>
           <input id="editButtonFile-${docSnap.id}" type="file" accept="image/*" hidden onchange="uploadEditedCategoryPhoto('${docSnap.id}','button',this.files?.[0])">
           <button type="button" class="soft" onclick="document.getElementById('editButtonFile-${docSnap.id}').click()">Upload Button Photo</button>
         </div>
@@ -1079,6 +1123,7 @@ window.saveCategoryEdit = async function(id){
       groupImage:buttonImage || categoryImage,
       mainTypeImage:buttonImage || categoryImage,
       parentImage:buttonImage || categoryImage,
+      buttonIsCategory:categoryName.toLowerCase() === buttonName.toLowerCase(),
       updatedAt:Date.now()
     };
     if(categoryImageSet) payload.imageSet = categoryImageSet;

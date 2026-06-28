@@ -2808,6 +2808,14 @@ function renderMenuGroupNav(groups = []){
   nav.querySelectorAll("[data-menu-group]").forEach(button => {
     button.addEventListener("click", () => {
       document.querySelectorAll("[data-menu-action]").forEach(item => item.classList.remove("active"));
+      const group = menuCategoryGroups.find(item => item.key === button.dataset.menuGroup);
+      if(group?.categories?.length === 1){
+        document.querySelectorAll("[data-menu-group]").forEach(item => item.classList.toggle("active", item.dataset.menuGroup === group.key));
+        menuBrowserOpen = true;
+        activeMenuGroup = group.key;
+        selectMenuCategory(group.categories[0].id);
+        return;
+      }
       selectMenuGroup(button.dataset.menuGroup, true);
     });
   });
