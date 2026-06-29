@@ -52,7 +52,8 @@ button{border:0;border-radius:12px;min-height:42px;padding:0 14px;font:800 12px 
   <div class="grid">
     <form class="panel" id="couponForm">
       <input type="hidden" id="couponId">
-      <label>Code</label><input id="code" placeholder="MAGNEETOZ50" required>
+      <label>Code / Names</label><input id="code" placeholder="RAHUL, SHIVAM, RAJU" required>
+      <p class="muted">Comma laga ke multiple naam/code daalo. Same criteria har coupon par apply hoga aur usage alag-alag track hoga.</p>
       <label>PG Name</label><input id="pgName" placeholder="AP Boys PG, XYZ Hostel">
       <label>PG Short Code</label><input id="pgCode" placeholder="APBOYS">
       <label>Type</label>
@@ -97,6 +98,14 @@ const money = amount => new Intl.NumberFormat("en-IN",{style:"currency",currency
 let coupons = [];
 let orders = [];
 function splitList(value){return String(value||"").split(",").map(v=>v.trim()).filter(Boolean)}
+function splitCouponCodes(value){
+  return Array.from(new Set(
+    String(value || "")
+      .split(",")
+      .map(v => v.trim().toUpperCase().replace(/\s+/g, ""))
+      .filter(Boolean)
+  ));
+}
 function expiryInput(ts){return ts?.seconds ? new Date(ts.seconds*1000).toISOString().slice(0,16) : ""}
 function norm(value){return String(value||"").trim().toUpperCase()}
 function orderRevenue(order){return Number(order.grandTotal || order.finalAmount || order.totalAmount || order.total || 0) || 0}
@@ -183,7 +192,29 @@ form.addEventListener("submit", async event => {
     delete data.createdAt;
     await updateDoc(doc(db,"coupons",id), data);
   }else{
-    await addDoc(collection(db,"coupons"), data);
+    const codes = splitCouponCodes(document.getElementById("code").value);
+    if(!codes.length){
+      await window.MagneetozNotify.alert("At least one coupon code enter karo.", { title:"Coupon code missing" });
+      return;
+    }
+    const existingCodes = new Set(coupons.map(coupon => norm(coupon.code)));
+    const newCodes = codes.filter(code => !existingCodes.has(code));
+    const skippedCodes = codes.filter(code => existingCodes.has(code));
+    if(!newCodes.length){
+      await window.MagneetozNotify.alert("Ye coupon code pehle se bana hua hai.", { title:"Duplicate coupon" });
+      return;
+    }
+    const batchId = newCodes.length > 1 ? `coupon-batch-${Date.now()}` : "";
+    await Promise.all(newCodes.map(code => addDoc(collection(db,"coupons"), {
+      ...data,
+      code,
+      batchId,
+      bulkCreated:true,
+      bulkSource:codes.join(", ")
+    })));
+    if(skippedCodes.length){
+      await window.MagneetozNotify.alert(`${newCodes.length} coupon ban gaye. Duplicate skip hue: ${skippedCodes.join(", ")}`, { title:"Bulk coupon saved" });
+    }
   }
   form.reset();
   document.getElementById("active").checked = true;
@@ -225,6 +256,7 @@ onSnapshot(collection(db,"coupons"), snap => {
     <article class="card">
       <h3>${c.code}</h3>
       <div class="meta">${c.pgName || c.pg ? `PG: ${c.pgName || c.pg} | ` : ""}${c.freeDelivery ? "Free Delivery" : c.freeItem ? "Free Item" : c.type}</div>
+      ${c.bulkCreated ? `<div class="meta">Bulk set: ${c.bulkSource || c.batchId || "Yes"}</div>` : ""}
       <div class="meta">Stored usage ${c.usedCount || 0}/${c.usageLimit || "∞"} | Live usage ${couponStats(c).used} | Revenue ${money(couponStats(c).revenue)}</div>
       <div class="meta">Min ${money(c.minOrderAmount)} | Max ${money(c.maxDiscount)} | ${c.active ? "Active" : "Paused"} | ${c.visibility || (c.vipOnly ? "vip-only" : c.hiddenCoupon ? "hidden" : "public")}</div>
       <div class="analytics">
@@ -247,6 +279,7 @@ onSnapshot(collection(db,"orders"), snap => {
       <article class="card">
         <h3>${c.code}</h3>
         <div class="meta">${c.pgName || c.pg ? `PG: ${c.pgName || c.pg} | ` : ""}${c.freeDelivery ? "Free Delivery" : c.freeItem ? "Free Item" : c.type}</div>
+        ${c.bulkCreated ? `<div class="meta">Bulk set: ${c.bulkSource || c.batchId || "Yes"}</div>` : ""}
         <div class="meta">Stored usage ${c.usedCount || 0}/${c.usageLimit || "∞"} | Live usage ${couponStats(c).used} | Revenue ${money(couponStats(c).revenue)}</div>
         <div class="meta">Min ${money(c.minOrderAmount)} | Max ${money(c.maxDiscount)} | ${c.active ? "Active" : "Paused"} | ${c.visibility || (c.vipOnly ? "vip-only" : c.hiddenCoupon ? "hidden" : "public")}</div>
         <div class="analytics">
