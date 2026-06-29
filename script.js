@@ -1739,7 +1739,32 @@ function writeJSON(key, value){
 }
 
 function normalizeCouponKey(value = ""){
-  return String(value || "").trim().toUpperCase();
+  return String(value || "").trim().toUpperCase().replace(/\s+/g, "");
+}
+
+function couponCodeList(coupon = {}){
+  return Array.from(new Set(
+    String(coupon.code || "")
+      .split(",")
+      .map(code => normalizeCouponKey(code))
+      .filter(Boolean)
+  ));
+}
+
+function couponWithMatchedCode(coupon, code){
+  const matchedCode = normalizeCouponKey(code);
+  if(!coupon || !matchedCode || !couponCodeList(coupon).includes(matchedCode)) return null;
+  return { ...coupon, code:matchedCode, sourceCouponCode:coupon.code };
+}
+
+function findCouponByCode(code){
+  const normalized = normalizeCouponKey(code);
+  if(!normalized) return null;
+  for(const coupon of availableCoupons){
+    const matched = couponWithMatchedCode(coupon, normalized);
+    if(matched) return matched;
+  }
+  return null;
 }
 
 function capturePgReferralCoupon(){
@@ -1764,13 +1789,16 @@ function findReferralCoupon(referral = readJSON(PG_REFERRAL_COUPON_KEY, null)){
   const couponCode = normalizeCouponKey(referral.couponCode);
   const pgCode = normalizeCouponKey(referral.pgCode);
   const pgName = normalizeCouponKey(referral.pgName);
-  return availableCoupons.find(coupon => {
-    if(coupon.deleted === true || coupon.active === false || couponExpired(coupon)) return false;
-    if(couponCode && normalizeCouponKey(coupon.code) === couponCode) return true;
-    if(pgCode && normalizeCouponKey(coupon.pgCode) === pgCode) return true;
-    if(pgName && normalizeCouponKey(coupon.pgName || coupon.pg) === pgName) return true;
-    return false;
-  }) || null;
+  for(const coupon of availableCoupons){
+    if(coupon.deleted === true || coupon.active === false || couponExpired(coupon)) continue;
+    if(couponCode){
+      const matched = couponWithMatchedCode(coupon, couponCode);
+      if(matched) return matched;
+    }
+    if(pgCode && normalizeCouponKey(coupon.pgCode) === pgCode) return coupon;
+    if(pgName && normalizeCouponKey(coupon.pgName || coupon.pg) === pgName) return coupon;
+  }
+  return null;
 }
 
 function fillReferralCouponField(coupon){
@@ -2515,7 +2543,7 @@ async function mergeGuestCartWithUser(user){
   if(referralCoupon){
     activeCoupon = referralCoupon;
   }else if(saved?.activeCouponCode && !activeCoupon){
-    const found = availableCoupons.find(item => String(item.code || "").toUpperCase() === String(saved.activeCouponCode).toUpperCase());
+    const found = findCouponByCode(saved.activeCouponCode);
     if(found) activeCoupon = found;
   }
   if(!activeCoupon) applyReferralCouponIfPossible();
@@ -3846,7 +3874,7 @@ function useCouponSnapshot(snapshot){
   if(!activeCoupon){
     const saved = readJSON(GUEST_CART_KEY, null);
     const code = saved?.activeCouponCode || readJSON(CHECKOUT_STATE_KEY, {})?.activeCouponCode || "";
-    const found = availableCoupons.find(item => String(item.code || "").toUpperCase() === String(code).toUpperCase());
+    const found = findCouponByCode(code);
     if(found) activeCoupon = found;
     if(!found) applyReferralCouponIfPossible();
   }
@@ -4296,8 +4324,9 @@ function renderAvailableCoupons(){
         coupon.freeItem ? `Free ${coupon.freeItem.name || coupon.freeItem}` :
         coupon.type === "percentage" ? `${coupon.discountValue}% OFF` :
         `${formatCurrency(coupon.discountValue)} OFF`;
-      return `<button type="button" class="coupon-card ${valid.ok ? "" : "disabled"}" onclick="applyCoupon('${escapeHTML(coupon.code)}')">
-        <strong>${escapeHTML(coupon.code)}</strong>
+      const displayCode = couponCodeList(coupon)[0] || coupon.code;
+      return `<button type="button" class="coupon-card ${valid.ok ? "" : "disabled"}" onclick="applyCoupon('${escapeHTML(displayCode)}')">
+        <strong>${escapeHTML(displayCode)}</strong>
         <span>${escapeHTML(valid.ok ? label : valid.message)}</span>
       </button>`;
     }).join("");
@@ -4755,7 +4784,7 @@ window.applyCoupon = async function(codeFromCard){
   }
   const input = document.getElementById("couponInput");
   const code = String(codeFromCard || input?.value || "").trim().toUpperCase();
-  const coupon = availableCoupons.find(item => String(item.code || "").toUpperCase() === code);
+  const coupon = findCouponByCode(code);
   const validation = validateCoupon(coupon);
   if(!validation.ok){
     alert(validation.message);

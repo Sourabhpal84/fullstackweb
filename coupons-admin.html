@@ -114,14 +114,30 @@ function successfulOrder(order){
   return status !== "cancelled" && status !== "rejected";
 }
 function couponStats(coupon){
-  const code = norm(coupon.code);
+  const codes = splitCouponCodes(coupon.code);
   const id = String(coupon.id || "");
-  const matched = orders.filter(order => successfulOrder(order) && (norm(order.couponCode) === code || (id && String(order.couponId || "") === id)));
+  const matched = orders.filter(order => successfulOrder(order) && (codes.includes(norm(order.couponCode)) || (id && String(order.couponId || "") === id)));
   return {
     used:matched.length,
     revenue:matched.reduce((sum, order) => sum + orderRevenue(order), 0),
     discount:matched.reduce((sum, order) => sum + Number(order.couponDiscount || 0) + Number(order.freeDeliveryDiscount || 0), 0)
   };
+}
+function couponCodeStats(coupon, code){
+  const matched = orders.filter(order => successfulOrder(order) && norm(order.couponCode) === norm(code));
+  return {
+    used:matched.length,
+    revenue:matched.reduce((sum, order) => sum + orderRevenue(order), 0),
+    discount:matched.reduce((sum, order) => sum + Number(order.couponDiscount || 0) + Number(order.freeDeliveryDiscount || 0), 0)
+  };
+}
+function renderCodeBreakdown(coupon){
+  const codes = splitCouponCodes(coupon.code);
+  if(codes.length < 2) return "";
+  return `<div class="analytics">${codes.map(code => {
+    const stats = couponCodeStats(coupon, code);
+    return `<span><b>${code}</b>: Used ${stats.used} | Revenue ${money(stats.revenue)} | Discount ${money(stats.discount)}</span>`;
+  }).join("")}</div>`;
 }
 function renderAnalytics(){
   const couponRows = coupons.map(coupon => ({ coupon, stats:couponStats(coupon) }));
@@ -259,6 +275,7 @@ onSnapshot(collection(db,"coupons"), snap => {
       ${c.bulkCreated ? `<div class="meta">Bulk set: ${c.bulkSource || c.batchId || "Yes"}</div>` : ""}
       <div class="meta">Stored usage ${c.usedCount || 0}/${c.usageLimit || "∞"} | Live usage ${couponStats(c).used} | Revenue ${money(couponStats(c).revenue)}</div>
       <div class="meta">Min ${money(c.minOrderAmount)} | Max ${money(c.maxDiscount)} | ${c.active ? "Active" : "Paused"} | ${c.visibility || (c.vipOnly ? "vip-only" : c.hiddenCoupon ? "hidden" : "public")}</div>
+      ${renderCodeBreakdown(c)}
       <div class="analytics">
         <span>Discount given: <b>${money(couponStats(c).discount)}</b></span>
         <span>PG Code: ${c.pgCode || "Not set"}</span>
@@ -282,6 +299,7 @@ onSnapshot(collection(db,"orders"), snap => {
         ${c.bulkCreated ? `<div class="meta">Bulk set: ${c.bulkSource || c.batchId || "Yes"}</div>` : ""}
         <div class="meta">Stored usage ${c.usedCount || 0}/${c.usageLimit || "∞"} | Live usage ${couponStats(c).used} | Revenue ${money(couponStats(c).revenue)}</div>
         <div class="meta">Min ${money(c.minOrderAmount)} | Max ${money(c.maxDiscount)} | ${c.active ? "Active" : "Paused"} | ${c.visibility || (c.vipOnly ? "vip-only" : c.hiddenCoupon ? "hidden" : "public")}</div>
+        ${renderCodeBreakdown(c)}
         <div class="analytics">
           <span>Discount given: <b>${money(couponStats(c).discount)}</b></span>
           <span>PG Code: ${c.pgCode || "Not set"}</span>
