@@ -23,6 +23,8 @@ import {
 
 const PHONE_RE = /^[6-9]\d{9}$/;
 const OTP_RE = /^\d{6}$/;
+const OTP_RESEND_SECONDS = 45;
+const OTP_DELAY_NOTICE_MS = 25000;
 
 let confirmationResult = null;
 let recaptchaVerifier = null;
@@ -35,6 +37,7 @@ let pushRegistrationInFlight = false;
 let pendingAuthResolve = null;
 let authNullTimer = null;
 let resendTimer = null;
+let otpDelayNoticeTimer = null;
 let webOtpController = null;
 let lastAutoVerifyCode = "";
 const VAPID_KEY_RE = /^[A-Za-z0-9_-]{80,}$/;
@@ -79,6 +82,26 @@ function setAuthStatus(message, type = "info"){
   if(!el) return;
   el.textContent = message;
   el.dataset.type = type;
+}
+
+function setOtpHelp(message = ""){
+  const el = $("otpHelp");
+  if(el) el.textContent = message;
+}
+
+function stopOtpDelayNotice(){
+  if(otpDelayNoticeTimer){
+    clearTimeout(otpDelayNoticeTimer);
+    otpDelayNoticeTimer = null;
+  }
+}
+
+function startOtpDelayNotice(phone){
+  stopOtpDelayNotice();
+  otpDelayNoticeTimer = setTimeout(() => {
+    setOtpHelp(`OTP late aa sakta hai. ${maskPhone(phone)} par SMS inbox check karein. Resend button active hote hi fresh OTP bhej sakte hain.`);
+    setAuthStatus("OTP late aa raha hai? SMS inbox check karein, phir Resend OTP use karein.", "info");
+  }, OTP_DELAY_NOTICE_MS);
 }
 
 function isValidVapidKey(value = ""){
@@ -269,6 +292,18 @@ function cleanPhone(){
   return raw;
 }
 
+function handlePhoneInput(){
+  const before = confirmationResult;
+  const raw = cleanPhone();
+  if(before){
+    cleanupOtpSession({ keepRecaptcha:true });
+    setAuthStatus("Mobile number changed. Send OTP again.", "info");
+  }
+  setOtpHelp(raw.length === 10
+    ? "Send OTP tap karein. OTP kabhi-kabhi 30-60 seconds le sakta hai."
+    : "Enter 10 digit mobile number.");
+}
+
 async function ensureRecaptcha(){
   if(recaptchaInitPromise) return recaptchaInitPromise;
   recaptchaInitPromise = (async () => {
@@ -327,8 +362,8 @@ function friendlyAuthError(error){
   const code = error?.code || "";
   if(code.includes("invalid-verification-code")) return "Invalid OTP, please try again.";
   if(code.includes("code-expired")) return "OTP expired. Please resend OTP.";
-  if(code.includes("too-many-requests") || code.includes("quota-exceeded")) return "Too many attempts. Please try again after some time.";
-  if(code.includes("captcha") || code.includes("app-not-authorized") || code.includes("missing-app-credential")) return "Security check could not finish automatically. Please tap Send OTP again.";
+  if(code.includes("too-many-requests") || code.includes("quota-exceeded")) return "Too many OTP attempts ho gaye. Please 15-30 minutes baad retry karein.";
+  if(code.includes("captcha") || code.includes("app-not-authorized") || code.includes("missing-app-credential")) return "Security check complete nahi hua. Please page refresh karke Send OTP again karein.";
   if(code.includes("invalid-phone-number")) return "Enter a valid 10 digit mobile number.";
   if(code.includes("network")) return "Network issue. Please check internet and retry.";
   return error?.message || "Something went wrong. Please try again.";
@@ -382,6 +417,8 @@ function cleanupOtpSession({ keepRecaptcha = false } = {}){
   lastAutoVerifyCode = "";
   stopResendTimer();
   stopOtpListener();
+  stopOtpDelayNotice();
+  setOtpHelp("OTP kabhi-kabhi 30-60 seconds le sakta hai. Ek baar Send OTP tap karke thoda wait karein.");
   $("authPopup")?.classList.remove("otp-sent");
   const otpInput = $("otp");
   if(otpInput) otpInput.value = "";
@@ -449,6 +486,7 @@ async function sendOTP(options = {}){
 
   otpInFlight = true;
   setAuthStatus("Sending OTP...", "info");
+  setOtpHelp("Security check ke baad OTP send hoga. Please ek baar tap karke wait karein.");
   setButton(button, true, "Sending OTP...");
   resetRecaptcha({ recreateContainer:true });
 
@@ -465,8 +503,10 @@ async function sendOTP(options = {}){
       });
     }
     setAuthStatus(`OTP sent to ${maskPhone(phone)}. Auto-detecting OTP...`, "success");
+    setOtpHelp("OTP 30-60 seconds tak le sakta hai. Resend active hone se pehle wait karein; latest OTP hi valid hota hai.");
     toast("OTP sent", "success");
-    startResendTimer(30);
+    startResendTimer(OTP_RESEND_SECONDS);
+    startOtpDelayNotice(phone);
     startOtpListener();
   }catch(error){
     devLog("sendOTP error:", error);
@@ -480,6 +520,7 @@ async function sendOTP(options = {}){
     }
     const message = friendlyAuthError(error);
     setAuthStatus(message, "error");
+    setOtpHelp("OTP nahi aa raha ho to internet check karein, number verify karein, phir page refresh karke retry karein.");
     toast(message, "error");
     resetRecaptcha();
     ensureRecaptcha().catch((recaptchaError) => devLog("Invisible reCAPTCHA retry preload failed:", recaptchaError));
@@ -515,7 +556,9 @@ async function verifyOTP(){
     await confirmationResult.confirm(code);
     stopOtpListener();
     stopResendTimer();
+    stopOtpDelayNotice();
     setAuthStatus("Login successful", "success");
+    setOtpHelp("Login successful.");
     toast("Login successful", "success");
   }catch(error){
     devLog("verifyOTP error:", error);
@@ -587,7 +630,7 @@ async function startOtpListener(){
 
 function bindAuthUI(){
   prepareOtpInput();
-  $("phoneNumber")?.addEventListener("input", cleanPhone);
+  $("phoneNumber")?.addEventListener("input", handlePhoneInput);
   $("sendOtpBtn")?.addEventListener("click", sendOTP);
   $("resendOtpBtn")?.addEventListener("click", sendOTP);
   $("verifyOtpBtn")?.addEventListener("click", verifyOTP);

@@ -10786,3 +10786,7 @@ body:not(.auth-success) #headerAuthBtn{display:inline-flex!important}
 body.auth-success #headerAuthBtn{display:none!important}
 @media(max-width:560px){#headerAuthBtn{min-height:36px;padding:0 10px;font-size:11px}.bottom-nav .auth-only{display:none!important}body.auth-success .bottom-nav .auth-only{display:flex!important}}
 body #headerAuthBtn.auth-state-action{display:inline-flex!important}
+
+/* OTP delivery guidance */
+.auth-help{margin:8px 0 12px;padding:9px 11px;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:rgba(255,255,255,.08);color:rgba(255,255,255,.78);font-size:12px;line-height:1.45;font-weight:700}
+body.light-theme .auth-help,body:not(.dark-mode):not(.dark-theme) .auth-help{background:#fff7ed;border-color:#fed7aa;color:#9a3412}
