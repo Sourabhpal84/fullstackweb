@@ -132,11 +132,11 @@ onSnapshot(doc(db,"settings","delivery"), snap => {
   zone3Threshold.value = deliverySettingNumber(data.zone3Threshold, 249, 199);
   zone3Fee.value = deliverySettingNumber(data.zone3Fee, 30, 24);
   zone4Threshold.value = deliverySettingNumber(data.zone4Threshold, 299, 249);
-  zone4Fee.value = deliverySettingNumber(data.zone4Fee, 40, 24);
+  zone4Fee.value = deliverySettingNumber(data.zone4Fee, 30, 40);
   zone5Threshold.value = deliverySettingNumber(data.zone5Threshold, 349, 299);
-  zone5Fee.value = deliverySettingNumber(data.zone5Fee, 50, 24);
+  zone5Fee.value = deliverySettingNumber(data.zone5Fee, 30, 50);
   zone6Threshold.value = deliverySettingNumber(data.zone6Threshold, 399, 299);
-  zone6Fee.value = deliverySettingNumber(data.zone6Fee, 50, 24);
+  zone6Fee.value = deliverySettingNumber(data.zone6Fee, 40, 50);
   whatsappNumber.value = data.whatsappNumber || "918303614331";
 });
 
@@ -188,11 +188,11 @@ deliveryForm.addEventListener("submit", async event => {
     ,zone3Threshold:Number(zone3Threshold.value) || 0
     ,zone3Fee:Number(zone3Fee.value) || 30
     ,zone4Threshold:Number(zone4Threshold.value) || 0
-    ,zone4Fee:Number(zone4Fee.value) || 40
+    ,zone4Fee:Number(zone4Fee.value) || 30
     ,zone5Threshold:Number(zone5Threshold.value) || 0
-    ,zone5Fee:Number(zone5Fee.value) || 50
+    ,zone5Fee:Number(zone5Fee.value) || 30
     ,zone6Threshold:Number(zone6Threshold.value) || 0
-    ,zone6Fee:Number(zone6Fee.value) || 50
+    ,zone6Fee:Number(zone6Fee.value) || 40
     ,whatsappNumber:whatsappNumber.value.replace(/\D/g,"")
   }, { merge:true });
   alert("Distance settings saved.");

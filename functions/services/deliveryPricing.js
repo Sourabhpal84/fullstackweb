@@ -20,9 +20,9 @@ function normalizeDeliverySettings(data = {}) {
       { maxKm: 1, threshold: settingNumber(data.zone1Threshold, 149, 99), fee: settingNumber(data.zone1Fee, 30, 24) },
       { maxKm: 2, threshold: settingNumber(data.zone2Threshold, 199, 149), fee: settingNumber(data.zone2Fee, 30, 24) },
       { maxKm: 3, threshold: settingNumber(data.zone3Threshold, 249, 199), fee: settingNumber(data.zone3Fee, 30, 24) },
-      { maxKm: 4, threshold: settingNumber(data.zone4Threshold, 299, 249), fee: settingNumber(data.zone4Fee, 40, 24) },
-      { maxKm: 5, threshold: settingNumber(data.zone5Threshold, 349, 299), fee: settingNumber(data.zone5Fee, 50, 24) },
-      { maxKm: 6, threshold: settingNumber(data.zone6Threshold, 399, 299), fee: settingNumber(data.zone6Fee, 50, 24) }
+      { maxKm: 4, threshold: settingNumber(data.zone4Threshold, 299, 249), fee: settingNumber(data.zone4Fee, 30, 40) },
+      { maxKm: 5, threshold: settingNumber(data.zone5Threshold, 349, 299), fee: settingNumber(data.zone5Fee, 30, 50) },
+      { maxKm: 6, threshold: settingNumber(data.zone6Threshold, 399, 299), fee: settingNumber(data.zone6Fee, 40, 50) }
     ]
   };
 }

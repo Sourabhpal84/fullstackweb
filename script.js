@@ -176,9 +176,9 @@ let deliveryPricingSettings = {
     { maxKm:1, threshold:149, fee:30 },
     { maxKm:2, threshold:199, fee:30 },
     { maxKm:3, threshold:249, fee:30 },
-    { maxKm:4, threshold:299, fee:40 },
-    { maxKm:5, threshold:349, fee:50 },
-    { maxKm:6, threshold:399, fee:50 }
+    { maxKm:4, threshold:299, fee:30 },
+    { maxKm:5, threshold:349, fee:30 },
+    { maxKm:6, threshold:399, fee:40 }
   ]
 };
 const DELIVERY_RULE_VERSION = "zone-fee-base-threshold-v3";
@@ -3324,9 +3324,9 @@ registerGlobalSnapshot(onSnapshot(
         { maxKm:1, threshold:deliverySettingNumber(data.zone1Threshold, 149, 99), fee:deliverySettingNumber(data.zone1Fee, 30, 24) },
         { maxKm:2, threshold:deliverySettingNumber(data.zone2Threshold, 199, 149), fee:deliverySettingNumber(data.zone2Fee, 30, 24) },
         { maxKm:3, threshold:deliverySettingNumber(data.zone3Threshold, 249, 199), fee:deliverySettingNumber(data.zone3Fee, 30, 24) },
-        { maxKm:4, threshold:deliverySettingNumber(data.zone4Threshold, 299, 249), fee:deliverySettingNumber(data.zone4Fee, 40, 24) },
-        { maxKm:5, threshold:deliverySettingNumber(data.zone5Threshold, 349, 299), fee:deliverySettingNumber(data.zone5Fee, 50, 24) },
-        { maxKm:MAX_DELIVERY_DISTANCE, threshold:deliverySettingNumber(data.zone6Threshold, 399, 299), fee:deliverySettingNumber(data.zone6Fee, 50, 24) }
+        { maxKm:4, threshold:deliverySettingNumber(data.zone4Threshold, 299, 249), fee:deliverySettingNumber(data.zone4Fee, 30, 40) },
+        { maxKm:5, threshold:deliverySettingNumber(data.zone5Threshold, 349, 299), fee:deliverySettingNumber(data.zone5Fee, 30, 50) },
+        { maxKm:MAX_DELIVERY_DISTANCE, threshold:deliverySettingNumber(data.zone6Threshold, 399, 299), fee:deliverySettingNumber(data.zone6Fee, 40, 50) }
       ]
     };
     updateCart();
