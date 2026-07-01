@@ -182,12 +182,14 @@ let deliveryPricingSettings = {
   ]
 };
 const DELIVERY_RULE_VERSION = "zone-fee-base-threshold-v3";
+const AUTH_NULL_GRACE_MS = 10000;
 let isOrderProcessing = false;
 let lastOrderSignature = null;
 let razorpayInFlight = false;
 let activeCoupon = null;
 let availableCoupons = [];
 let activeBogoOffer = null;
+let activeBogoOffers = [];
 let bogoOfferAccepted = false;
 let bogoOfferSignature = "";
 let liveOfferCache = [];
@@ -1035,7 +1037,7 @@ function calculateInvoicePricing(subtotal, basePricing = calculateCouponPricing(
     handlingCharge,
     discount,
     offerApplied,
-    offerType:offerApplied ? activeBogoOffer?.type || "" : "",
+    offerType:offerApplied ? offerResult.offer?.type || activeBogoOffer?.type || "" : "",
     offerDiscount,
     freeItems:offerApplied ? offerResult.freeItems : [],
     beforeWallet,
@@ -1615,7 +1617,7 @@ onAuthStateChanged(auth, user => {
     authCacheNullTimer = setTimeout(() => {
       if(!auth.currentUser) cachedAuthUser = null;
       authCacheNullTimer = null;
-    }, 2500);
+    }, AUTH_NULL_GRACE_MS);
   }else{
     cachedAuthUser = null;
   }
@@ -1966,14 +1968,12 @@ async function resolveAuthenticatedCheckoutPhone(user = auth.currentUser || cach
 }
 
 async function promptVerifiedMobileLogin(){
-  cachedAuthUser = null;
-  try{
-    if(auth.currentUser) await signOut(auth);
-  }catch(error){
-    console.warn("Stale login cleanup skipped:", error);
-  }
+  const existingUser = auth.currentUser || cachedAuthUser;
   const label = document.getElementById("checkoutAuthPhoneValue");
   if(label) label.textContent = "Login to verify mobile";
+  if(existingUser?.uid){
+    console.warn("Verified mobile missing; asking for re-verification without signing out.", { uid:existingUser.uid });
+  }
   if(typeof window.requireMagneetozAuth === "function"){
     await window.requireMagneetozAuth("mobile_verification");
   }else if(typeof window.openMagneetozAuth === "function"){
@@ -3017,14 +3017,15 @@ function bindHeroOfferActions(){
 function updateHeroBogoButton(){
   const bogoBtn = document.getElementById("heroBogoJumpBtn");
   if(!bogoBtn) return;
-  if(!activeBogoOffer){
+  if(!activeBogoOffers.length && !activeBogoOffer){
     bogoBtn.textContent = "BOGO";
     bogoBtn.disabled = true;
     bogoBtn.title = "No BOGO offer live right now";
     return;
   }
-  const fallback = activeBogoOffer.type === "buy_2_get_1" ? "BUY 2 GET 1" : "BUY 1 GET 1";
-  bogoBtn.textContent = String(activeBogoOffer.offerName || fallback).toUpperCase();
+  const offers = activeBogoOffers.length ? activeBogoOffers : [activeBogoOffer];
+  const fallback = offers.length > 1 ? "B1G1 + B2G1" : offers[0].type === "buy_2_get_1" ? "BUY 2 GET 1" : "BUY 1 GET 1";
+  bogoBtn.textContent = String(offers.length > 1 ? fallback : (offers[0].offerName || fallback)).toUpperCase();
   bogoBtn.disabled = false;
   bogoBtn.title = "View live BOGO offer";
 }
@@ -3087,14 +3088,18 @@ function dishToppingText(d = {}){
   return String(raw || "Classic MAGNEETOZ toppings").slice(0, 90);
 }
 
-function bogoDishEligible(d = {}){
-  if(!activeBogoOffer) return false;
-  const allowed = new Set((activeBogoOffer.eligibleCategories || []).map(normalizeOfferCategory).filter(Boolean));
+function bogoDishEligibleForOffer(d = {}, offer = activeBogoOffer){
+  if(!offer) return false;
+  const allowed = new Set((offer.eligibleCategories || []).map(normalizeOfferCategory).filter(Boolean));
   const category = normalizeOfferCategory(d.category || d.dishCategory || "");
   return allowed.size ? allowed.has(category) : /pizza/i.test(`${d.productType || ""} ${d.category || ""} ${d.name || ""}`);
 }
 
-function bogoSizeLabel(){
+function bogoDishEligible(d = {}){
+  return activeBogoOffers.some(offer => bogoDishEligibleForOffer(d, offer));
+}
+
+function bogoSizeLabel(offer = activeBogoOffer){
   const codeBySize = {
     regular:"R",
     small:"R",
@@ -3102,7 +3107,7 @@ function bogoSizeLabel(){
     large:"L"
   };
   const order = ["medium", "large", "regular", "small"];
-  const normalized = [...new Set((activeBogoOffer?.eligibleSizes || []).map(normalizeOfferSize).filter(Boolean))];
+  const normalized = [...new Set((offer?.eligibleSizes || []).map(normalizeOfferSize).filter(Boolean))];
   if(!normalized.length) return "ALL";
   const ordered = [
     ...order.filter(size => normalized.includes(size)),
@@ -3112,14 +3117,20 @@ function bogoSizeLabel(){
 }
 
 function bogoCardBadge(d = {}){
-  if(!bogoDishEligible(d)) return "";
-  const typeLabel = activeBogoOffer.type === "buy_2_get_1" ? "B2G1" : "B1G1";
-  return `<span class="bogo-menu-badge">${escapeHTML(typeLabel)} ${escapeHTML(bogoSizeLabel())}</span>`;
+  const offers = activeBogoOffers.filter(offer => bogoDishEligibleForOffer(d, offer));
+  if(!offers.length) return "";
+  const label = offers.map(offer => `${offer.type === "buy_2_get_1" ? "B2G1" : "B1G1"} ${bogoSizeLabel(offer)}`).join(" / ");
+  return `<span class="bogo-menu-badge">${escapeHTML(label)}</span>`;
 }
 
 function bogoSizeEligibleLabel(size = ""){
-  const allowedSizes = new Set((activeBogoOffer?.eligibleSizes || []).map(normalizeOfferSize).filter(Boolean));
-  return !allowedSizes.size || allowedSizes.has(normalizeOfferSize(size));
+  const offers = activeBogoOffers.length ? activeBogoOffers : (activeBogoOffer ? [activeBogoOffer] : []);
+  if(!offers.length) return false;
+  const normalizedSize = normalizeOfferSize(size);
+  return offers.some(offer => {
+  const allowedSizes = new Set((offer?.eligibleSizes || []).map(normalizeOfferSize).filter(Boolean));
+  return !allowedSizes.size || allowedSizes.has(normalizedSize);
+  });
 }
 
 function dishCardMarkup(d = {}, className = ""){
@@ -3899,14 +3910,33 @@ getDocs(collection(db, "coupons"))
 
 function useBogoOfferSnapshot(snapshot){
   const data = snapshot.exists() ? snapshot.data() : null;
-  if(data?.buy1Get1Active === true){
-    activeBogoOffer = { ...data, active:true, type:"buy_1_get_1" };
-  }else if(data?.buy2Get1Active === true){
-    activeBogoOffer = { ...data, active:true, type:"buy_2_get_1" };
-  }else{
-    activeBogoOffer = data?.active === true ? data : null;
+  const commonCategories = Array.isArray(data?.eligibleCategories) ? data.eligibleCategories : [];
+  const commonSizes = Array.isArray(data?.eligibleSizes) ? data.eligibleSizes : [];
+  const offers = [];
+  if(data?.buy1Get1Active === true || (data?.active === true && data?.type === "buy_1_get_1")){
+    offers.push({
+      ...data,
+      active:true,
+      type:"buy_1_get_1",
+      offerName:data.buy1OfferName || data.offerName || "Buy 1 Get 1",
+      eligibleCategories:Array.isArray(data.buy1EligibleCategories) ? data.buy1EligibleCategories : commonCategories,
+      eligibleSizes:Array.isArray(data.buy1EligibleSizes) ? data.buy1EligibleSizes : commonSizes
+    });
   }
-  if(!activeBogoOffer) bogoOfferAccepted = false;
+  if(data?.buy2Get1Active === true || (data?.active === true && data?.type === "buy_2_get_1")){
+    offers.push({
+      ...data,
+      active:true,
+      type:"buy_2_get_1",
+      offerName:data.buy2OfferName || data.offerName || "Buy 2 Get 1",
+      eligibleCategories:Array.isArray(data.buy2EligibleCategories) ? data.buy2EligibleCategories : commonCategories,
+      eligibleSizes:Array.isArray(data.buy2EligibleSizes) ? data.buy2EligibleSizes : commonSizes
+    });
+  }
+  if(!offers.length && data?.active === true) offers.push(data);
+  activeBogoOffers = offers;
+  activeBogoOffer = offers[0] || null;
+  if(!activeBogoOffers.length) bogoOfferAccepted = false;
   renderOfferRail();
   updateHeroBogoButton();
   if(menuListenerStarted){
@@ -3923,6 +3953,7 @@ registerGlobalSnapshot(onSnapshot(doc(db, "settings", "offerEngine"), useBogoOff
   }catch(loadError){
     console.warn("BOGO settings load failed.", loadError);
     activeBogoOffer = null;
+    activeBogoOffers = [];
     updateCart();
   }
 }));
@@ -3931,8 +3962,9 @@ getDoc(doc(db, "settings", "offerEngine"))
   .catch(error => console.warn("Initial BOGO load failed.", error));
 
 function bogoOfferLabels(){
-  const categories = (activeBogoOffer?.eligibleCategories || []).filter(Boolean);
-  const sizes = (activeBogoOffer?.eligibleSizes || []).filter(Boolean);
+  const offer = calculateBogoOffer().offer || activeBogoOffer;
+  const categories = (offer?.eligibleCategories || []).filter(Boolean);
+  const sizes = (offer?.eligibleSizes || []).filter(Boolean);
   return {
     categories:categories.length ? categories.join(", ") : "Pizza",
     sizes:sizes.length ? sizes.join(", ") : "All sizes"
@@ -3940,9 +3972,13 @@ function bogoOfferLabels(){
 }
 
 function renderBogoLiveOfferCard(){
-  if(!activeBogoOffer) return "";
-  const labels = bogoOfferLabels();
-  const typeLabel = activeBogoOffer.type === "buy_2_get_1" ? "Buy 2 Get 1 Free" : "Buy 1 Get 1 Free";
+  if(!activeBogoOffers.length && !activeBogoOffer) return "";
+  const cards = (activeBogoOffers.length ? activeBogoOffers : [activeBogoOffer]).map(offer => {
+  const labels = {
+    categories:(offer?.eligibleCategories || []).filter(Boolean).join(", ") || "Pizza",
+    sizes:(offer?.eligibleSizes || []).filter(Boolean).join(", ") || "All sizes"
+  };
+  const typeLabel = offer.type === "buy_2_get_1" ? "Buy 2 Get 1 Free" : "Buy 1 Get 1 Free";
   return `
     <article class="offer-card offer-card-simple bogo-live-card">
       <img src="logo_tran.jpeg" alt="${escapeHTML(typeLabel)}" width="92" height="92" loading="lazy" decoding="async">
@@ -3954,6 +3990,8 @@ function renderBogoLiveOfferCard(){
       </div>
     </article>
   `;
+  });
+  return cards.join("");
 }
 
 function renderOfferRail(){
@@ -4200,14 +4238,14 @@ function normalizeOfferSize(value = ""){
   return text.replace(/\s+/g, " ");
 }
 
-function calculateBogoOffer(){
+function calculateBogoOfferForOffer(offer){
   const originalTotal = getCartSubtotal();
-  const requiredItemCount = activeBogoOffer?.type === "buy_2_get_1" ? 3 : 2;
-  if(!activeBogoOffer || activeBogoOffer.active !== true){
+  const requiredItemCount = offer?.type === "buy_2_get_1" ? 3 : 2;
+  if(!offer || offer.active !== true){
     return { originalTotal, discount:0, finalTotal:originalTotal, freeItems:[], offerApplied:false, eligibleItemCount:0, requiredItemCount };
   }
-  const allowed = new Set((activeBogoOffer.eligibleCategories || []).map(normalizeOfferCategory).filter(Boolean));
-  const allowedSizes = new Set((activeBogoOffer.eligibleSizes || []).map(normalizeOfferSize).filter(Boolean));
+  const allowed = new Set((offer.eligibleCategories || []).map(normalizeOfferCategory).filter(Boolean));
+  const allowedSizes = new Set((offer.eligibleSizes || []).map(normalizeOfferSize).filter(Boolean));
   const units = [];
   cart.forEach(item => {
     const category = normalizeOfferCategory(item.category || item.dishCategory || "");
@@ -4239,20 +4277,31 @@ function calculateBogoOffer(){
     freeItems:[...grouped.values()],
     offerApplied:discount > 0,
     eligibleItemCount:units.length,
-    requiredItemCount
+    requiredItemCount,
+    offer
   };
+}
+
+function calculateBogoOffer(){
+  const originalTotal = getCartSubtotal();
+  const offers = activeBogoOffers.length ? activeBogoOffers : (activeBogoOffer ? [activeBogoOffer] : []);
+  if(!offers.length) return { originalTotal, discount:0, finalTotal:originalTotal, freeItems:[], offerApplied:false, eligibleItemCount:0, requiredItemCount:2 };
+  return offers
+    .map(calculateBogoOfferForOffer)
+    .sort((a,b) => b.discount - a.discount || a.requiredItemCount - b.requiredItemCount)[0];
 }
 
 function renderBogoOfferPanel(){
   const host = document.getElementById("bogoOfferPanel");
   if(!host) return;
-  if(!activeBogoOffer){
+  if(!activeBogoOffers.length && !activeBogoOffer){
     host.innerHTML = "";
     return;
   }
   const result = calculateBogoOffer();
+  const offer = result.offer || activeBogoOffer;
   const applied = bogoOfferAccepted && result.offerApplied;
-  const typeLabel = activeBogoOffer.type === "buy_2_get_1" ? "Buy 2 Get 1 Free" : "Buy 1 Get 1 Free";
+  const typeLabel = offer?.type === "buy_2_get_1" ? "Buy 2 Get 1 Free" : "Buy 1 Get 1 Free";
   const labels = bogoOfferLabels();
   host.innerHTML = `
     <div style="margin-bottom:12px;padding:12px;border:1px solid ${applied ? "#22c55e" : "#f59e0b"};border-radius:12px;background:${applied ? "rgba(34,197,94,.12)" : "rgba(245,158,11,.10)"}">
@@ -4819,7 +4868,10 @@ function updateCart() {
   let itemsHTML = "";
   let total = 0;
   const totalQty = cart.reduce((sum, item) => sum + (Number(item.qty) || 1), 0);
-  const nextOfferSignature = `${activeBogoOffer?.type || "none"}:${activeBogoOffer?.active === true}:${(activeBogoOffer?.eligibleCategories || []).join("|")}:${(activeBogoOffer?.eligibleSizes || []).join("|")}:${cart.map(item => `${item.id || item.name}:${item.qty}:${item.price}:${item.category || ""}:${item.size || ""}`).join("|")}`;
+  const offerStateSignature = (activeBogoOffers.length ? activeBogoOffers : (activeBogoOffer ? [activeBogoOffer] : []))
+    .map(offer => `${offer.type}:${offer.active === true}:${(offer.eligibleCategories || []).join("|")}:${(offer.eligibleSizes || []).join("|")}`)
+    .join("~") || "none";
+  const nextOfferSignature = `${offerStateSignature}:${cart.map(item => `${item.id || item.name}:${item.qty}:${item.price}:${item.category || ""}:${item.size || ""}`).join("|")}`;
   if(bogoOfferSignature && bogoOfferSignature !== nextOfferSignature) bogoOfferAccepted = false;
   bogoOfferSignature = nextOfferSignature;
 
@@ -6503,7 +6555,7 @@ onAuthStateChanged(auth,(user)=>{
       phoneTrackingUnsub = null;
       authSignOutClearTimer = null;
       orderTrackingPausedForAuthRefresh = false;
-    }, 1500);
+    }, AUTH_NULL_GRACE_MS);
     return;
   }
   if(orderTrackingPausedForAuthRefresh){

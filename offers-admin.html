@@ -72,10 +72,20 @@ button{border:0;border-radius:13px;min-height:44px;padding:0 14px;font:900 12px 
         </select>
       </div>
     </div>
-    <label>Eligible Categories</label>
-    <div class="check-grid" id="engineCategories"></div>
-    <label>Eligible Sizes</label>
-    <div class="check-grid" id="engineSizes"></div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:12px">
+      <div>
+        <label>B2G1 Eligible Categories</label>
+        <div class="check-grid" id="engineBuy2Categories"></div>
+        <label>B2G1 Eligible Sizes</label>
+        <div class="check-grid" id="engineBuy2Sizes"></div>
+      </div>
+      <div>
+        <label>B1G1 Eligible Categories</label>
+        <div class="check-grid" id="engineBuy1Categories"></div>
+        <label>B1G1 Eligible Sizes</label>
+        <div class="check-grid" id="engineBuy1Sizes"></div>
+      </div>
+    </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
       <button class="send" type="button" style="width:auto;margin:0" onclick="saveOfferEngine()">Save BOGO Settings</button>
       <button class="soft" type="button" onclick="disableOfferEngine()">Disable Offer</button>
@@ -182,32 +192,44 @@ function parseSizePrices(text = ""){
 function sizePricesToText(rows = []){
   return Array.isArray(rows) ? rows.map(row => `${row.label || row.size || ""}=${row.price || row.offerPrice || ""}${row.oldPrice || row.originalPrice ? `,${row.oldPrice || row.originalPrice}` : ""}`).join("\n") : "";
 }
-function selectedEngineCategories(){
-  return [...document.querySelectorAll(".engine-category:checked")].map(input => input.value);
+function selectedEngineCategories(selector = ".engine-category"){
+  return [...document.querySelectorAll(`${selector}:checked`)].map(input => input.value);
 }
-function selectedEngineSizes(){
-  return [...document.querySelectorAll(".engine-size:checked")].map(input => input.value);
+function selectedEngineSizes(selector = ".engine-size"){
+  return [...document.querySelectorAll(`${selector}:checked`)].map(input => input.value);
 }
-function renderEngineCategories(){
-  const selected = new Set(engineSettings?.eligibleCategories || []);
-  const box = document.getElementById("engineCategories");
+function renderEngineCategoryBox(boxId, className, selectedValues = []){
+  const selected = new Set(selectedValues);
+  const box = document.getElementById(boxId);
+  if(!box) return;
   box.innerHTML = categoryCache.map(category => `
     <label class="check-row">
-      <input class="engine-category" type="checkbox" value="${category.name || ""}" ${selected.has(category.name) ? "checked" : ""}>
+      <input class="${className}" type="checkbox" value="${category.name || ""}" ${selected.has(category.name) ? "checked" : ""}>
       <span>${category.name || "Untitled category"}</span>
     </label>
   `).join("") || `<div class="history-item">No categories found. Add categories first.</div>`;
 }
-function renderEngineSizes(){
-  const selected = new Set(engineSettings?.eligibleSizes || []);
+function renderEngineSizeBox(boxId, className, selectedValues = []){
+  const selected = new Set(selectedValues);
   const sizes = ["Regular", "Medium", "Large"];
-  const box = document.getElementById("engineSizes");
+  const box = document.getElementById(boxId);
+  if(!box) return;
   box.innerHTML = sizes.map(size => `
     <label class="check-row">
-      <input class="engine-size" type="checkbox" value="${size}" ${selected.has(size) ? "checked" : ""}>
+      <input class="${className}" type="checkbox" value="${size}" ${selected.has(size) ? "checked" : ""}>
       <span>${size}</span>
     </label>
   `).join("");
+}
+function renderEngineCategories(){
+  const common = engineSettings?.eligibleCategories || [];
+  renderEngineCategoryBox("engineBuy2Categories", "engine-buy2-category", engineSettings?.buy2EligibleCategories || common);
+  renderEngineCategoryBox("engineBuy1Categories", "engine-buy1-category", engineSettings?.buy1EligibleCategories || common);
+}
+function renderEngineSizes(){
+  const common = engineSettings?.eligibleSizes || [];
+  renderEngineSizeBox("engineBuy2Sizes", "engine-buy2-size", engineSettings?.buy2EligibleSizes || common);
+  renderEngineSizeBox("engineBuy1Sizes", "engine-buy1-size", engineSettings?.buy1EligibleSizes || common);
 }
 function renderEngineSettings(){
   if(engineSettings){
@@ -221,11 +243,13 @@ function renderEngineSettings(){
   renderEngineSizes();
   const buy1Active = engineSettings?.buy1Get1Active === true || (engineSettings?.active === true && engineSettings?.type === "buy_1_get_1");
   const buy2Active = engineSettings?.buy2Get1Active === true || (engineSettings?.active === true && engineSettings?.type === "buy_2_get_1");
-  const typeText = buy1Active ? "Buy 1 Get 1 (priority)" : buy2Active ? "Buy 2 Get 1" : "No checkout offer";
+  const typeText = buy1Active && buy2Active ? "B1G1 + B2G1 live" : buy1Active ? "Buy 1 Get 1" : buy2Active ? "Buy 2 Get 1" : "No checkout offer";
   const offerName = engineSettings?.offerName || typeText;
-  const categories = engineSettings?.eligibleCategories?.length ? engineSettings.eligibleCategories.join(", ") : "No category selected";
-  const sizes = engineSettings?.eligibleSizes?.length ? engineSettings.eligibleSizes.join(", ") : "All sizes";
-  document.getElementById("engineStatus").innerHTML = `<b>Checkout offer:</b> ${typeText}<br><b>Button name:</b> ${offerName}<br><b>B1G1:</b> ${buy1Active ? "Active" : "Disabled"}<br><b>B2G1:</b> ${buy2Active ? "Active" : "Disabled"}<br><b>Categories:</b> ${categories}<br><b>Sizes:</b> ${sizes}`;
+  const b2Cats = (engineSettings?.buy2EligibleCategories || engineSettings?.eligibleCategories || []).join(", ") || "No category selected";
+  const b1Cats = (engineSettings?.buy1EligibleCategories || engineSettings?.eligibleCategories || []).join(", ") || "No category selected";
+  const b2Sizes = (engineSettings?.buy2EligibleSizes || engineSettings?.eligibleSizes || []).join(", ") || "All sizes";
+  const b1Sizes = (engineSettings?.buy1EligibleSizes || engineSettings?.eligibleSizes || []).join(", ") || "All sizes";
+  document.getElementById("engineStatus").innerHTML = `<b>Checkout offer:</b> ${typeText}<br><b>Button name:</b> ${offerName}<br><b>B1G1:</b> ${buy1Active ? "Active" : "Disabled"} · ${b1Cats} · ${b1Sizes}<br><b>B2G1:</b> ${buy2Active ? "Active" : "Disabled"} · ${b2Cats} · ${b2Sizes}`;
 }
 async function writeHistory(offerId, action, title){
   await addDoc(collection(db, "offerHistory"), {
@@ -325,18 +349,29 @@ onSnapshot(doc(db, "settings", "offerEngine"), snap => {
 });
 
 window.saveOfferEngine = async function(){
-  const categories = selectedEngineCategories();
-  if(!categories.length){
-    alert("Kam se kam ek category select karo.");
+  const buy1Categories = selectedEngineCategories(".engine-buy1-category");
+  const buy2Categories = selectedEngineCategories(".engine-buy2-category");
+  const buy1Active = document.getElementById("engineBuy1Active").value === "true";
+  const buy2Active = document.getElementById("engineBuy2Active").value === "true";
+  if(buy1Active && !buy1Categories.length){
+    alert("B1G1 ke liye kam se kam ek category select karo.");
+    return;
+  }
+  if(buy2Active && !buy2Categories.length){
+    alert("B2G1 ke liye kam se kam ek category select karo.");
     return;
   }
   const payload = {
     active:false,
-    buy1Get1Active:document.getElementById("engineBuy1Active").value === "true",
-    buy2Get1Active:document.getElementById("engineBuy2Active").value === "true",
+    buy1Get1Active:buy1Active,
+    buy2Get1Active:buy2Active,
     offerName:value("engineOfferName"),
-    eligibleCategories:categories,
-    eligibleSizes:selectedEngineSizes(),
+    eligibleCategories:[...new Set([...buy1Categories, ...buy2Categories])],
+    eligibleSizes:[...new Set([...selectedEngineSizes(".engine-buy1-size"), ...selectedEngineSizes(".engine-buy2-size")])],
+    buy1EligibleCategories:buy1Categories,
+    buy1EligibleSizes:selectedEngineSizes(".engine-buy1-size"),
+    buy2EligibleCategories:buy2Categories,
+    buy2EligibleSizes:selectedEngineSizes(".engine-buy2-size"),
     updatedAt:serverTimestamp()
   };
   await setDoc(doc(db, "settings", "offerEngine"), payload, { merge:true });

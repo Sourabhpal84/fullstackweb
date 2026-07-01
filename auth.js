@@ -25,6 +25,7 @@ const PHONE_RE = /^[6-9]\d{9}$/;
 const OTP_RE = /^\d{6}$/;
 const OTP_RESEND_SECONDS = 45;
 const OTP_DELAY_NOTICE_MS = 25000;
+const AUTH_NULL_GRACE_MS = 10000;
 
 let confirmationResult = null;
 let recaptchaVerifier = null;
@@ -696,7 +697,7 @@ onAuthStateChanged(auth, (user) => {
     if(auth.currentUser) return;
     setAuthView(null);
     authNullTimer = null;
-  }, 2500);
+  }, AUTH_NULL_GRACE_MS);
 
 }, (error) => {
 
