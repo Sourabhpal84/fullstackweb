@@ -2001,6 +2001,12 @@ function focusMissingCheckoutField(){
   if(!missing) return false;
   setCheckoutFieldsCollapsed(false);
   const el = document.getElementById(missing[0]);
+  if(missing[0] === "customerAddress"){
+    openLocationSelector();
+    showLocationAddressForm();
+  }else{
+    toggleCart(true);
+  }
   el?.scrollIntoView({ behavior:"smooth", block:"center" });
   setTimeout(() => el?.focus(), 250);
   alert(missing[1] === "name"
@@ -5146,12 +5152,9 @@ function selectPizzaSize(button){
 /* ================= ADD TO CART ================= */
 
 function promptGuestLoginAfterCartAction(){
-  if(auth.currentUser || guestCartAuthPrompted) return;
-  guestCartAuthPrompted = true;
-  setTimeout(async () => {
-    const user = await window.requireMagneetozAuth?.("cart");
-    if(!user) guestCartAuthPrompted = false;
-  }, 280);
+  if(auth.currentUser) return;
+  guestCartAuthPrompted = false;
+  toastInfo("Item added. Login will be needed at checkout.");
 }
 
 function addToCartFull(btn, name){
@@ -5319,6 +5322,7 @@ if(!auth.currentUser){
   await timedStep("placeOrder:auth", () => window.requireMagneetozAuth?.("checkout"));
   if(!auth.currentUser){
     resumeCheckoutAfterAuth = false;
+    toastInfo("Login complete karne ke baad Place Order continue hoga.");
     return;
   }
   await timedStep("placeOrder:mergeGuestCart", () => mergeGuestCartWithUser(auth.currentUser));
@@ -5341,11 +5345,15 @@ let verifiedPhone = phone;
 if(!verifiedPhone){
   await promptVerifiedMobileLogin();
   verifiedPhone = await resolveAuthenticatedCheckoutPhone(auth.currentUser || cachedAuthUser);
-  if(!verifiedPhone) return;
+  if(!verifiedPhone){
+    toastError("Verified mobile missing hai. Please login/OTP verify karke retry karein.");
+    return;
+  }
 }
 
 if(!name || !address){
   focusMissingCheckoutField();
+  toastWarning(!name ? "Please cart me apna name add karein." : "Please delivery address select karein.");
   return;
 }
 
