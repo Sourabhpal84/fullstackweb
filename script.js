@@ -2690,6 +2690,61 @@ function compactCartForStorage(items = []){
   });
 }
 
+function orderItemsForReorder(order = {}){
+  return Array.isArray(order.items) && order.items.length
+    ? order.items
+    : (Array.isArray(order.cart) ? order.cart : []);
+}
+
+function rebuildCartItemFromOrder(item = {}){
+  const qty = Math.max(1, Number(item.qty || item.quantity || 1));
+  const extras = normalizeCartExtras(item.extras || item.addOns || item.addons || item.extraToppings);
+  const crust = normalizeCrust(item.crust || item.crustType || item.selectedCrust);
+  const baseUnitPrice = Number(item.baseUnitPrice || item.unitPrice || (qty ? Number(item.price || 0) / qty - extrasTotalPerUnit(extras) : 0)) || 0;
+  return normalizeCartItemPricing({
+    name:item.name || "MAGNEETOZ Item",
+    size:item.size || "Regular",
+    qty,
+    category:item.category || item.dishCategory || "Recommended",
+    image:normalizeImageUrl(item.image || "logo_tran.jpeg"),
+    baseUnitPrice,
+    unitPrice:baseUnitPrice,
+    extras,
+    addOns:extras,
+    crust,
+    crustType:crust.label,
+    selectedCrust:crust.id,
+    comboId:item.comboId || "",
+    itemsIncluded:item.itemsIncluded || ""
+  });
+}
+
+function orderCanBeReordered(order = {}){
+  return normalizeTimelineStatus(order.status || order.orderStatus || order.lifecycleStatus) === "Delivered"
+    && orderItemsForReorder(order).length > 0;
+}
+
+window.orderAgain = function(orderId = ""){
+  const order = (liveOrders || []).find(item => String(item.id) === String(orderId));
+  if(!order || !orderCanBeReordered(order)){
+    toastWarning("Order Again sirf delivered orders ke liye available hai.");
+    return;
+  }
+  const rebuilt = orderItemsForReorder(order).map(rebuildCartItemFromOrder).filter(item => item.name && item.price >= 0);
+  if(!rebuilt.length){
+    toastWarning("Is order ke items cart me add nahi ho paaye.");
+    return;
+  }
+  cart = rebuilt;
+  bogoOfferAccepted = false;
+  activeCoupon = null;
+  walletPointsRequested = 0;
+  persistGuestState();
+  updateCart();
+  toggleCart(true);
+  toastSuccess("Previous order cart me add ho gaya.");
+};
+
 function estimateJsonBytes(value){
   try{
     return new Blob([JSON.stringify(value)]).size;
@@ -3925,6 +3980,9 @@ window.addEventListener("load", ()=>{
   const savedCheckout = readJSON(CHECKOUT_STATE_KEY, {});
   restoreCheckoutFields(savedCheckout);
   updateCart();
+  if(savedCart?.cartOpen || location.hash === "#cart"){
+    setTimeout(() => toggleCart(true), 250);
+  }
 
 });
 
@@ -6895,6 +6953,9 @@ const cancelHTML = buildCancelWindowHTML(order);
 const payNowHTML = buildPayNowActionHTML(order);
 const paymentHTML = buildPaymentTrackingHTML(order);
 const riderLiveMapHTML = buildRiderLiveMapHTML(order);
+const orderAgainHTML = orderCanBeReordered(order)
+  ? `<button type="button" class="order-again-btn" onclick="orderAgain('${escapeHTML(order.id)}')">Order Again</button>`
+  : "";
 
 const timelineHTML = `
 
@@ -7059,6 +7120,7 @@ order.status === "Delivered"
 
       </div>
       <button type="button" class="invoice-download-btn" onclick="downloadInvoicePDF('${order.id}')">⬇ Download Invoice PDF</button>
+      ${orderAgainHTML}
 
       ${cancelHTML}
 

@@ -10923,3 +10923,7 @@ body .cart-panel .bogo-applied-note{display:block;color:#bbf7d0;font-size:10px;f
 #locationSelectorPopup .location-address-form label{display:block;margin-bottom:7px;color:#172033;font-size:12px;font-weight:950}
 #locationSelectorPopup .location-address-form textarea,#locationSelectorPopup .location-address-form input{width:100%!important;margin:0 0 8px!important;border:1px solid #e1e6ee!important;border-radius:13px!important;background:#f8fafc!important;color:#172033!important}
 @media(max-width:420px){#locationSelectorPopup .location-choice-tabs{grid-template-columns:1fr}#locationSelectorPopup .location-choice-tabs button{min-height:38px}}
+/* Order Again action for delivered orders */
+.order-again-btn{width:100%;min-height:46px;margin:10px 0 0;border:0;border-radius:14px;background:linear-gradient(135deg,#ff7a00,#22c55e);color:#fff;font-size:14px;font-weight:950;box-shadow:0 12px 24px rgba(34,197,94,.18);cursor:pointer}
+.order-again-btn:hover{transform:translateY(-1px);box-shadow:0 16px 30px rgba(34,197,94,.24)}
+@media(max-width:560px){.order-again-btn{min-height:42px;font-size:12px;border-radius:12px}}

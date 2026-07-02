@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -48,6 +48,8 @@ function txDate(value){const date=value?.toDate?.()||null;return date?date.toLoc
 function txReason(d){if(d.type==="referral_bonus")return "Referral reward";if(d.type==="welcome_bonus")return "Referral welcome reward";if(d.type==="loyalty_bonus")return "Feedback reward";if(d.type==="admin_credit")return "Points added";if(d.type==="admin_debit")return "Points adjusted";if(String(d.type||"").includes("redeem"))return "Used on order";return String(d.type||"Pizza Points").replaceAll("_"," ");}
 function customerLabel(user){return user?(user.fullName||user.customerName||user.name||user.phone||user.customerPhone||"Customer"):"Customer";}
 async function renderWalletHistory(txs){if(txs.empty){walletHistory.innerHTML='<p class="muted">No transactions yet.</p>';return}const rows=txs.docs.map(x=>({id:x.id,...x.data()}));walletHistory.innerHTML=rows.map(d=>{const orderLabel=d.orderNumber||d.orderId||"";const referred={fullName:d.referralUserName||"",phone:d.referralUserPhone||""};const referredText=d.type==="referral_bonus"&&d.referralUserId?`<br><span class="muted">Referred customer: ${esc(customerLabel(referred))}</span>`:d.type==="welcome_bonus"&&d.referralUserId?`<br><span class="muted">Referred by: ${esc(customerLabel(referred))}</span>`:"";return `<div class="item"><b>${d.points>0?"+":""}${d.points} points</b> <span class="muted">Â· ${esc(txDate(d.createdAt))}</span>${orderLabel?`<br><span class="muted">Order #${esc(orderLabel)}</span>`:""}<br><span class="muted">${esc(txReason(d))}: ${esc(d.description||"Pizza Points update")}</span>${referredText}${d.orderAmount?`<br><span class="muted">Order value: â‚¹${Number(d.orderAmount).toFixed(0)}</span>`:""}</div>`}).join("");}
+function compactReorderItems(items=[]){return (Array.isArray(items)?items:[]).map(item=>({name:item.name||"MAGNEETOZ Item",size:item.size||"Regular",qty:Number(item.qty||item.quantity||1)||1,category:item.category||item.dishCategory||"Recommended",image:item.image||"logo_tran.jpeg",baseUnitPrice:Number(item.baseUnitPrice||item.unitPrice||0)||0,unitPrice:Number(item.baseUnitPrice||item.unitPrice||0)||0,price:Number(item.price||0)||0,extras:item.extras||item.addOns||[],addOns:item.addOns||item.extras||[],crust:item.crust||null,crustType:item.crustType||"",selectedCrust:item.selectedCrust||"",comboId:item.comboId||"",itemsIncluded:item.itemsIncluded||""})).filter(item=>item.name&&item.qty>0)}
+window.profileOrderAgain=function(orderId){const order=(window.__profileOrders||[]).find(item=>String(item.id)===String(orderId));const items=compactReorderItems(order?.items||order?.cart||[]);if(!items.length){alert("Is order ke items cart me add nahi ho paaye.");return}localStorage.setItem("magneetozGuestCart",JSON.stringify({cart:items,cartOpen:true,savedAt:Date.now()}));location.href="index.html#cart";}
 async function load(){
   await api("ensureGrowthProfile",{}).catch(e=>console.warn("Growth profile setup deferred",e));
   const snap=await getDoc(doc(db,"users",currentUser.uid));
@@ -65,7 +67,8 @@ async function load(){
   }else if(txResult.status!=="fulfilled") walletHistory.innerHTML='<p class="muted">Wallet history is temporarily unavailable.</p>';
   if(orderResult.status==="fulfilled"){
     const ords=orderResult.value;
-    recentOrders.innerHTML=ords.empty?'<p class="muted">No orders yet.</p>':ords.docs.map(x=>{const d=x.data();return `<div class="item"><b>#${esc(d.orderNumber||x.id.slice(0,8))}</b> · ${esc(d.status||d.orderStatus||"Pending")} · ₹${Number(d.totalAmount||0).toFixed(0)}</div>`}).join("");
+    window.__profileOrders=ords.docs.map(x=>({id:x.id,...x.data()}));
+    recentOrders.innerHTML=ords.empty?'<p class="muted">No orders yet.</p>':window.__profileOrders.map(d=>{const delivered=String(d.status||d.orderStatus||"").toLowerCase()==="delivered"&&(d.items||d.cart||[]).length;return `<div class="item"><b>#${esc(d.orderNumber||d.id.slice(0,8))}</b> · ${esc(d.status||d.orderStatus||"Pending")} · ₹${Number(d.totalAmount||0).toFixed(0)}${delivered?`<br><button type="button" onclick="profileOrderAgain('${esc(d.id)}')">Order Again</button>`:""}</div>`}).join("");
   }else recentOrders.innerHTML='<p class="muted">Recent orders are temporarily unavailable.</p>';
 }
 onAuthStateChanged(auth,u=>{if(!u){location.href="index.html";return}currentUser=u;load().catch(e=>alert(e.message))});
