@@ -10845,3 +10845,8 @@ body .hero[data-hero-combo-id] .hero-btn::after{content:"  >";font-weight:950}
 .combo-feature-card.combo-offer-active,.combo-card.combo-offer-active{outline:4px solid rgba(255,123,0,.34)!important;outline-offset:5px!important;box-shadow:0 0 0 8px rgba(255,123,0,.10),0 28px 70px rgba(15,23,42,.24)!important;animation:comboOfferPulse 1.6s ease both}
 @keyframes comboOfferPulse{0%{transform:translateY(0) scale(1)}35%{transform:translateY(-6px) scale(1.015)}100%{transform:translateY(0) scale(1)}}
 @media(max-width:640px){.combo-feature-card.combo-offer-active,.combo-card.combo-offer-active{outline-width:3px!important;outline-offset:3px!important}}
+/* Combo offer images should show the full creative */
+#combosSection .combo-feature-visual{display:grid!important;place-items:center!important;overflow:hidden!important;background:#05070b!important}
+#combosSection .combo-feature-visual img{width:100%!important;height:100%!important;object-fit:contain!important;object-position:center center!important;background:#05070b!important}
+#combosSection .combo-card img,body #combosSection .combo-card img{object-fit:contain!important;object-position:center center!important;background:#05070b!important}
+@media(max-width:760px){#combosSection .combo-card img,body #combosSection .combo-card img{height:auto!important;min-height:0!important;aspect-ratio:16/9!important;width:100%!important}#combosSection .combo-card{grid-template-columns:1fr!important}}
