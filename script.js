@@ -260,6 +260,7 @@ let heroSwipeStartY = 0;
 let heroSwipeMoved = false;
 let heroSwipeTracking = false;
 let heroSwipeCapturedAt = 0;
+let heroSlideOffers = [];
 
 function renderHeroSliderDots(count = 0){
   const hero = document.getElementById("homeHero");
@@ -385,6 +386,97 @@ function renderHeroPizzaSlider(images = [], imageSets = [], heroImages = []){
   setupHeroSwipeSlider(slides.length);
 }
 
+function comboHeroImage(combo = {}){
+  return normalizeImageUrl(
+    combo.heroImage ||
+    combo.bannerImage ||
+    combo.mobileHeroImage ||
+    combo.desktopHeroImage ||
+    combo.image ||
+    "logo_tran.jpeg"
+  );
+}
+
+function renderComboHeroSlides(combos = []){
+  const slides = combos
+    .filter(combo => combo && combo.active !== false && comboHeroImage(combo))
+    .map(combo => ({
+      id:combo.id,
+      name:combo.name || "MAGNEETOZ Combo",
+      badge:combo.badge || "Combo Offer",
+      description:combo.description || combo.itemsIncluded || "Limited-time MAGNEETOZ combo deal",
+      comboPrice:Number(combo.comboPrice || 0),
+      originalPrice:Number(combo.originalPrice || combo.comboPrice || 0),
+      url:comboHeroImage(combo),
+      mobileUrl:normalizeImageUrl(combo.mobileHeroImage || combo.mobileImage || comboHeroImage(combo)),
+      desktopUrl:normalizeImageUrl(combo.desktopHeroImage || combo.desktopImage || comboHeroImage(combo)),
+      variants:combo.heroImageSet?.variants || combo.imageSet?.variants || {},
+      order:Number(combo.displayOrder ?? combo.order ?? 999)
+    }))
+    .sort((a, b) => a.order - b.order)
+    .slice(0, 8);
+  if(!slides.length) return;
+  heroSlideOffers = slides;
+  renderHeroPizzaSlider([], [], slides.map((slide, index) => ({
+    active:true,
+    order:index,
+    url:slide.url,
+    mobileUrl:slide.mobileUrl,
+    desktopUrl:slide.desktopUrl,
+    variants:slide.variants
+  })));
+  syncHeroOfferCopy();
+}
+
+function currentHeroOffer(){
+  if(!heroSlideOffers.length) return null;
+  return heroSlideOffers[heroSliderIndex] || heroSlideOffers[0] || null;
+}
+
+function selectorEscape(value = ""){
+  if(window.CSS?.escape) return CSS.escape(String(value));
+  return String(value).replace(/["\\]/g, "\\$&");
+}
+
+function syncHeroOfferCopy(){
+  const primary = document.getElementById("heroPrimaryBtnText");
+  const hero = document.getElementById("homeHero");
+  const kicker = document.getElementById("heroKickerText");
+  const title = document.getElementById("heroTitleText");
+  const subtitle = document.getElementById("heroSubtitleText");
+  const offer = currentHeroOffer();
+  if(primary){
+    primary.textContent = offer ? "Order Now" : (primary.textContent || "Order Now");
+    primary.setAttribute("href", offer ? "#combosSection" : "#menuSection");
+    primary.dataset.heroComboId = offer?.id || "";
+    primary.setAttribute("aria-label", offer ? `Order ${offer.name}` : "Order Now");
+  }
+  if(hero){
+    hero.dataset.heroComboId = offer?.id || "";
+    hero.setAttribute("aria-label", offer ? `View ${offer.name} combo offer` : "Start your MAGNEETOZ order");
+  }
+  if(offer){
+    const savings = Math.max(0, Number(offer.originalPrice || 0) - Number(offer.comboPrice || 0));
+    if(kicker) kicker.textContent = `${offer.badge} • Tap Order Now`;
+    if(title) title.textContent = offer.name;
+    if(subtitle){
+      subtitle.textContent = `${offer.description}${offer.comboPrice ? ` • ${formatCurrency(offer.comboPrice)}` : ""}${savings ? ` • Save ${formatCurrency(savings)}` : ""}`;
+    }
+  }
+}
+
+function focusComboOffer(comboId = ""){
+  if(!comboId){
+    document.getElementById("combosSection")?.scrollIntoView({ behavior:"smooth", block:"start" });
+    return;
+  }
+  const comboCard = document.querySelector(`[data-combo-id="${selectorEscape(comboId)}"]`);
+  const target = comboCard || document.getElementById("combosSection");
+  target?.scrollIntoView({ behavior:"smooth", block:"center" });
+  comboCard?.classList.add("combo-offer-active");
+  setTimeout(() => comboCard?.classList.remove("combo-offer-active"), 1800);
+}
+
 function setHeroSliderIndex(index = 0){
   const bgSlides = [...document.querySelectorAll("#heroBgSlider img")];
   const pizzaSlides = [...document.querySelectorAll("#heroPizzaSlider img")];
@@ -410,6 +502,7 @@ function setHeroSliderIndex(index = 0){
     dot.classList.toggle("active", dotIndex === heroSliderIndex);
     dot.setAttribute("aria-current", dotIndex === heroSliderIndex ? "true" : "false");
   });
+  syncHeroOfferCopy();
 }
 
 function startHeroSliderAuto(count = 0){
@@ -3542,6 +3635,9 @@ registerGlobalSnapshot(onSnapshot(doc(db, "settings", "theme"), snap => {
     Array.isArray(hero.heroImages) ? hero.heroImages : []
   );
   setThemeParticles(String(vars["--particle-bg"] || "").trim() === "founder-gold");
+  if((window.__magneetozActiveCombos || []).length){
+    renderComboHeroSlides(window.__magneetozActiveCombos);
+  }
 }));
 
 
@@ -4152,7 +4248,7 @@ registerGlobalSnapshot(onSnapshot(query(collection(db, "combos"), orderBy("creat
   const secondaryCombos = featured ? combos.filter(combo => combo.id !== featured.id) : combos;
   if(featuredHost){
     featuredHost.innerHTML = featured ? `
-      <article class="combo-feature-card" style="--combo-accent:${escapeHTML(featured.accentColor || "#ff6b00")}">
+      <article class="combo-feature-card" data-combo-id="${escapeHTML(featured.id)}" style="--combo-accent:${escapeHTML(featured.accentColor || "#ff6b00")}">
         <div class="combo-feature-copy">
           <span class="combo-badge">${escapeHTML(featured.badge || "Chef's Combo Pick")}</span>
           <p>${escapeHTML(featured.subtitle || "A complete MAGNEETOZ feast")}</p>
@@ -4172,7 +4268,7 @@ registerGlobalSnapshot(onSnapshot(query(collection(db, "combos"), orderBy("creat
   }
   host.hidden = secondaryCombos.length === 0;
   host.innerHTML = secondaryCombos.map(combo => `
-    <article class="combo-card" style="--combo-accent:${escapeHTML(combo.accentColor || "#ff6b00")}">
+    <article class="combo-card" data-combo-id="${escapeHTML(combo.id)}" style="--combo-accent:${escapeHTML(combo.accentColor || "#ff6b00")}">
       <img src="${escapeHTML(normalizeImageUrl(combo.image))}" alt="${escapeHTML(combo.name || "Combo")}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
       <div>
         <span>${escapeHTML(combo.badge || "Combo deal")}</span>
@@ -4187,6 +4283,7 @@ registerGlobalSnapshot(onSnapshot(query(collection(db, "combos"), orderBy("creat
     </article>
   `).join("");
   window.__magneetozActiveCombos = combos;
+  renderComboHeroSlides(combos);
 }));
 
 function getCartSubtotal(){
@@ -6172,6 +6269,13 @@ document.addEventListener("DOMContentLoaded", () => {
     event.stopPropagation();
     openLocationSelector();
   });
+  document.getElementById("heroPrimaryBtnText")?.addEventListener("click", event => {
+    const comboId = event.currentTarget?.dataset?.heroComboId || currentHeroOffer()?.id || "";
+    if(!comboId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    focusComboOffer(comboId);
+  });
   document.querySelector(".hero")?.addEventListener("click", event => {
     if(heroSwipeMoved){
       event.preventDefault();
@@ -6180,12 +6284,16 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     if(event.target.closest("button,a,select,input,textarea")) return;
-    document.getElementById("homepageBestSellers")?.scrollIntoView({ behavior:"smooth", block:"start" });
+    const comboId = currentHeroOffer()?.id || "";
+    if(comboId) focusComboOffer(comboId);
+    else document.getElementById("homepageBestSellers")?.scrollIntoView({ behavior:"smooth", block:"start" });
   });
   document.querySelector(".hero")?.addEventListener("keydown", event => {
     if(event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
-    document.getElementById("homepageBestSellers")?.scrollIntoView({ behavior:"smooth", block:"start" });
+    const comboId = currentHeroOffer()?.id || "";
+    if(comboId) focusComboOffer(comboId);
+    else document.getElementById("homepageBestSellers")?.scrollIntoView({ behavior:"smooth", block:"start" });
   });
   ["customerName","customerAddress","customerLandmark"].forEach(id => {
     document.getElementById(id)?.addEventListener("input", () => {
