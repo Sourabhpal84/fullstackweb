@@ -2153,8 +2153,15 @@ async function promptVerifiedMobileLogin(){
   const existingUser = auth.currentUser || cachedAuthUser;
   const label = document.getElementById("checkoutAuthPhoneValue");
   if(label) label.textContent = "Login to verify mobile";
+  setCheckoutMessage("Mobile verification required hai. Login popup open ho raha hai.", "warning");
   if(existingUser?.uid){
-    console.warn("Verified mobile missing; asking for re-verification without signing out.", { uid:existingUser.uid });
+    console.warn("Verified mobile missing; signing out before re-verification.", { uid:existingUser.uid });
+    document.body?.classList.add("auth-needs-verification");
+    try{
+      await signOut(auth);
+    }catch(error){
+      console.warn("Auto sign-out for mobile verification failed:", error);
+    }
   }
   if(typeof window.requireMagneetozAuth === "function"){
     await window.requireMagneetozAuth("mobile_verification");
@@ -5548,7 +5555,7 @@ if(!verifiedPhone){
   await promptVerifiedMobileLogin();
   verifiedPhone = await resolveAuthenticatedCheckoutPhone(auth.currentUser || cachedAuthUser);
   if(!verifiedPhone){
-    toastError("Verified mobile missing hai. Please login/OTP verify karke retry karein.");
+    setCheckoutMessage("OTP login complete karke Place Order dobara tap karein.", "warning");
     return;
   }
 }

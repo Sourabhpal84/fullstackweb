@@ -140,7 +140,8 @@ function setButton(button, busy, busyText){
 }
 
 function syncAuthControls(user){
-  const loggedIn = !!user;
+  const needsVerification = document.body.classList.contains("auth-needs-verification") || !!(user && !user.phoneNumber);
+  const loggedIn = !!user && !needsVerification;
   document.body.classList.toggle("is-guest", !loggedIn);
   document.body.classList.toggle("is-logged-in", loggedIn);
   document.querySelectorAll(".auth-login-action").forEach(button => {
@@ -154,7 +155,7 @@ function syncAuthControls(user){
   const headerAuthBtn = $("headerAuthBtn");
   if(headerAuthBtn){
     headerAuthBtn.textContent = loggedIn ? "🚪 Logout" : "🔐 Login";
-    headerAuthBtn.title = loggedIn ? "Logout from MAGNEETOZ" : "Login to MAGNEETOZ";
+    headerAuthBtn.title = needsVerification ? "Login to verify mobile" : (loggedIn ? "Logout from MAGNEETOZ" : "Login to MAGNEETOZ");
     headerAuthBtn.hidden = false;
     headerAuthBtn.setAttribute("aria-hidden", "false");
   }
@@ -167,6 +168,7 @@ function setAuthView(user){
   syncAuthControls(user);
 
   if(user){
+    document.body.classList.remove("auth-needs-verification");
     cleanupOtpSession({ keepRecaptcha:true });
     setAuthStatus("Login successful", "success");
     document.body.classList.remove("auth-required");
@@ -185,6 +187,7 @@ function setAuthView(user){
 
   document.body.classList.remove("auth-required");
   document.body.classList.remove("auth-success");
+  document.body.classList.remove("auth-needs-verification");
   if(app) app.style.display = "block";
   if(popup) popup.style.display = "none";
   window.dispatchEvent(new CustomEvent("magneetoz:guest-ready"));
@@ -646,7 +649,7 @@ function bindAuthUI(){
   $("headerAuthBtn")?.addEventListener("click", event => {
     event.preventDefault();
     event.stopPropagation();
-    if(auth.currentUser){
+    if(auth.currentUser && !document.body.classList.contains("auth-needs-verification")){
       logout();
       return;
     }
