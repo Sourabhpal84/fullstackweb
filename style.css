@@ -3343,6 +3343,11 @@ body.dark-mode .hero::after{background:linear-gradient(to bottom,transparent,#0b
   cursor:pointer;
   backdrop-filter:blur(16px);
 }
+.hero-best-seller-btn{
+  background:rgba(255,255,255,.18);
+  border-color:rgba(255,183,77,.44);
+  box-shadow:0 12px 32px rgba(255,123,0,.18);
+}
 .magnetic-btn{will-change:transform;transition:transform .22s ease,box-shadow .22s ease;}
 .hero-proof{
   display:flex;
@@ -9634,7 +9639,7 @@ body .hero.hero-image-contain .hero-pizza-slider img{
   width:min(1180px,calc(100% - 24px));
   margin:12px auto 10px;
   display:grid;
-  grid-template-columns:1fr 1fr;
+  grid-template-columns:1.15fr .9fr .9fr;
   gap:10px;
 }
 .hero-offer-actions button{
@@ -9650,6 +9655,7 @@ body .hero.hero-image-contain .hero-pizza-slider img{
   box-shadow:0 14px 34px rgba(15,23,42,.18);
 }
 .hero-offer-actions button:first-child{background:linear-gradient(135deg,#ff7b00,#f04455)}
+.hero-offer-actions button:nth-child(2){background:linear-gradient(135deg,#7c3aed,#ef4444)}
 .hero-offer-actions button:last-child{background:linear-gradient(135deg,#16a34a,#0ea5e9)}
 .hero-offer-actions button:disabled{
   opacity:.55;
@@ -9659,7 +9665,8 @@ body .hero.hero-image-contain .hero-pizza-slider img{
 @media(max-width:560px){
   .hero-offer-actions{
     width:calc(100% - 20px);
-    gap:8px;
+    grid-template-columns:1fr;
+    gap:7px;
   }
   .hero-offer-actions button{
     min-height:48px;
@@ -10790,3 +10797,19 @@ body #headerAuthBtn.auth-state-action{display:inline-flex!important}
 /* OTP delivery guidance */
 .auth-help{margin:8px 0 12px;padding:9px 11px;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:rgba(255,255,255,.08);color:rgba(255,255,255,.78);font-size:12px;line-height:1.45;font-weight:700}
 body.light-theme .auth-help,body:not(.dark-mode):not(.dark-theme) .auth-help{background:#fff7ed;border-color:#fed7aa;color:#9a3412}
+
+/* Homepage first screen usability */
+body .hero-actions{display:flex!important;flex-wrap:wrap!important;align-items:center!important;gap:10px!important}
+body .hero-btn,body .hero-secondary,body .hero-best-seller-btn{display:inline-flex!important;align-items:center!important;justify-content:center!important;min-height:46px!important;white-space:nowrap!important}
+body .hero-btn{padding:0 30px!important;font-size:15px!important;font-weight:950!important}
+body .hero-best-seller-btn{border:1px solid rgba(255,255,255,.28)!important;background:rgba(255,255,255,.14)!important;color:#fff!important;box-shadow:0 14px 28px rgba(2,6,23,.18)!important}
+body .hero-proof{display:flex!important;flex-wrap:wrap!important;align-items:center!important;gap:8px!important}
+body .hero-proof span{display:inline-flex!important;align-items:center!important;min-height:30px!important;border:1px solid rgba(255,255,255,.16)!important;background:rgba(2,6,23,.20)!important;color:#fff!important}
+body .delivery-location-strip{grid-template-columns:40px minmax(0,1fr) max-content!important}
+body .delivery-location-change{white-space:nowrap!important}
+body .hero-offer-actions{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+body .hero-offer-actions button:first-child{background:linear-gradient(135deg,#111827,#ff7b00)!important}
+body .hero-offer-actions button:nth-child(2){background:linear-gradient(135deg,#ff7b00,#f04455)!important}
+body .hero-offer-actions button:nth-child(3){background:linear-gradient(135deg,#16a34a,#0ea5e9)!important}
+body .new-card.menu-category-active,body .category-block.menu-category-active{outline:3px solid rgba(255,123,0,.28)!important;outline-offset:4px!important}
+@media(max-width:560px){body .hero-actions{gap:5px!important}body .hero-btn,body .hero-secondary,body .hero-best-seller-btn{min-height:28px!important;padding:5px 8px!important;font-size:7.5px!important}body .hero-proof{gap:4px!important}body .hero-proof span{min-height:18px!important}body .delivery-location-strip{grid-template-columns:34px minmax(0,1fr) auto!important;gap:8px!important}body .delivery-location-change{font-size:9px!important}body .hero-offer-actions{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:7px!important}body .hero-offer-actions button{min-height:44px!important;padding:0 7px!important;font-size:10px!important}}

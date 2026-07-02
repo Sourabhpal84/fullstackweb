@@ -3016,8 +3016,20 @@ function scrollToBogoTarget(){
 function bindHeroOfferActions(){
   const comboBtn = document.getElementById("heroComboJumpBtn");
   const bogoBtn = document.getElementById("heroBogoJumpBtn");
+  const bestSellerBtn = document.getElementById("heroBestSellerJumpBtn");
+  const heroBestSellerBtn = document.getElementById("heroBestSellerBtn");
+  const scrollToBestSellers = () => {
+    document.getElementById("menuSection")?.scrollIntoView({ behavior:"smooth", block:"start" });
+    requestAnimationFrame(() => {
+      const firstCategory = document.querySelector(".inline-menu-section .category-block, .inline-menu-section .new-card");
+      firstCategory?.classList.add("menu-category-active");
+      setTimeout(() => firstCategory?.classList.remove("menu-category-active"), 1400);
+    });
+  };
   comboBtn?.addEventListener("click", () => document.getElementById("combosSection")?.scrollIntoView({ behavior:"smooth", block:"start" }));
   bogoBtn?.addEventListener("click", scrollToBogoTarget);
+  bestSellerBtn?.addEventListener("click", scrollToBestSellers);
+  heroBestSellerBtn?.addEventListener("click", scrollToBestSellers);
 }
 
 function updateHeroBogoButton(){
@@ -6109,12 +6121,12 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     if(event.target.closest("button,a,select,input,textarea")) return;
-    document.getElementById("combosSection")?.scrollIntoView({ behavior:"smooth", block:"start" });
+    document.getElementById("menuSection")?.scrollIntoView({ behavior:"smooth", block:"start" });
   });
   document.querySelector(".hero")?.addEventListener("keydown", event => {
     if(event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
-    document.getElementById("combosSection")?.scrollIntoView({ behavior:"smooth", block:"start" });
+    document.getElementById("menuSection")?.scrollIntoView({ behavior:"smooth", block:"start" });
   });
   ["customerName","customerAddress","customerLandmark"].forEach(id => {
     document.getElementById(id)?.addEventListener("input", () => {

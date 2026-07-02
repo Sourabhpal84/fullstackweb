@@ -464,7 +464,7 @@ Verify OTP
     </button>
     <!-- HERO -->
 
-    <section class="hero" id="homeHero" role="button" tabindex="0" aria-label="View combo offers">
+    <section class="hero" id="homeHero" role="button" tabindex="0" aria-label="Start your MAGNEETOZ order">
       <div class="hero-bg-slider" id="heroBgSlider" aria-hidden="true"></div>
       <div class="hero-bg bg1"></div>
       <div class="hero-bg bg2"></div>
@@ -487,9 +487,13 @@ Verify OTP
           </p>
 
           <div class="hero-actions">
-            <a href="#combosSection" class="hero-btn" id="heroPrimaryBtnText">
-              Explore Menu
+            <a href="#menuSection" class="hero-btn" id="heroPrimaryBtnText">
+              Order Now
             </a>
+
+            <button type="button" class="hero-secondary hero-best-seller-btn" id="heroBestSellerBtn">
+              <span>Best Sellers</span>
+            </button>
 
             <button type="button" class="hero-secondary magnetic-btn" id="openSearchBtn">
               <span id="heroSecondaryBtnText">Smart Search</span>
@@ -497,9 +501,9 @@ Verify OTP
           </div>
 
           <div class="hero-proof">
-            <span>4.8 rated</span>
-            <span>Secure payments</span>
-            <span>Realtime tracking</span>
+            <span>Freshly prepared</span>
+            <span>COD & UPI</span>
+            <span>Live tracking</span>
           </div>
         </div>
 
@@ -546,11 +550,12 @@ Verify OTP
     <div class="sticky-area">
       <button type="button" class="delivery-location-strip" id="heroLocationPill" aria-label="Select delivery location">
         <span class="delivery-location-pin">⌖</span>
-        <span class="delivery-location-copy"><small>DELIVERING TO</small><strong id="heroLocationTitle">Select your location</strong><em id="heroLocationAddress">Use current location for accurate delivery offers</em></span>
-        <span class="delivery-location-change">Change <b>›</b></span>
+        <span class="delivery-location-copy"><small>CURRENT LOCATION</small><strong id="heroLocationTitle">Select your location</strong><em id="heroLocationAddress">Use current location for accurate delivery time and offers</em></span>
+        <span class="delivery-location-change">Use location <b>›</b></span>
       </button>
 
       <section class="hero-offer-actions" id="heroOfferActions" aria-label="Featured offers">
+        <button type="button" id="heroBestSellerJumpBtn">BEST SELLERS</button>
         <button type="button" id="heroComboJumpBtn">COMBO</button>
         <button type="button" id="heroBogoJumpBtn">BOGO</button>
       </section>
