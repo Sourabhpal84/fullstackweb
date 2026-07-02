@@ -10850,3 +10850,38 @@ body .hero[data-hero-combo-id] .hero-btn::after{content:"  >";font-weight:950}
 #combosSection .combo-feature-visual img{width:100%!important;height:100%!important;object-fit:contain!important;object-position:center center!important;background:#05070b!important}
 #combosSection .combo-card img,body #combosSection .combo-card img{object-fit:contain!important;object-position:center center!important;background:#05070b!important}
 @media(max-width:760px){#combosSection .combo-card img,body #combosSection .combo-card img{height:auto!important;min-height:0!important;aspect-ratio:16/9!important;width:100%!important}#combosSection .combo-card{grid-template-columns:1fr!important}}
+/* Compact combo cards while keeping full banner visible */
+#combosSection .combo-feature-card{min-height:320px!important;border-radius:22px!important}
+#combosSection .combo-feature-copy{padding:24px!important}
+#combosSection .combo-feature-visual{min-height:260px!important}
+#combosSection .combo-card,body #combosSection .combo-card{grid-template-columns:150px minmax(0,1fr)!important;gap:12px!important;padding:12px!important;border-radius:18px!important}
+#combosSection .combo-card img,body #combosSection .combo-card img{width:150px!important;height:auto!important;min-height:0!important;aspect-ratio:16/9!important;border-radius:13px!important}
+#combosSection .combo-card h3{font-size:15px!important;line-height:1.18!important;margin:3px 0!important}
+#combosSection .combo-card p{font-size:11px!important;line-height:1.35!important;display:-webkit-box!important;-webkit-line-clamp:2!important;-webkit-box-orient:vertical!important;overflow:hidden!important}
+#combosSection .combo-card button{min-height:36px!important;padding:8px 12px!important;font-size:12px!important}
+@media(max-width:760px){#combosSection .combo-feature-card{min-height:0!important;border-radius:18px!important}#combosSection .combo-feature-copy{padding:16px!important}#combosSection .combo-feature-visual{min-height:0!important;aspect-ratio:16/9!important}#combosSection .combo-card,body #combosSection .combo-card{grid-template-columns:1fr!important;padding:10px!important;border-radius:16px!important}#combosSection .combo-card img,body #combosSection .combo-card img{width:100%!important;aspect-ratio:16/9!important;border-radius:12px!important}#combosSection .combo-card button{width:100%!important}}
+/* Simplified checkout steps */
+body .cart-panel .checkout-details-column{gap:12px!important}
+body .cart-panel .checkout-stepper{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0 0 2px;padding:8px;border:1px solid rgba(255,255,255,.10);border-radius:16px;background:rgba(255,255,255,.06)}
+body .cart-panel .checkout-stepper span{display:flex;align-items:center;justify-content:center;gap:6px;min-height:36px;border-radius:12px;color:#94a3b8;font-size:11px;font-weight:900;white-space:nowrap}
+body .cart-panel .checkout-stepper b{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:#1f2937;color:#cbd5e1;font-size:10px}
+body .cart-panel .checkout-stepper span.active{background:rgba(255,122,0,.12);color:#fb923c}
+body .cart-panel .checkout-stepper span.complete{background:rgba(34,197,94,.12);color:#86efac}
+body .cart-panel .checkout-stepper span.complete b{background:#16a34a;color:#fff}
+body .cart-panel .checkout-inline-message{padding:10px 12px;border-radius:13px;background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;font-size:12px;font-weight:850;line-height:1.35}
+body .cart-panel .checkout-inline-message[hidden]{display:none!important}
+body .cart-panel .checkout-name-field{display:grid!important;gap:6px;margin:0;padding:12px;border:1px solid var(--cart-border,rgba(255,255,255,.10));border-radius:15px;background:var(--cart-card,rgba(255,255,255,.06));color:#fff}
+body .cart-panel .checkout-name-field span{color:#fb923c;font-size:11px;font-weight:950;text-transform:uppercase;letter-spacing:.06em}
+body .cart-panel .checkout-name-field span b{color:#ef4444}
+body .cart-panel #customerName{display:block!important;width:100%!important;min-height:44px!important;margin:0!important;border-radius:12px!important;background:#0c1524!important;color:#fff!important;border:1px solid var(--cart-border,rgba(255,255,255,.10))!important}
+body .cart-panel .checkout-name-field small{color:#94a3b8;font-size:10px;font-weight:750}
+body .cart-panel .checkout-auth-phone{display:grid!important;gap:3px;margin:0;padding:11px 12px;border:1px solid var(--cart-border,rgba(255,255,255,.10));border-radius:14px;background:var(--cart-card,rgba(255,255,255,.06));color:#fff}
+body .cart-panel .checkout-auth-phone span,body .cart-panel .checkout-payment-step span{color:#94a3b8;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em}
+body .cart-panel .checkout-auth-phone strong,body .cart-panel .checkout-payment-step strong{color:#fff;font-size:13px;font-weight:950}
+body .cart-panel .checkout-payment-step{display:grid!important;gap:3px;margin:0;padding:11px 12px;border:1px solid rgba(34,197,94,.18);border-radius:14px;background:rgba(34,197,94,.08);color:#fff}
+body .cart-panel .checkout-payment-step small{color:#bbf7d0;font-size:10px;font-weight:750}
+body .cart-panel .checkout-field-missing{border-color:#fb7185!important;box-shadow:0 0 0 3px rgba(251,113,133,.14)!important}
+body.light-theme .cart-panel .checkout-stepper,body:not(.dark-mode):not(.dark-theme) .cart-panel .checkout-stepper,body.light-theme .cart-panel .checkout-name-field,body:not(.dark-mode):not(.dark-theme) .cart-panel .checkout-name-field,body.light-theme .cart-panel .checkout-auth-phone,body:not(.dark-mode):not(.dark-theme) .cart-panel .checkout-auth-phone{background:#fff!important;border-color:#ffedd5!important;color:#172033!important}
+body.light-theme .cart-panel #customerName,body:not(.dark-mode):not(.dark-theme) .cart-panel #customerName{background:#fff!important;color:#172033!important;border-color:#fed7aa!important}
+body.light-theme .cart-panel .checkout-auth-phone strong,body:not(.dark-mode):not(.dark-theme) .cart-panel .checkout-auth-phone strong,body.light-theme .cart-panel .checkout-payment-step strong,body:not(.dark-mode):not(.dark-theme) .cart-panel .checkout-payment-step strong{color:#172033!important}
+@media(max-width:560px){body .cart-panel .checkout-stepper{gap:5px;padding:6px}body .cart-panel .checkout-stepper span{min-height:32px;font-size:9px;gap:4px}body .cart-panel .checkout-stepper b{width:18px;height:18px;font-size:9px}body .cart-panel .checkout-name-field{padding:10px!important}body .cart-panel .checkout-auth-phone,body .cart-panel .checkout-payment-step{padding:10px!important}}

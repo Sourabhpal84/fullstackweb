@@ -1270,6 +1270,7 @@ function closeLocationSelector(){
     popup.setAttribute("aria-hidden", "true");
     document.body?.classList.remove("location-selector-open");
   }
+  updateCheckoutSteps();
 }
 
 function showLocationAddressForm(){
@@ -1316,6 +1317,8 @@ async function saveLocationSelection(){
   }
   updateSelectedLocationUi(address);
   checkoutLocationChoiceVersion++;
+  setCheckoutMessage("");
+  updateCheckoutSteps();
   persistGuestState();
   if(auth.currentUser) await saveCurrentAddressToBook().catch(error => console.warn("Address save skipped", error));
   closeLocationSelector();
@@ -2083,6 +2086,34 @@ function getCheckoutFields(){
   };
 }
 
+function setCheckoutMessage(message = "", type = "info"){
+  const box = document.getElementById("checkoutInlineMessage");
+  if(!box) return;
+  box.hidden = !message;
+  box.textContent = message;
+  box.dataset.type = type;
+}
+
+function markCheckoutField(id, invalid = false){
+  const el = document.getElementById(id);
+  el?.classList.toggle("checkout-field-missing", invalid);
+  el?.closest("label, .cart-location-card")?.classList.toggle("checkout-field-missing", invalid);
+}
+
+function updateCheckoutSteps(){
+  const fields = getCheckoutFields();
+  const hasName = !!fields.name;
+  const hasLocation = !!(fields.address && isUsableCoordinatePair(fields.lat, fields.lng));
+  document.querySelector('[data-checkout-step="name"]')?.classList.toggle("complete", hasName);
+  document.querySelector('[data-checkout-step="location"]')?.classList.toggle("complete", hasLocation);
+  document.querySelector('[data-checkout-step="payment"]')?.classList.toggle("complete", hasName && hasLocation);
+  document.querySelector('[data-checkout-step="payment"]')?.classList.toggle("active", hasName && hasLocation);
+  document.querySelector('[data-checkout-step="name"]')?.classList.toggle("active", !hasName);
+  document.querySelector('[data-checkout-step="location"]')?.classList.toggle("active", hasName && !hasLocation);
+  markCheckoutField("customerName", false);
+  document.getElementById("cartLocationCard")?.classList.remove("checkout-field-missing");
+}
+
 function syncAuthenticatedCheckoutPhone(user = auth.currentUser || cachedAuthUser){
   const phone = normalizeUnicodeText(user?.phoneNumber || document.getElementById("customerPhone")?.value || "");
   const hidden = document.getElementById("customerPhone");
@@ -2144,25 +2175,27 @@ async function resolveAuthenticatedCheckoutName(user = auth.currentUser || cache
 }
 
 function focusMissingCheckoutField(){
-  const fields = [
-    ["customerName", "name"],
-    ["customerAddress", "address"]
-  ];
-  const missing = fields.find(([id]) => !normalizeUnicodeText(document.getElementById(id)?.value || ""));
-  if(!missing) return false;
+  const checkout = getCheckoutFields();
+  const missingName = !checkout.name;
+  const missingLocation = !(checkout.address && isUsableCoordinatePair(checkout.lat, checkout.lng));
+  if(!missingName && !missingLocation) return false;
   setCheckoutFieldsCollapsed(false);
-  const el = document.getElementById(missing[0]);
-  if(missing[0] === "customerAddress"){
+  toggleCart(true);
+  if(missingLocation && !missingName){
+    markCheckoutField("customerName", false);
+    document.getElementById("cartLocationCard")?.classList.add("checkout-field-missing");
+    setCheckoutMessage("Delivery location required hai. Use current location ya address select karein.", "warning");
     openLocationSelector();
     showLocationAddressForm();
   }else{
-    toggleCart(true);
+    const el = document.getElementById("customerName");
+    markCheckoutField("customerName", true);
+    document.getElementById("cartLocationCard")?.classList.toggle("checkout-field-missing", missingLocation);
+    setCheckoutMessage("Please apna name enter karein, fir location confirm karke payment continue hoga.", "warning");
+    el?.scrollIntoView({ behavior:"smooth", block:"center" });
+    setTimeout(() => el?.focus(), 250);
   }
-  el?.scrollIntoView({ behavior:"smooth", block:"center" });
-  setTimeout(() => el?.focus(), 250);
-  alert(missing[1] === "name"
-    ? "Please enter your name in the cart so we know who the order is for."
-    : "Please select or enter your delivery address.");
+  updateCheckoutSteps();
   return true;
 }
 
@@ -2177,6 +2210,7 @@ function restoreCheckoutFields(state = readJSON(CHECKOUT_STATE_KEY, {}), force =
     const el = document.getElementById(id);
     if(el && value && (force || !el.value)) el.value = value;
   });
+  updateCheckoutSteps();
 }
 
 function setCheckoutFieldsCollapsed(collapsed){
@@ -5521,7 +5555,6 @@ if(!verifiedPhone){
 
 if(!name || !address){
   focusMissingCheckoutField();
-  toastWarning(!name ? "Please cart me apna name add karein." : "Please delivery address select karein.");
   return;
 }
 
@@ -6304,9 +6337,15 @@ document.addEventListener("DOMContentLoaded", () => {
         if(lng) lng.value = "";
       }
       setCheckoutFieldsCollapsed(false);
+      setCheckoutMessage("");
+      updateCheckoutSteps();
       persistGuestState();
     });
   });
+  ["customerLat","customerLng"].forEach(id => {
+    document.getElementById(id)?.addEventListener("change", updateCheckoutSteps);
+  });
+  updateCheckoutSteps();
 
 });
 

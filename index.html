@@ -804,6 +804,12 @@ Verify OTP
       </section>
 
       <section class="checkout-details-column" aria-label="Delivery and checkout details">
+      <div class="checkout-stepper" aria-label="Checkout steps">
+        <span data-checkout-step="name"><b>1</b>Name</span>
+        <span data-checkout-step="location"><b>2</b>Location</span>
+        <span data-checkout-step="payment"><b>3</b>Payment</span>
+      </div>
+      <div class="checkout-inline-message" id="checkoutInlineMessage" role="status" aria-live="polite" hidden></div>
       <button type="button" class="cart-location-card" id="cartLocationCard" onclick="openLocationSelector()">
         <span>📍</span>
         <span><strong id="cartLocationTitle">Select delivery location</strong><small id="cartLocationAddress">Required for delivery pricing</small></span>
@@ -825,6 +831,11 @@ Verify OTP
       <div class="checkout-auth-phone" id="checkoutAuthPhone">
         <span>Verified mobile</span>
         <strong id="checkoutAuthPhoneValue">Login to continue</strong>
+      </div>
+      <div class="checkout-payment-step">
+        <span>Payment</span>
+        <strong>Choose COD or UPI after details are complete</strong>
+        <small>Payment options open in the next step.</small>
       </div>
       <input type="hidden" id="customerPhone" />
 
