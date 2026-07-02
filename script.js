@@ -1536,6 +1536,64 @@ function scoreSmartDish(dish = {}, intent = "popular"){
   return score;
 }
 
+function scoreBestSellerDish(dish = {}){
+  const variant = dishLowestVariant(dish);
+  const price = Number(variant.price || 0);
+  if(!dish.available || !price) return -999;
+  const text = textForDish(dish);
+  let score = scoreSmartDish(dish, "popular");
+  if(dish.bestSeller || dish.bestseller || dish.isBestSeller) score += 140;
+  if(dish.popular || dish.isPopular) score += 110;
+  if(dish.featured || dish.isFeatured) score += 70;
+  score += Math.min(90, Number(dish.orderCount || dish.soldCount || dish.sales || dish.totalSold || 0) / 2);
+  score += Math.min(35, Number(dish.rating || dish.avgRating || 0) * 7);
+  score += Math.max(0, 160 - price) / 10;
+  if(/best|seller|popular|special|loaded|magneetoz|signature|combo|pizza/.test(text)) score += 35;
+  return score;
+}
+
+function bestSellerCardMarkup(dish = {}, index = 0){
+  const variant = dishLowestVariant(dish);
+  return `
+    <article class="homepage-best-seller-card">
+      <span class="best-seller-rank">#${index + 1}</span>
+      <img src="${escapeHTML(bestImageUrl(dish.image, dish.imageSet))}" alt="${escapeHTML(dish.name || "MAGNEETOZ best seller")}" width="320" height="240" loading="${index < 3 ? "eager" : "lazy"}" decoding="async" ${imageFallbackAttrs()}>
+      <div>
+        <small>${escapeHTML(dish.category || "Popular")}</small>
+        <strong>${escapeHTML(dish.name || "MAGNEETOZ Item")}</strong>
+        <p>${escapeHTML((dish.description || "Fresh customer favourite").slice(0, 68))}</p>
+        <span>${formatCurrency(variant.price)}</span>
+      </div>
+      <button type="button" class="add-cart-btn" onclick="addBestSellerItem('${escapeHTML(String(dish.id || ""))}')">Add +</button>
+    </article>
+  `;
+}
+
+function renderBestSellers(){
+  const section = document.getElementById("homepageBestSellers");
+  const rail = document.getElementById("homepageBestSellersRail");
+  if(!section || !rail) return;
+  const dishes = [...allMenuDishes]
+    .filter(dish => dish?.available && dishLowestVariant(dish).price > 0)
+    .sort((a, b) => scoreBestSellerDish(b) - scoreBestSellerDish(a)
+      || Number(a.order ?? Number.MAX_SAFE_INTEGER) - Number(b.order ?? Number.MAX_SAFE_INTEGER)
+      || String(a.name || "").localeCompare(String(b.name || "")))
+    .slice(0, 8);
+  section.classList.remove("is-loading");
+  section.setAttribute("aria-busy", "false");
+  section.hidden = !dishes.length;
+  if(!dishes.length){
+    rail.innerHTML = "";
+    return;
+  }
+  rail.innerHTML = dishes.map(bestSellerCardMarkup).join("");
+}
+
+window.addBestSellerItem = function(dishId){
+  const dish = allMenuDishes.find(item => String(item.id) === String(dishId));
+  if(dish) addDishObjectToCart(dish, 1);
+};
+
 function smartAssistantTitle(intent){
   return ({
     budget:"Best picks under budget",
@@ -3019,9 +3077,9 @@ function bindHeroOfferActions(){
   const bestSellerBtn = document.getElementById("heroBestSellerJumpBtn");
   const heroBestSellerBtn = document.getElementById("heroBestSellerBtn");
   const scrollToBestSellers = () => {
-    document.getElementById("menuSection")?.scrollIntoView({ behavior:"smooth", block:"start" });
+    document.getElementById("homepageBestSellers")?.scrollIntoView({ behavior:"smooth", block:"start" });
     requestAnimationFrame(() => {
-      const firstCategory = document.querySelector(".inline-menu-section .category-block, .inline-menu-section .new-card");
+      const firstCategory = document.querySelector(".homepage-best-seller-card, .inline-menu-section .category-block, .inline-menu-section .new-card");
       firstCategory?.classList.add("menu-category-active");
       setTimeout(() => firstCategory?.classList.remove("menu-category-active"), 1400);
     });
@@ -3551,6 +3609,7 @@ function loadMenu(){
         count: document.querySelectorAll(".new-card").length
       });
       warmVisibleMenuImages();
+      renderBestSellers();
       renderHomepageSections();
       renderSmartAssistant();
       applyRestaurantAvailability();
@@ -6121,12 +6180,12 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     if(event.target.closest("button,a,select,input,textarea")) return;
-    document.getElementById("menuSection")?.scrollIntoView({ behavior:"smooth", block:"start" });
+    document.getElementById("homepageBestSellers")?.scrollIntoView({ behavior:"smooth", block:"start" });
   });
   document.querySelector(".hero")?.addEventListener("keydown", event => {
     if(event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
-    document.getElementById("menuSection")?.scrollIntoView({ behavior:"smooth", block:"start" });
+    document.getElementById("homepageBestSellers")?.scrollIntoView({ behavior:"smooth", block:"start" });
   });
   ["customerName","customerAddress","customerLandmark"].forEach(id => {
     document.getElementById(id)?.addEventListener("input", () => {
