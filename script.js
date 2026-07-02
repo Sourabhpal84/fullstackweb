@@ -1214,25 +1214,25 @@ function setLocationUiState(state, detail = ""){
   const checkoutStatus = document.getElementById("checkoutLocationStatus");
   const banner = ensureCustomerDistanceBanner();
   const messages = {
-    detecting:"Detecting location...",
-    current:"Current location updated",
-    permission:"Location permission required",
-    lastSaved:"Last saved location",
-    idle:"Tap to fetch your current location"
+    detecting:"GPS location detect ho rahi hai...",
+    current:"Location selected",
+    permission:"GPS permission nahi mili",
+    lastSaved:"Saved location selected",
+    idle:"GPS, search, ya manual address choose karein"
   };
   const text = detail || messages[state] || messages.idle;
   if(status) status.textContent = text;
   if(checkoutStatus){
     checkoutStatus.textContent = state === "detecting" ? "📍 Detecting your current location…"
       : state === "current" ? `✓ ${text}`
-      : state === "lastSaved" ? `📌 Saved location selected · ${detail || "refresh for live GPS"}`
+      : state === "lastSaved" ? `Saved location selected · ${detail || "GPS refresh kar sakte hain"}`
       : state === "permission" ? `⚠ ${text}`
-      : `📍 ${text}`;
+      : `${text}`;
     checkoutStatus.dataset.state = state || "idle";
   }
   if(banner) {
-    banner.textContent = state === "lastSaved" ? `📍 Last saved location · ${detail || "Tap Refresh Location for current GPS"}` : `📍 ${text}`;
-    banner.title = state === "lastSaved" ? "This is not live GPS. Tap to refresh current location." : "Tap to refresh current location";
+    banner.textContent = state === "lastSaved" ? `📍 Saved location · ${detail || "Tap to refresh GPS"}` : `📍 ${text}`;
+    banner.title = state === "lastSaved" ? "Saved location selected. Tap to refresh GPS." : "Tap to select location";
   }
   updateSelectedLocationUi(detail);
 }
@@ -1343,12 +1343,12 @@ async function getLocationPermissionState(){
 function geolocationErrorMessage(error){
   const isiPhone = /iPhone|iPad|iPod/i.test(navigator.userAgent || "");
   if(error?.code === 1) return isiPhone
-    ? "iPhone me location blocked hai. Safari/Chrome settings me Location Allow karein, ya address search/manual address use karein."
-    : "Location permission blocked hai. Browser settings me location allow karke retry karein.";
-  if(error?.code === 2) return "GPS signal weak hai. Please GPS/location ON rakhein ya address search karke select karein.";
-  if(error?.code === 3 || /timed out|timeout/i.test(error?.message || "")) return "Location fetch slow ho raha hai. Please retry karein, ya address search/manual address use karein.";
-  if(/not supported/i.test(error?.message || "")) return "Is browser me location support nahi hai. Please address search/manual address use karein.";
-  return "Location fetch nahi ho pa raha. Please retry karein, ya address search/manual address use karein.";
+    ? "Location allow nahi hai. iPhone Settings/Safari me Location Allow karein, ya Search/Manual address use karein."
+    : "Location permission blocked hai. Browser settings me Allow karein, ya Search/Manual address use karein.";
+  if(error?.code === 2) return "GPS signal weak hai. Location ON rakhein, ya Search/Manual address use karein.";
+  if(error?.code === 3 || /timed out|timeout/i.test(error?.message || "")) return "GPS slow ho raha hai. Retry karein, ya Search/Manual address use karein.";
+  if(/not supported/i.test(error?.message || "")) return "Is browser me GPS support nahi hai. Search/Manual address use karein.";
+  return "Location nahi mil pa rahi. Search address ya Manual address use karein.";
 }
 
 function requestGpsPosition(options = {}){
@@ -1449,7 +1449,9 @@ async function fetchFreshCurrentLocation({ updateAddress = true, source = "fresh
     return userLocation;
   }catch(error){
     console.warn("[LOCATION]", { event:"fresh_location_failed", error:error?.message || String(error), code:error?.code, source });
-    setLocationUiState("permission", geolocationErrorMessage(error));
+    const message = geolocationErrorMessage(error);
+    setLocationUiState("permission", message);
+    showLocationAddressForm();
     showLastSavedLocation(error?.message || "fresh_location_failed");
     throw error;
   }
@@ -4518,13 +4520,38 @@ function renderBogoOfferPanel(){
   const applied = bogoOfferAccepted && result.offerApplied;
   const typeLabel = offer?.type === "buy_2_get_1" ? "Buy 2 Get 1 Free" : "Buy 1 Get 1 Free";
   const labels = bogoOfferLabels();
+  const remaining = Math.max(0, result.requiredItemCount - result.eligibleItemCount);
+  const freeItems = result.freeItems || [];
+  const freeText = freeItems.length
+    ? freeItems.map(item => `${escapeHTML(item.name)}${item.qty > 1 ? ` x${item.qty}` : ""}`).join(", ")
+    : "Cheapest eligible item will be free";
+  const progress = Math.min(100, Math.round((Math.min(result.eligibleItemCount, result.requiredItemCount) / Math.max(1, result.requiredItemCount)) * 100));
+  const statusText = result.offerApplied
+    ? `Ready: ${freeText}`
+    : `Add ${remaining} more eligible item${remaining === 1 ? "" : "s"} to unlock free item`;
   host.innerHTML = `
-    <div style="margin-bottom:12px;padding:12px;border:1px solid ${applied ? "#22c55e" : "#f59e0b"};border-radius:12px;background:${applied ? "rgba(34,197,94,.12)" : "rgba(245,158,11,.10)"}">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-        <div><strong>${typeLabel}</strong><small style="display:block;margin-top:4px">Category: ${escapeHTML(labels.categories)} · Size: ${escapeHTML(labels.sizes)} · Eligible: ${result.eligibleItemCount}/${result.requiredItemCount}</small></div>
-        <button type="button" onclick="applyBogoOffer()" ${!result.offerApplied || applied ? "disabled" : ""} style="padding:10px 14px;border:0;border-radius:999px;background:${result.offerApplied && !applied ? "#16a34a" : "#6b7280"};color:white;font-weight:800">${applied ? "Applied" : "Apply Offer"}</button>
+    <div class="bogo-cart-card ${applied ? "is-applied" : ""}">
+      <div class="bogo-cart-head">
+        <div>
+          <span>Live BOGO offer</span>
+          <strong>${escapeHTML(typeLabel)}</strong>
+        </div>
+        <button type="button" onclick="applyBogoOffer()" ${!result.offerApplied || applied ? "disabled" : ""}>${applied ? "Applied" : "Apply Offer"}</button>
       </div>
-      ${applied ? `<small style="display:block;margin-top:8px">Coupon and Pizza Points are disabled. Free: ${result.freeItems.map(item => `${escapeHTML(item.name)}${item.qty > 1 ? ` x${item.qty}` : ""}`).join(", ")}</small>` : ""}
+      <div class="bogo-rule-grid">
+        <p><span>Valid category</span><b>${escapeHTML(labels.categories)}</b></p>
+        <p><span>Valid size</span><b>${escapeHTML(labels.sizes)}</b></p>
+        <p><span>Offer rule</span><b>Add ${result.requiredItemCount}, get ${offer?.type === "buy_2_get_1" ? "1" : "1"} free</b></p>
+      </div>
+      <div class="bogo-progress-row">
+        <div><span>Eligible items</span><b>${result.eligibleItemCount}/${result.requiredItemCount}</b></div>
+        <i><em style="width:${progress}%"></em></i>
+      </div>
+      <div class="bogo-free-preview ${result.offerApplied ? "ready" : ""}">
+        <span>${result.offerApplied ? "Free item" : "Next step"}</span>
+        <strong>${statusText}</strong>
+      </div>
+      ${applied ? `<small class="bogo-applied-note">Coupon and Pizza Points are disabled while this BOGO offer is applied.</small>` : ""}
     </div>`;
 }
 

@@ -882,27 +882,36 @@ Verify OTP
           <button type="button" onclick="closeLocationSelector()">←</button>
           <h2 id="locationSelectorTitle">Select a location</h2>
         </div>
+        <div class="location-helper-copy">
+          <strong>Choose delivery location</strong>
+          <span>GPS try karein. Agar permission/GPS issue aaye to address search ya manual address use karein.</span>
+        </div>
+        <div class="location-choice-tabs" aria-label="Location options">
+          <button type="button" onclick="useCurrentLocationForAddress()">Current GPS</button>
+          <button type="button" onclick="document.getElementById('addressSearchInput')?.focus()">Search address</button>
+          <button type="button" onclick="showLocationAddressForm()">Manual address</button>
+        </div>
         <div class="address-search-row location-search-row">
-          <input id="addressSearchInput" type="search" placeholder="Find address, area or street..." aria-label="Find delivery address" autocomplete="off">
+          <input id="addressSearchInput" type="search" placeholder="Search area, society, street..." aria-label="Find delivery address" autocomplete="off">
           <button type="button" id="searchAddressBtn">Search</button>
         </div>
         <section class="saved-address-box location-actions-box" aria-label="Saved delivery address">
           <button type="button" id="useCurrentLocationBtn" class="location-primary-action">
-            <span>◎</span><span><strong>Use current location</strong><small id="locationStatus">Detecting your current location…</small></span><b>›</b>
+            <span>◎</span><span><strong>Use current GPS</strong><small id="locationStatus">Best for iPhone/Android. Allow location when asked.</small></span><b>›</b>
           </button>
           <button type="button" class="location-add-action" onclick="showLocationAddressForm()">
-            <span>＋</span><span><strong>Add a new address</strong><small>Search or enter manually</small></span><b>›</b>
+            <span>＋</span><span><strong>Manual address</strong><small>Use this if GPS/search does not work</small></span><b>›</b>
           </button>
           <label class="saved-address-label" for="savedAddressSelect">Saved addresses</label>
           <select id="savedAddressSelect" aria-label="Saved addresses">
             <option value="">Add new address</option>
           </select>
           <div id="savedAddressCards" class="saved-address-cards"></div>
-          <div class="checkout-location-status" id="checkoutLocationStatus">📍 Location will be verified automatically.</div>
+          <div class="checkout-location-status" id="checkoutLocationStatus">Choose GPS, search, or manual address.</div>
         </section>
         <div class="location-address-form" id="locationAddressForm" hidden>
           <label>Complete delivery address</label>
-          <textarea id="customerAddress" placeholder="House / flat, street, area" rows="3" autocomplete="street-address"></textarea>
+          <textarea id="customerAddress" placeholder="House/flat, society/street, area, city" rows="3" autocomplete="street-address"></textarea>
           <input type="text" id="customerLandmark" placeholder="Landmark (Optional)">
           <div class="location-form-actions">
             <button type="button" onclick="hideLocationAddressForm()">Cancel</button>
