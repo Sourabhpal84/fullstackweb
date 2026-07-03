@@ -569,6 +569,18 @@ Verify OTP
       <section class="menu-category-browser" id="menuCategoryBrowser" aria-label="Selected food categories"></section>
 
     </div>
+    <section class="first-order-guide" id="firstOrderGuide" aria-label="How to place first order" hidden>
+      <div>
+        <p>First order?</p>
+        <h2>Order karna simple hai</h2>
+      </div>
+      <ol>
+        <li><b>1</b><span>Food select karo</span></li>
+        <li><b>2</b><span>Location add karo</span></li>
+        <li><b>3</b><span>Login/OTP</span></li>
+        <li><b>4</b><span>Payment/COD</span></li>
+      </ol>
+    </section>
     <section class="homepage-best-sellers is-loading" id="homepageBestSellers" aria-label="Best Sellers" aria-busy="true">
       <div class="homepage-best-sellers-head">
         <div>
@@ -828,9 +840,16 @@ Verify OTP
       <div class="checkout-stepper" aria-label="Checkout steps">
         <span data-checkout-step="name"><b>1</b>Name</span>
         <span data-checkout-step="location"><b>2</b>Location</span>
-        <span data-checkout-step="payment"><b>3</b>Payment</span>
+        <span data-checkout-step="login"><b>3</b>Login/OTP</span>
+        <span data-checkout-step="payment"><b>4</b>Payment</span>
       </div>
       <div class="checkout-inline-message" id="checkoutInlineMessage" role="status" aria-live="polite" hidden></div>
+      <div class="cart-first-order-guide" aria-label="Checkout guide">
+        <span data-cart-guide="food">Food</span>
+        <span data-cart-guide="location">Location</span>
+        <span data-cart-guide="login">Login/OTP</span>
+        <span data-cart-guide="payment">Payment/COD</span>
+      </div>
       <button type="button" class="cart-location-card" id="cartLocationCard" onclick="openLocationSelector()">
         <span>📍</span>
         <span><strong id="cartLocationTitle">Select delivery location</strong><small id="cartLocationAddress">Required for delivery pricing</small></span>

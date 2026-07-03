@@ -211,6 +211,7 @@ let restaurantState = {
 
 const GUEST_CART_KEY = "magneetozGuestCart";
 const CHECKOUT_STATE_KEY = "magneetozCheckoutState";
+const FIRST_ORDER_GUIDE_KEY = "magneetozFirstOrderGuideSeen";
 const PG_REFERRAL_COUPON_KEY = "magneetozPgReferralCoupon";
 const RAZORPAY_RECOVERY_KEY = "magneetozRazorpayRecovery";
 const FUNCTIONS_REGION = "asia-south1";
@@ -2096,6 +2097,21 @@ function setCheckoutMessage(message = "", type = "info"){
   box.dataset.type = type;
 }
 
+function checkoutAuthReady(){
+  const user = auth.currentUser || cachedAuthUser;
+  const phone = normalizeUnicodeText(document.getElementById("customerPhone")?.value || user?.phoneNumber || "");
+  return !!(user?.uid && phone);
+}
+
+function checkoutMissingReason(){
+  const fields = getCheckoutFields();
+  if(!cart.length) return "Food select karo. Cart empty hai.";
+  if(!fields.name) return "Name missing hai. Order kis naam se banana hai?";
+  if(!(fields.address && isUsableCoordinatePair(fields.lat, fields.lng))) return "Location missing hai. Delivery charges aur service area check karna zaroori hai.";
+  if(!checkoutAuthReady()) return "Login/OTP pending hai. Verified mobile ke bina order place nahi hoga.";
+  return "";
+}
+
 function markCheckoutField(id, invalid = false){
   const el = document.getElementById(id);
   el?.classList.toggle("checkout-field-missing", invalid);
@@ -2104,16 +2120,39 @@ function markCheckoutField(id, invalid = false){
 
 function updateCheckoutSteps(){
   const fields = getCheckoutFields();
+  const hasFood = cart.length > 0;
   const hasName = !!fields.name;
   const hasLocation = !!(fields.address && isUsableCoordinatePair(fields.lat, fields.lng));
+  const hasLogin = checkoutAuthReady();
   document.querySelector('[data-checkout-step="name"]')?.classList.toggle("complete", hasName);
   document.querySelector('[data-checkout-step="location"]')?.classList.toggle("complete", hasLocation);
-  document.querySelector('[data-checkout-step="payment"]')?.classList.toggle("complete", hasName && hasLocation);
-  document.querySelector('[data-checkout-step="payment"]')?.classList.toggle("active", hasName && hasLocation);
+  document.querySelector('[data-checkout-step="login"]')?.classList.toggle("complete", hasLogin);
+  document.querySelector('[data-checkout-step="payment"]')?.classList.toggle("complete", hasName && hasLocation && hasLogin);
+  document.querySelector('[data-checkout-step="payment"]')?.classList.toggle("active", hasName && hasLocation && hasLogin);
   document.querySelector('[data-checkout-step="name"]')?.classList.toggle("active", !hasName);
   document.querySelector('[data-checkout-step="location"]')?.classList.toggle("active", hasName && !hasLocation);
+  document.querySelector('[data-checkout-step="login"]')?.classList.toggle("active", hasName && hasLocation && !hasLogin);
+  const guideState = {
+    food:hasFood,
+    location:hasLocation,
+    login:hasLogin,
+    payment:hasFood && hasName && hasLocation && hasLogin
+  };
+  Object.entries(guideState).forEach(([key, complete]) => {
+    const chip = document.querySelector(`[data-cart-guide="${key}"]`);
+    chip?.classList.toggle("complete", complete);
+    chip?.classList.toggle("missing", !complete && (key === "food" || (key === "location" && hasFood) || (key === "login" && hasFood && hasName && hasLocation) || (key === "payment" && hasFood && hasName && hasLocation && hasLogin)));
+  });
   markCheckoutField("customerName", false);
   document.getElementById("cartLocationCard")?.classList.remove("checkout-field-missing");
+}
+
+function initFirstOrderGuide(){
+  const guide = document.getElementById("firstOrderGuide");
+  if(!guide) return;
+  const seen = localStorage.getItem(FIRST_ORDER_GUIDE_KEY) === "1";
+  guide.hidden = seen;
+  if(!seen) localStorage.setItem(FIRST_ORDER_GUIDE_KEY, "1");
 }
 
 function syncAuthenticatedCheckoutPhone(user = auth.currentUser || cachedAuthUser){
@@ -5667,7 +5706,16 @@ return;
 
 persistGuestState();
 
+const preAuthMissing = checkoutMissingReason();
+if(preAuthMissing && !preAuthMissing.startsWith("Login/OTP")){
+  setCheckoutMessage(preAuthMissing, "warning");
+  focusMissingCheckoutField();
+  return;
+}
+
 if(!auth.currentUser){
+  setCheckoutMessage("Login/OTP pending hai. Verified mobile ke bina order place nahi hoga.", "warning");
+  updateCheckoutSteps();
   resumeCheckoutAfterAuth = true;
   await timedStep("placeOrder:auth", () => window.requireMagneetozAuth?.("checkout"));
   if(!auth.currentUser){
@@ -5702,6 +5750,7 @@ if(!verifiedPhone){
 }
 
 if(!name || !address){
+  setCheckoutMessage(checkoutMissingReason() || "Required details complete karo, phir order place hoga.", "warning");
   focusMissingCheckoutField();
   return;
 }
@@ -6410,6 +6459,7 @@ if(popup) popup.style.display="none";
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  initFirstOrderGuide();
   bindHeroOfferActions();
   updateHeroBogoButton();
 
