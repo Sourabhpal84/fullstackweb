@@ -2735,17 +2735,123 @@ function orderItemsForReorder(order = {}){
     : (Array.isArray(order.cart) ? order.cart : []);
 }
 
-function rebuildCartItemFromOrder(item = {}){
+function reorderLookupText(value = ""){
+  return normalizeUnicodeText(value).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function menuDishAvailableForReorder(dish = {}){
+  return !!(dish && dish.available !== false && dish.active !== false && dish.deleted !== true && dish.category);
+}
+
+async function getReorderMenuDishes(){
+  if(Array.isArray(allMenuDishes) && allMenuDishes.length) return allMenuDishes;
+  try{
+    const snapshot = await getDocs(collection(db, "dishes"));
+    allMenuDishes = snapshot.docs
+      .map(docSnap => ({ id:docSnap.id, ...docSnap.data() }))
+      .filter(menuDishAvailableForReorder);
+  }catch(error){
+    console.warn("Reorder menu refresh failed:", error);
+  }
+  return allMenuDishes || [];
+}
+
+async function getReorderCombos(){
+  const cached = (window.__magneetozActiveCombos || []).filter(combo => combo && combo.active !== false && combo.deleted !== true);
+  if(cached.length) return cached;
+  try{
+    const snapshot = await getDocs(collection(db, "combos"));
+    const combos = snapshot.docs
+      .map(docSnap => ({ id:docSnap.id, ...docSnap.data() }))
+      .filter(combo => combo.active !== false && combo.deleted !== true);
+    window.__magneetozActiveCombos = combos;
+    return combos;
+  }catch(error){
+    console.warn("Reorder combo refresh failed:", error);
+    return [];
+  }
+}
+
+function findMenuDishForOrderItem(item = {}, dishes = []){
+  const ids = [
+    item.dishId,
+    item.productId,
+    item.menuItemId,
+    item.itemId,
+    item.id
+  ].map(value => String(value || "").trim()).filter(Boolean);
+  const byId = dishes.find(dish => ids.some(id => String(dish.id || "") === id));
+  if(byId) return byId;
+  const itemName = reorderLookupText(item.name || item.itemName || "");
+  const itemCategory = reorderLookupText(item.category || item.dishCategory || "");
+  if(!itemName) return null;
+  return dishes.find(dish => {
+    const sameName = reorderLookupText(dish.name || "") === itemName;
+    if(!sameName) return false;
+    if(!itemCategory) return true;
+    return reorderLookupText(dish.category || "") === itemCategory;
+  }) || dishes.find(dish => reorderLookupText(dish.name || "") === itemName);
+}
+
+function findComboForOrderItem(item = {}, combos = []){
+  const ids = [item.comboId, item.offerId, item.id].map(value => String(value || "").trim()).filter(Boolean);
+  const byId = combos.find(combo => ids.some(id => String(combo.id || "") === id));
+  if(byId) return byId;
+  const itemName = reorderLookupText(item.comboName || item.name || "");
+  if(!itemName) return null;
+  return combos.find(combo => reorderLookupText(combo.name || "") === itemName);
+}
+
+function dishVariantForReorder(dish = {}, item = {}){
+  const requestedSize = reorderLookupText(item.size || "Regular");
+  if(dish.type === "simple"){
+    const price = Number(dish.price || 0);
+    return price > 0
+      ? { size:"Regular", price, market:Number(dish.marketPrice || price + 20) }
+      : null;
+  }
+  const sizes = dish.sizes || {};
+  const entries = Object.entries(sizes).map(([key, value]) => {
+    const price = typeof value === "object" ? Number(value.price || 0) : Number(value || 0);
+    const market = typeof value === "object" ? Number(value.market || price + 50) : price + 50;
+    const label = key.charAt(0).toUpperCase() + key.slice(1);
+    return { key, size:label, price, market };
+  }).filter(variant => variant.price > 0);
+  if(!entries.length) return null;
+  return entries.find(variant => reorderLookupText(variant.size) === requestedSize || reorderLookupText(variant.key) === requestedSize) || null;
+}
+
+function rebuildComboCartItemFromOrder(item = {}, combo = {}){
+  const qty = Math.max(1, Number(item.qty || item.quantity || 1) || 1);
+  const price = Number(combo.comboPrice || item.baseUnitPrice || item.unitPrice || (qty ? Number(item.price || 0) / qty : 0)) || 0;
+  return normalizeCartItemPricing({
+    id:combo.id || item.comboId || "",
+    name:combo.name || item.name || "MAGNEETOZ Combo",
+    size:"Combo",
+    qty,
+    category:"Combo",
+    image:normalizeImageUrl(combo.image || item.image || "logo_tran.jpeg"),
+    baseUnitPrice:price,
+    unitPrice:price,
+    price:price * qty,
+    comboId:combo.id || item.comboId || "",
+    itemsIncluded:combo.itemsIncluded || item.itemsIncluded || ""
+  });
+}
+
+function rebuildCartItemFromOrder(item = {}, menuDish = null){
   const qty = Math.max(1, Number(item.qty || item.quantity || 1));
   const extras = normalizeCartExtras(item.extras || item.addOns || item.addons || item.extraToppings);
   const crust = normalizeCrust(item.crust || item.crustType || item.selectedCrust);
-  const baseUnitPrice = Number(item.baseUnitPrice || item.unitPrice || (qty ? Number(item.price || 0) / qty - extrasTotalPerUnit(extras) : 0)) || 0;
+  const variant = menuDish ? dishVariantForReorder(menuDish, item) : null;
+  const baseUnitPrice = Number(variant?.price || item.baseUnitPrice || item.unitPrice || (qty ? Number(item.price || 0) / qty - extrasTotalPerUnit(extras) : 0)) || 0;
   return normalizeCartItemPricing({
-    name:item.name || "MAGNEETOZ Item",
-    size:item.size || "Regular",
+    id:menuDish?.id || item.id || item.dishId || "",
+    name:menuDish?.name || item.name || "MAGNEETOZ Item",
+    size:variant?.size || item.size || "Regular",
     qty,
-    category:item.category || item.dishCategory || "Recommended",
-    image:normalizeImageUrl(item.image || "logo_tran.jpeg"),
+    category:menuDish?.category || item.category || item.dishCategory || "Recommended",
+    image:normalizeImageUrl(bestImageUrl(menuDish?.image, menuDish?.imageSet) || item.image || "logo_tran.jpeg"),
     baseUnitPrice,
     unitPrice:baseUnitPrice,
     extras,
@@ -2763,25 +2869,53 @@ function orderCanBeReordered(order = {}){
     && orderItemsForReorder(order).length > 0;
 }
 
-window.orderAgain = function(orderId = ""){
+window.orderAgain = async function(orderId = ""){
   const order = (liveOrders || []).find(item => String(item.id) === String(orderId));
   if(!order || !orderCanBeReordered(order)){
     toastWarning("Order Again sirf delivered orders ke liye available hai.");
     return;
   }
-  const rebuilt = orderItemsForReorder(order).map(rebuildCartItemFromOrder).filter(item => item.name && item.price >= 0);
+  const [dishes, combos] = await Promise.all([getReorderMenuDishes(), getReorderCombos()]);
+  const skipped = [];
+  const rebuilt = orderItemsForReorder(order).map(orderItem => {
+    const isComboItem = String(orderItem.comboId || orderItem.category || orderItem.size || "").toLowerCase().includes("combo");
+    if(isComboItem){
+      const combo = findComboForOrderItem(orderItem, combos);
+      if(!combo){
+        skipped.push(orderItem.name || "Combo");
+        return null;
+      }
+      return rebuildComboCartItemFromOrder(orderItem, combo);
+    }
+    const menuDish = findMenuDishForOrderItem(orderItem, dishes);
+    const variant = menuDish ? dishVariantForReorder(menuDish, orderItem) : null;
+    if(!menuDish || !menuDishAvailableForReorder(menuDish)){
+      skipped.push(orderItem.name || "Item");
+      return null;
+    }
+    if(!variant){
+      skipped.push(`${orderItem.name || menuDish.name || "Item"} (${orderItem.size || "size unavailable"})`);
+      return null;
+    }
+    return rebuildCartItemFromOrder(orderItem, menuDish);
+  }).filter(item => item && item.name && item.price >= 0);
   if(!rebuilt.length){
-    toastWarning("Is order ke items cart me add nahi ho paaye.");
+    toastWarning("Is order ke items ab menu me available nahi hain.");
     return;
   }
   cart = rebuilt;
   bogoOfferAccepted = false;
   activeCoupon = null;
+  const couponInput = document.getElementById("couponInput");
+  if(couponInput) couponInput.value = "";
   walletPointsRequested = 0;
   persistGuestState();
   updateCart();
   toggleCart(true);
-  toastSuccess("Previous order cart me add ho gaya.");
+  if(skipped.length){
+    toastWarning(`${skipped.length} item skip hua: ${skipped.slice(0, 2).join(", ")}${skipped.length > 2 ? "..." : ""}`);
+  }
+  toastSuccess(`${rebuilt.length} item cart me add ho gaye. Charges/coupons fresh calculate honge.`);
 };
 
 function estimateJsonBytes(value){
@@ -4431,6 +4565,21 @@ function renderLiveOfferCard(offer = {}){
   `;
 }
 
+function comboSavingsPercent(combo = {}){
+  const original = Number(combo.originalPrice || combo.marketPrice || combo.comboPrice || 0);
+  const price = Number(combo.comboPrice || 0);
+  if(!original || original <= price) return 0;
+  return Math.max(0, Math.round(((original - price) / original) * 100));
+}
+
+function comboHighlights(combo = {}, limit = 4){
+  return String(combo.highlights || combo.itemsIncluded || combo.description || "")
+    .split(/,|\n|•/)
+    .map(text => text.trim())
+    .filter(Boolean)
+    .slice(0, limit);
+}
+
 registerGlobalSnapshot(onSnapshot(query(collection(db, "combos"), orderBy("createdAt", "desc")), (snapshot) => {
   const host = document.getElementById("comboRail");
   const featuredHost = document.getElementById("comboFeatured");
@@ -4443,41 +4592,61 @@ registerGlobalSnapshot(onSnapshot(query(collection(db, "combos"), orderBy("creat
   const featured = combos.find(combo => combo.featured === true) || combos[0];
   const secondaryCombos = featured ? combos.filter(combo => combo.id !== featured.id) : combos;
   if(featuredHost){
+    const featuredSave = Math.max(0, Number(featured?.originalPrice || 0) - Number(featured?.comboPrice || 0));
+    const featuredPercent = comboSavingsPercent(featured || {});
+    const featuredHighlights = comboHighlights(featured || {}, 5);
     featuredHost.innerHTML = featured ? `
       <article class="combo-feature-card" data-combo-id="${escapeHTML(featured.id)}" style="--combo-accent:${escapeHTML(featured.accentColor || "#ff6b00")}">
+        <div class="combo-feature-visual">
+          <img src="${escapeHTML(normalizeImageUrl(featured.image))}" alt="${escapeHTML(featured.name || "Featured combo")}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
+          ${featuredPercent ? `<span>${featuredPercent}% OFF</span>` : ""}
+        </div>
         <div class="combo-feature-copy">
-          <span class="combo-badge">${escapeHTML(featured.badge || "Chef's Combo Pick")}</span>
-          <p>${escapeHTML(featured.subtitle || "A complete MAGNEETOZ feast")}</p>
+          <span class="combo-badge">${escapeHTML(featured.badge || "Best Value Combo")}</span>
+          <p>${escapeHTML(featured.subtitle || "Perfect for sharing")}</p>
           <h3>${escapeHTML(featured.name || "MAGNEETOZ Combo")}</h3>
           <strong>${escapeHTML(featured.description || featured.itemsIncluded || "")}</strong>
           <div class="combo-highlights">
-            ${String(featured.highlights || featured.itemsIncluded || "").split(",").map(text=>text.trim()).filter(Boolean).slice(0,4).map(text=>`<span>✓ ${escapeHTML(text)}</span>`).join("")}
+            ${featuredHighlights.map(text=>`<span>${escapeHTML(text)}</span>`).join("")}
           </div>
-          <div class="combo-feature-price"><div><small>Combo price</small><b>${formatCurrency(featured.comboPrice || 0)}</b><s>${formatCurrency(featured.originalPrice || featured.comboPrice || 0)}</s></div><em>${Math.max(0,Math.round((Number(featured.originalPrice||0)-Number(featured.comboPrice||0))/Math.max(1,Number(featured.originalPrice||0))*100))}% OFF</em></div>
-          <button type="button" onclick="addComboToCart('${escapeHTML(featured.id)}')">${escapeHTML(featured.ctaText || "Add this combo")}</button>
-        </div>
-        <div class="combo-feature-visual">
-          <img src="${escapeHTML(normalizeImageUrl(featured.image))}" alt="${escapeHTML(featured.name || "Featured combo")}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
-          <span>Save ${formatCurrency(Math.max(0,Number(featured.originalPrice||0)-Number(featured.comboPrice||0)))}</span>
+          <div class="combo-feature-bottom">
+            <div class="combo-feature-price">
+              <small>Combo price</small>
+              <b>${formatCurrency(featured.comboPrice || 0)}</b>
+              ${Number(featured.originalPrice || 0) > Number(featured.comboPrice || 0) ? `<s>${formatCurrency(featured.originalPrice || 0)}</s>` : ""}
+              ${featuredSave ? `<em>Save ${formatCurrency(featuredSave)}</em>` : ""}
+            </div>
+            <button type="button" onclick="addComboToCart('${escapeHTML(featured.id)}')">${escapeHTML(featured.ctaText || "Add Combo")}</button>
+          </div>
         </div>
       </article>` : "";
   }
   host.hidden = secondaryCombos.length === 0;
-  host.innerHTML = secondaryCombos.map(combo => `
+  host.innerHTML = secondaryCombos.map(combo => {
+    const save = Math.max(0, Number(combo.originalPrice || 0) - Number(combo.comboPrice || 0));
+    const percent = comboSavingsPercent(combo);
+    const highlights = comboHighlights(combo, 3);
+    return `
     <article class="combo-card" data-combo-id="${escapeHTML(combo.id)}" style="--combo-accent:${escapeHTML(combo.accentColor || "#ff6b00")}">
-      <img src="${escapeHTML(normalizeImageUrl(combo.image))}" alt="${escapeHTML(combo.name || "Combo")}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
+      <div class="combo-card-media">
+        <img src="${escapeHTML(normalizeImageUrl(combo.image))}" alt="${escapeHTML(combo.name || "Combo")}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
+        ${percent ? `<span>${percent}% OFF</span>` : ""}
+      </div>
       <div>
         <span>${escapeHTML(combo.badge || "Combo deal")}</span>
         <h3>${escapeHTML(combo.name || "MAGNEETOZ Combo")}</h3>
         <p>${escapeHTML(combo.description || combo.itemsIncluded || "")}</p>
+        ${highlights.length ? `<div class="combo-mini-highlights">${highlights.map(text => `<small>${escapeHTML(text)}</small>`).join("")}</div>` : ""}
         <div class="combo-price-row">
-          <s>${formatCurrency(combo.originalPrice || combo.comboPrice || 0)}</s>
           <b>${formatCurrency(combo.comboPrice || 0)}</b>
+          ${Number(combo.originalPrice || 0) > Number(combo.comboPrice || 0) ? `<s>${formatCurrency(combo.originalPrice || 0)}</s>` : ""}
+          ${save ? `<em>Save ${formatCurrency(save)}</em>` : ""}
         </div>
         <button type="button" onclick="addComboToCart('${escapeHTML(combo.id)}')">${escapeHTML(combo.ctaText || "Add Combo")}</button>
       </div>
     </article>
-  `).join("");
+  `;
+  }).join("");
   window.__magneetozActiveCombos = combos;
   renderComboHeroSlides(combos);
 }));
@@ -4595,6 +4764,83 @@ function calculateCouponPricingWithoutCoupon(subtotal = getCartSubtotal()){
     freeDeliveryDiscount:distancePricing.freeDeliveryDiscount,
     finalTotal:Math.max(0, subtotal + deliveryCharge)
   };
+}
+
+function cartSmartDishSuggestions(limit = 4){
+  return [...(allMenuDishes || [])]
+    .filter(dish => dish?.available && dishLowestVariant(dish).price > 0)
+    .sort((a, b) => scoreBestSellerDish(b) - scoreBestSellerDish(a)
+      || Number(a.order ?? Number.MAX_SAFE_INTEGER) - Number(b.order ?? Number.MAX_SAFE_INTEGER)
+      || String(a.name || "").localeCompare(String(b.name || "")))
+    .slice(0, limit);
+}
+
+function cartSmartComboSuggestions(limit = 3){
+  return [...(window.__magneetozActiveCombos || [])]
+    .filter(combo => combo && combo.active !== false && combo.deleted !== true && Number(combo.comboPrice || 0) > 0)
+    .sort((a, b) => Number(b.featured === true) - Number(a.featured === true)
+      || Number(a.displayOrder ?? 999) - Number(b.displayOrder ?? 999))
+    .slice(0, limit);
+}
+
+function cartSuggestionCard(item = {}, type = "dish"){
+  const isCombo = type === "combo";
+  const price = isCombo ? Number(item.comboPrice || 0) : Number(dishLowestVariant(item).price || 0);
+  const name = item.name || (isCombo ? "MAGNEETOZ Combo" : "MAGNEETOZ Item");
+  const image = normalizeImageUrl(bestImageUrl(item.image, item.imageSet) || "logo_tran.jpeg");
+  const action = isCombo
+    ? `addComboToCart('${escapeHTML(String(item.id || ""))}')`
+    : `addBestSellerItem('${escapeHTML(String(item.id || ""))}')`;
+  return `
+    <article class="cart-suggestion-card">
+      <img src="${escapeHTML(image)}" alt="${escapeHTML(name)}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
+      <div>
+        <small>${escapeHTML(isCombo ? "Combo" : (item.category || "Best seller"))}</small>
+        <strong>${escapeHTML(name)}</strong>
+        <span>${formatCurrency(price)}</span>
+      </div>
+      <button type="button" onclick="${action}">Add</button>
+    </article>
+  `;
+}
+
+function renderCartSmartSuggestions(total = getCartSubtotal()){
+  const host = document.getElementById("cartSmartSuggestions");
+  if(!host) return;
+  const baseSubtotal = getCartBaseSubtotal();
+  const pricing = calculateDistanceDeliveryPricing(deliveryDistance, total, baseSubtotal);
+  const hasItems = cart.length > 0;
+  const remainingForFree = Math.max(0, Number(pricing.threshold || DEFAULT_FREE_DELIVERY_MIN) - baseSubtotal);
+  const combos = cartSmartComboSuggestions(hasItems ? 2 : 3);
+  const dishes = cartSmartDishSuggestions(hasItems ? 3 : 4);
+  const suggestions = [
+    ...combos.map(item => ({ type:"combo", item })),
+    ...dishes.map(item => ({ type:"dish", item }))
+  ].slice(0, hasItems ? 4 : 6);
+
+  if(!suggestions.length || (hasItems && remainingForFree <= 0)){
+    host.innerHTML = "";
+    host.hidden = true;
+    return;
+  }
+
+  const title = hasItems
+    ? (remainingForFree > 0 ? `Add ${formatCurrency(remainingForFree)} more to save delivery fee` : "You unlocked the best cart value")
+    : "Start with best sellers";
+  const subtitle = hasItems
+    ? "Base item amount count hota hai. Extra toppings minimum/free delivery me count nahi hote."
+    : "Popular items aur combos direct cart me add karein.";
+
+  host.hidden = false;
+  host.innerHTML = `
+    <div class="cart-suggestion-head">
+      <div><strong>${escapeHTML(title)}</strong><span>${escapeHTML(subtitle)}</span></div>
+      ${hasItems && remainingForFree > 0 ? `<b>${formatCurrency(baseSubtotal)} / ${formatCurrency(pricing.threshold || DEFAULT_FREE_DELIVERY_MIN)}</b>` : ""}
+    </div>
+    <div class="cart-suggestion-rail">
+      ${suggestions.map(entry => cartSuggestionCard(entry.item, entry.type)).join("")}
+    </div>
+  `;
 }
 
 function normalizeOfferCategory(value = ""){
@@ -5338,6 +5584,7 @@ function updateCart() {
       ? `<div class="cart-items-title">Items in cart <b>${totalQty}</b></div>${itemsHTML}`
       : "";
   }
+  renderCartSmartSuggestions(total);
   const couponResult = calculateInvoicePricing(total);
   const offerIsApplied = couponResult.offerApplied === true;
   const couponInput = document.getElementById("couponInput");

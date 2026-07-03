@@ -33,9 +33,17 @@
     .order-card h3 { margin:0 0 10px; font-size:18px; }
     .info-row { font-size:13px; color:#aaa; margin-bottom:5px; display:flex; align-items:center; gap:8px; }
     .items-list { background:#0b0f14; padding:10px; border-radius:10px; margin:15px 0; font-size:12px; border-left:3px solid var(--accent); }
-    .item-line{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:start;padding:4px 0;color:#fff}
+    .item-line{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:start;padding:10px 0;color:#fff}
     .item-line + .item-line{border-top:1px solid rgba(255,255,255,.08)}
     .item-line b{color:var(--accent);white-space:nowrap}
+    .item-name{font-weight:900;color:#fff}.item-meta{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:6px}
+    .item-meta small{display:flex;justify-content:space-between;gap:8px;padding:7px 9px;border-radius:9px;background:#101826;color:#cbd5e1;font-weight:800}
+    .item-meta small strong{color:#fff}.item-extras{grid-column:1/-1;color:#94a3b8;font-size:11px;line-height:1.45}
+    .grand-total-card{margin:12px 0;padding:14px;border-radius:16px;background:linear-gradient(135deg,#00ffcc,#22c55e);color:#06110a;display:flex;justify-content:space-between;align-items:center;gap:10px;font-weight:950;box-shadow:0 14px 30px rgba(0,255,204,.16)}
+    .grand-total-card span{font-size:12px;text-transform:uppercase;letter-spacing:.08em}.grand-total-card strong{font-size:22px}
+    .date-group-heading{grid-column:1/-1;margin:4px 0 -4px;padding:12px 14px;border-radius:16px;background:#0b0f14;border:1px solid #263241;color:#00ffcc;font-weight:950;display:flex;justify-content:space-between;align-items:center}
+    .invoice-print-btn{width:100%;margin:8px 0 0;border:1px solid #334155;border-radius:12px;background:#0b0f14;color:#00ffcc;padding:10px;font-weight:900;cursor:pointer}
+    .invoice-print-btn:hover{border-color:#00ffcc}
     .empty-orders{grid-column:1/-1;text-align:center;color:#94a3b8;background:#121821;border:1px dashed #334155;border-radius:18px;padding:28px;font-weight:800}
     
     .btn-group { display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:15px; }
@@ -147,6 +155,7 @@
 .restaurant-state-pill{display:inline-flex;align-items:center;gap:7px;margin-bottom:6px;padding:6px 10px;border-radius:999px;font-size:11px;font-weight:900;text-transform:uppercase}.restaurant-state-pill.open{background:rgba(34,197,94,.15);color:#86efac}.restaurant-state-pill.closed{background:rgba(239,68,68,.16);color:#fca5a5}
 .restaurant-switch{position:relative;display:inline-flex;align-items:center;width:78px;height:42px;cursor:pointer}.restaurant-switch input{position:absolute;opacity:0;inset:0}.restaurant-switch span{position:absolute;inset:0;border-radius:999px;background:#ef4444;transition:.2s;box-shadow:inset 0 0 0 2px rgba(255,255,255,.12)}.restaurant-switch span:before{content:"";position:absolute;width:34px;height:34px;left:4px;top:4px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 7px 18px rgba(0,0,0,.35)}.restaurant-switch input:checked+span{background:#22c55e}.restaurant-switch input:checked+span:before{transform:translateX(36px)}
 @media(max-width:560px){.restaurant-toggle-card{grid-template-columns:1fr}.restaurant-switch{justify-self:start}}
+@media(max-width:560px){.item-meta{grid-template-columns:1fr}.grand-total-card strong{font-size:18px}.date-group-heading{display:block}.orders-grid{grid-template-columns:1fr}}
 .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#111827;color:white;border:1px solid #263241;border-radius:14px;padding:12px 16px;z-index:80;display:none;font-weight:800}
 .toast.show{display:block}
 .kitchen-alarm-bar{position:sticky;top:0;z-index:45;margin:0 auto 16px;max-width:980px;display:flex;align-items:center;justify-content:space-between;gap:12px;background:#121821;border:1px solid #263241;border-radius:16px;padding:12px 14px;box-shadow:0 16px 50px rgba(0,0,0,.3)}
@@ -249,7 +258,7 @@
   <div class="filter-bar" id="filters">
 
   <button onclick="loadOrders('All')">
-    All
+    All Statuses
   </button>
 
   <button onclick="loadOrders('Active')">
@@ -333,8 +342,9 @@ let pendingAlarmReminderTimer = null;
 let latestPendingOrders = [];
 let latestActiveOrders = [];
 let menuDishCache = [];
-let currentOrderFilter = "Pending";
+let currentOrderFilter = "All";
 let currentOrderDateKey = todayKey();
+let latestRenderedOrders = [];
 let currentRestaurantOpen = true;
 const FUNCTIONS_BASE_URL = "https://asia-south1-magneetoz.cloudfunctions.net";
 protectAdminPage();
@@ -631,13 +641,35 @@ function renderOrderItems(items = []){
     const amountText = line > 0 ? formatCurrency(line) : "-";
     const extras = itemExtras(item);
     const baseLine = itemBaseLineAmount(item);
-    const crustText = `<small style="grid-column:1/-1;color:#94a3b8;">Crust: ${escapeHTML(itemCrust(item))}</small>`;
-    const baseText = `<small style="grid-column:1/-1;color:#94a3b8;">Base: ${formatCurrency(baseLine)}</small>`;
+    const extrasTotal = extras.reduce((sum, extra) => sum + Number(extra.price || 0), 0) * qty;
     const extrasText = extras.length
-      ? `<small style="grid-column:1/-1;color:#94a3b8;">Extras: ${extras.map(extra => `${escapeHTML(extra.name)} ${formatCurrency(Number(extra.price || 0) * qty)}`).join(", ")}</small>`
-      : "";
-    return `<div class="item-line"><span>• ${itemName} (x${qty})</span><b>${amountText}</b>${crustText}${baseText}${extrasText}</div>`;
+      ? `<div class="item-extras">Extras: ${extras.map(extra => `${escapeHTML(extra.name)} ${formatCurrency(Number(extra.price || 0) * qty)}`).join(", ")}</div>`
+      : `<div class="item-extras">Extras: None</div>`;
+    return `<div class="item-line">
+      <span class="item-name">${itemName}</span>
+      <b>${amountText}</b>
+      <div class="item-meta">
+        <small><span>Qty</span><strong>${qty}</strong></small>
+        <small><span>Crust</span><strong>${escapeHTML(itemCrust(item))}</strong></small>
+        <small><span>Base</span><strong>${formatCurrency(baseLine)}</strong></small>
+        <small><span>Extras</span><strong>${formatCurrency(extrasTotal)}</strong></small>
+      </div>
+      ${extrasText}
+    </div>`;
   }).join("");
+}
+
+function orderDateLabel(key = ""){
+  if(!key) return "No Date";
+  if(key === todayKey()) return "Today";
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  if(key === dateKeyFromDate(yesterday)) return "Yesterday";
+  return new Date(`${key}T00:00:00`).toLocaleDateString("en-IN", { day:"2-digit", month:"short", year:"numeric" });
+}
+
+function orderGrandTotal(order = {}){
+  return Number(order.totalAmount ?? order.grandTotal ?? order.finalAmount ?? order.amount ?? 0);
 }
 
 function paymentBadge(order = {}){
@@ -822,7 +854,7 @@ window.deleteAllOrders = async function(){
 window.loadOrders = function(filter) {
   currentOrderFilter = filter;
   document.querySelectorAll("#filters button").forEach(btn => {
-    btn.classList.toggle("active", btn.textContent.trim() === filter || (filter === "Reached Nearby" && btn.textContent.trim() === "Nearby") || (filter === "Payment Completed" && btn.textContent.trim() === "Payment Done") || (filter === "Rider Accepted" && btn.textContent.trim() === "Rider Assigned"));
+    btn.classList.toggle("active", btn.textContent.trim() === filter || (filter === "All" && btn.textContent.trim() === "All Statuses") || (filter === "Reached Nearby" && btn.textContent.trim() === "Nearby") || (filter === "Payment Completed" && btn.textContent.trim() === "Payment Done") || (filter === "Rider Accepted" && btn.textContent.trim() === "Rider Assigned"));
   });
   const dateInput = document.getElementById("orderDateFilter");
   if(dateInput && !dateInput.value) dateInput.value = currentOrderDateKey;
@@ -843,10 +875,11 @@ window.loadOrders = function(filter) {
     syncIncomingOrderAlarm(latestPendingOrders);
     renderGoLiveChecklist();
     let rendered = 0;
-    docs
+    latestRenderedOrders = [];
+    const renderedDocs = docs
       .sort((a,b) => tsMillis(b.data().createdAt) - tsMillis(a.data().createdAt))
-      .forEach(docSnap => {
-      const d = docSnap.data();
+      .filter(docSnap => {
+      const d = { id:docSnap.id, ...docSnap.data() };
       if(orderDateKey(d) !== currentOrderDateKey) return;
       const displayStatus = normalizeStatus(d.status || d.orderStatus || "Pending");
       const paidProof = String(d.paymentStatus || "").toLowerCase() === "paid" || d.paymentCaptured === true || !!d.razorpayPaymentId;
@@ -856,7 +889,19 @@ window.loadOrders = function(filter) {
       if(pendingOnlineDraft && filter !== "Payment Pending") return;
       if(filter === "Active" && terminalOrder(displayStatus)) return;
       if (filter !== "All" && filter !== "Active" && displayStatus !== normalizeStatus(filter)) return;
+      return true;
+    });
+    if(renderedDocs.length){
+      container.innerHTML += `<div class="date-group-heading"><span>${orderDateLabel(currentOrderDateKey)} Orders</span><small>${currentOrderDateKey}</small></div>`;
+    }
+    renderedDocs.forEach(docSnap => {
+      const d = { id:docSnap.id, ...docSnap.data() };
+      const displayStatus = normalizeStatus(d.status || d.orderStatus || "Pending");
+      const paidProof = String(d.paymentStatus || "").toLowerCase() === "paid" || d.paymentCaptured === true || !!d.razorpayPaymentId;
+      const method = paidProof ? "online" : String(d.paymentMethod || d.paymentMode || "").toLowerCase();
+      const paidOnline = (method === "online" || method === "upi") && paidProof;
       rendered += 1;
+      latestRenderedOrders.push(d);
       const badge = paymentBadge(d);
       const paymentLocked = isUnpaidOnline(d);
       const waLink = displayStatus === "Pending" ? adminWhatsAppLink({ id:docSnap.id, ...d }) : "";
@@ -871,7 +916,7 @@ window.loadOrders = function(filter) {
           ${waLink ? `<a class="wa-alert-btn" href="${waLink}" target="_blank" rel="noopener">Send admin WhatsApp alert</a>` : ""}
           <div class="info-row">🏠 ${d.address}</div>
           <div class="items-list">${renderOrderItems(d.items)}</div>
-          <div style="font-weight:700; color:var(--accent);">Total: ${formatCurrency(d.totalAmount)}</div>
+          <div class="grand-total-card"><span>Grand Total</span><strong>${formatCurrency(orderGrandTotal(d))}</strong></div>
           <div class="assigned-rider">
             Order value: ${formatCurrency(d.subtotalAmount || d.subtotal || 0)}<br>
             Distance: ${Number(d.distanceKm || d.deliveryDistance || 0).toFixed(1)} KM<br>
@@ -882,6 +927,7 @@ window.loadOrders = function(filter) {
           </div>
           <div class="assigned-rider">Payment: ${paidOnline ? "paid (online)" : `${d.paymentStatus || "pending"} ${d.paymentMethod ? `(${d.paymentMethod})` : ""}`}<br>Amount to collect: ${formatCurrency(paidOnline ? 0 : (d.amountToCollect ?? d.totalAmount ?? 0))}<br>Coupon: ${d.couponCode || "None"} ${d.couponDiscount ? `- ${formatCurrency(d.couponDiscount)}` : ""}</div>
           ${d.riderName || d.assignedRider?.name ? `<div class="assigned-rider">Rider: ${d.riderName || d.assignedRider.name}<br>${d.riderPhone || d.assignedRider?.phone || ""}</div>` : ""}
+          <button type="button" class="invoice-print-btn" onclick="printAdminInvoice('${docSnap.id}')">Print / Download Invoice</button>
           <div class="btn-group status-grid">
 
   <button
@@ -942,7 +988,8 @@ window.loadOrders = function(filter) {
         </div>`;
     });
     if(!rendered){
-      container.innerHTML = `<div class="empty-orders">No ${filter.toLowerCase()} orders for ${currentOrderDateKey}.</div>`;
+      const readableFilter = filter === "All" ? "orders" : `${filter.toLowerCase()} orders`;
+      container.innerHTML = `<div class="empty-orders">No ${readableFilter} for ${orderDateLabel(currentOrderDateKey)} (${currentOrderDateKey}).</div>`;
     }
   }, error => console.warn("[FIRESTORE LISTENER] Admin orders failed", error));
 }
@@ -1156,8 +1203,62 @@ window.requestNearbyRiders = async function(orderId){
   logStructured("RIDER MATCHING", { orderId, source:"backend_google_routes" });
 };
 
+window.printAdminInvoice = function(orderId){
+  const order = latestRenderedOrders.find(item => String(item.id) === String(orderId));
+  if(!order){
+    alert("Order invoice data not found. Please refresh orders.");
+    return;
+  }
+  const invoiceWindow = window.open("", "_blank", "width=900,height=900");
+  if(!invoiceWindow){
+    alert("Popup blocked. Please allow popups to print invoice.");
+    return;
+  }
+  const rows = renderOrderItems(order.items || []);
+  const subtotal = Number(order.subtotalAmount || order.subtotal || 0);
+  const delivery = Number(order.deliveryFee ?? order.deliveryCharge ?? 0);
+  const coupon = Number(order.couponDiscount || 0);
+  const gst = Number(order.gstAmount || 0);
+  const handling = Number(order.handlingCharge || 0);
+  invoiceWindow.document.write(`<!DOCTYPE html>
+    <html><head><title>MAGNEETOZ Invoice ${escapeHTML(order.orderNumber || order.id || "")}</title>
+    <style>
+      body{font-family:Arial,sans-serif;color:#111;margin:0;padding:28px;background:#fff}
+      .head{display:flex;justify-content:space-between;gap:20px;border-bottom:2px solid #111;padding-bottom:14px;margin-bottom:18px}
+      .brand{font-size:30px;font-weight:900}.muted{color:#555;font-size:12px;margin-top:4px}
+      .box{border:1px solid #ddd;border-radius:12px;padding:14px;margin:12px 0}
+      .items-list{border-left:4px solid #111;background:#fafafa;padding:10px;border-radius:10px}
+      .item-line{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:10px 0;border-bottom:1px solid #e5e7eb}
+      .item-line:last-child{border-bottom:0}.item-name{font-weight:900}.item-line b{white-space:nowrap}
+      .item-meta{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:6px}
+      .item-meta small{display:flex;justify-content:space-between;background:#fff;border:1px solid #eee;border-radius:8px;padding:7px;color:#333}
+      .item-extras{grid-column:1/-1;color:#555;font-size:12px}
+      .summary{width:min(360px,100%);margin-left:auto}.summary div{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee}
+      .summary .grand{font-size:20px;font-weight:900;border-top:2px solid #111;border-bottom:0;margin-top:6px;padding-top:12px}
+      @media print{button{display:none}body{padding:0}.box{break-inside:avoid}}
+    </style></head><body>
+      <button onclick="window.print()" style="float:right;padding:10px 14px;border-radius:10px;border:0;background:#111;color:#fff;font-weight:800">Print / Save PDF</button>
+      <div class="head">
+        <div><div class="brand">MAGNEETOZ</div><div class="muted">Admin invoice copy</div></div>
+        <div><strong>Order: #${escapeHTML(order.orderNumber || order.orderId || order.id || "")}</strong><br><span class="muted">${escapeHTML(orderDateLabel(orderDateKey(order)))} • ${escapeHTML(orderDateKey(order))}</span></div>
+      </div>
+      <div class="box"><strong>Customer</strong><br>${escapeHTML(order.customerName || "Customer")}<br>${escapeHTML(order.phone || "")}<br><span class="muted">${escapeHTML(order.address || "")}</span></div>
+      <div class="box"><strong>Items</strong><div class="items-list">${rows}</div></div>
+      <div class="summary">
+        <div><span>Subtotal</span><b>${formatCurrency(subtotal)}</b></div>
+        <div><span>GST</span><b>${formatCurrency(gst)}</b></div>
+        <div><span>Handling</span><b>${formatCurrency(handling)}</b></div>
+        <div><span>Delivery</span><b>${delivery > 0 ? formatCurrency(delivery) : "FREE"}</b></div>
+        <div><span>Coupon</span><b>-${formatCurrency(coupon)}</b></div>
+        <div class="grand"><span>Grand Total</span><b>${formatCurrency(orderGrandTotal(order))}</b></div>
+      </div>
+    </body></html>`);
+  invoiceWindow.document.close();
+  invoiceWindow.focus();
+};
+
 renderGoLiveChecklist();
-loadOrders('Active');
+loadOrders('All');
   </script>
   <script src="app-notifications.js"></script>
 </body>
