@@ -750,6 +750,33 @@ Verify OTP
       <button type="button" id="profileBtn" class="auth-only">♡<span>Profile</span></button>
     </nav>
 
+    <section class="magneetoz-chatbot" id="magneetozChatbot" aria-label="MAGNEETOZ help chat">
+      <button class="chatbot-toggle" id="chatbotToggle" type="button" aria-expanded="false" aria-controls="chatbotPanel">
+        <span>💬</span>
+        <b>Help</b>
+      </button>
+      <div class="chatbot-panel" id="chatbotPanel" hidden>
+        <header>
+          <div>
+            <p>MAGNEETOZ Assistant</p>
+            <strong>Hi, kaise help karun?</strong>
+          </div>
+          <button type="button" id="chatbotClose" aria-label="Close chatbot">×</button>
+        </header>
+        <div class="chatbot-messages" id="chatbotMessages" aria-live="polite">
+          <div class="chatbot-message bot">Namaste! Quick help choose karo, ya support se connect ho jao.</div>
+        </div>
+        <div class="chatbot-quick-actions" id="chatbotQuickActions">
+          <button type="button" data-chatbot-action="order">Order kaise karein?</button>
+          <button type="button" data-chatbot-action="location">Delivery location</button>
+          <button type="button" data-chatbot-action="offers">Offers/Coupons</button>
+          <button type="button" data-chatbot-action="tracking">Track order</button>
+          <button type="button" data-chatbot-action="otp">Login/OTP help</button>
+          <button type="button" data-chatbot-action="support">WhatsApp support</button>
+        </div>
+      </div>
+    </section>
+
     <!-- FLOATING CART -->
 
     <div

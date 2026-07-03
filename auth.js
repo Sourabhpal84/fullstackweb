@@ -139,6 +139,10 @@ function setButton(button, busy, busyText){
   button.textContent = busy ? busyText : button.dataset.idleText;
 }
 
+function isOtpSessionActive(){
+  return !!(confirmationResult || document.getElementById("authPopup")?.classList.contains("otp-sent"));
+}
+
 function syncAuthControls(user){
   const needsVerification = document.body.classList.contains("auth-needs-verification") || !!(user && !user.phoneNumber);
   const loggedIn = !!user && !needsVerification;
@@ -189,7 +193,7 @@ function setAuthView(user){
   document.body.classList.remove("auth-success");
   document.body.classList.remove("auth-needs-verification");
   if(app) app.style.display = "block";
-  if(popup) popup.style.display = "none";
+  if(popup && !isOtpSessionActive()) popup.style.display = "none";
   window.dispatchEvent(new CustomEvent("magneetoz:guest-ready"));
   if(new URLSearchParams(location.search).get("login") === "1"){
     history.replaceState(null, "", location.pathname + location.hash);
@@ -678,7 +682,7 @@ document.addEventListener("click", event => {
   if(auth.currentUser) return;
   if(authPopupVisible()) return;
   const target = event.target;
-  if(target?.closest?.("#authPopup,#recaptcha-container,.auth-login-action,.auth-state-action,.add-cart-btn,.cart-wrapper,.cart-panel,#cartPanel,[aria-label='Place order'],#codBtn,#upiBtn,[onclick*='toggleCart'],[onclick*='placeOrder'],[onclick*='codOrder'],[onclick*='upiOrder'],[data-auth-free],a[href^='tel:'],a[href^='mailto:']")) return;
+  if(target?.closest?.("#authPopup,#recaptcha-container,.auth-login-action,.auth-state-action,.add-cart-btn,.cart-wrapper,.cart-panel,#cartPanel,.magneetoz-chatbot,[aria-label='Place order'],#codBtn,#upiBtn,[onclick*='toggleCart'],[onclick*='placeOrder'],[onclick*='codOrder'],[onclick*='upiOrder'],[data-auth-free],a[href^='tel:'],a[href^='mailto:']")) return;
   openAuthPopup("site_click");
   event.preventDefault();
   event.stopPropagation();
@@ -708,6 +712,14 @@ onAuthStateChanged(auth, (user) => {
   if(authNullTimer) clearTimeout(authNullTimer);
   authNullTimer = setTimeout(() => {
     if(auth.currentUser) return;
+    if(isOtpSessionActive()){
+      openAuthPopup($("authPopup")?.dataset.reason || "login");
+      $("authPopup")?.classList.add("otp-sent");
+      setAuthStatus("OTP sent. Code enter karke verify karein.", "success");
+      requestAnimationFrame(() => $("otp")?.focus({ preventScroll:true }));
+      authNullTimer = null;
+      return;
+    }
     setAuthView(null);
     authNullTimer = null;
   }, AUTH_NULL_GRACE_MS);

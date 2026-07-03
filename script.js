@@ -8016,6 +8016,84 @@ window.trackOrderByPhone = trackOrderByPhone;
 window.closeOrderPopup = closeOrderPopup;
 window.closeMinOrderPopup = closeMinOrderPopup;
 
+/* ================= MAGNEETOZ CHATBOT ================= */
+
+function initMagneetozChatbot(){
+  const widget = document.getElementById("magneetozChatbot");
+  const toggle = document.getElementById("chatbotToggle");
+  const panel = document.getElementById("chatbotPanel");
+  const close = document.getElementById("chatbotClose");
+  const messages = document.getElementById("chatbotMessages");
+  const actions = document.getElementById("chatbotQuickActions");
+  if(!widget || !toggle || !panel || !messages || !actions) return;
+
+  const replies = {
+    order:"Order simple hai: menu se food add karo, cart open karo, location aur name complete karo, phir COD ya UPI choose karo.",
+    location:"Delivery ke liye current GPS, search address ya manual address use kar sakte ho. Location add hone ke baad delivery charge auto calculate hota hai.",
+    offers:"Offers cart me auto-check hote hain. Coupon available ho to cart me coupon box me apply karo. BOGO/combos ke liye eligible item aur size cart me clearly dikhega.",
+    tracking:"Order place hone ke baad Profile/Tracking section me live status dikhega. Previous delivered order se Order Again bhi kar sakte ho.",
+    otp:"OTP 30-60 seconds le sakta hai. Number sahi ho, SMS inbox check karo, aur latest OTP hi enter karo. OTP field popup me open rahega.",
+    support:"Aap WhatsApp support par connect ho sakte ho. Order issue ho to cart/order details ka screenshot bhej dena."
+  };
+
+  const labels = {
+    order:"Order kaise karein?",
+    location:"Delivery location",
+    offers:"Offers/Coupons",
+    tracking:"Track order",
+    otp:"Login/OTP help",
+    support:"WhatsApp support"
+  };
+
+  const addMessage = (text, type = "bot") => {
+    const bubble = document.createElement("div");
+    bubble.className = `chatbot-message ${type}`;
+    bubble.textContent = text;
+    messages.appendChild(bubble);
+    messages.scrollTop = messages.scrollHeight;
+  };
+
+  const setOpen = (open) => {
+    panel.hidden = !open;
+    widget.classList.toggle("open", open);
+    toggle.setAttribute("aria-expanded", open ? "true" : "false");
+  };
+
+  const openWhatsappSupport = () => {
+    const phone = String(deliveryPricingSettings.whatsappNumber || "918303614331").replace(/\D/g, "");
+    const text = "Hi MAGNEETOZ, mujhe website/order me help chahiye.";
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank");
+  };
+
+  toggle.addEventListener("click", () => setOpen(panel.hidden));
+  close?.addEventListener("click", () => setOpen(false));
+  actions.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-chatbot-action]");
+    if(!button) return;
+    const action = button.dataset.chatbotAction;
+    addMessage(labels[action] || button.textContent.trim(), "user");
+    addMessage(replies[action] || "Main help ke liye ready hoon.", "bot");
+    if(action === "order"){
+      document.getElementById("menuSection")?.scrollIntoView({ behavior:"smooth", block:"start" });
+    }
+    if(action === "location"){
+      setTimeout(() => window.openLocationSelector?.(), 450);
+    }
+    if(action === "tracking"){
+      setTimeout(() => document.getElementById("profileBtn")?.click(), 450);
+    }
+    if(action === "support"){
+      setTimeout(openWhatsappSupport, 450);
+    }
+  });
+}
+
+if(document.readyState === "loading"){
+  document.addEventListener("DOMContentLoaded", initMagneetozChatbot, { once:true });
+}else{
+  initMagneetozChatbot();
+}
+
 /* ================= AI UX GUARDS + MOTION ================= */
 
 function installAIUXPolish(){
