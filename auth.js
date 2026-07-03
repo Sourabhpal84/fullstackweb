@@ -452,18 +452,28 @@ function prepareOtpInput(){
   return input;
 }
 
-function setOtpValue(value = "", { autoVerify = false } = {}){
+function setOtpValue(value = "", { autoVerify = false, source = "manual" } = {}){
   const input = prepareOtpInput();
   if(!input) return "";
   const code = String(value || "").replace(/\D/g, "").slice(0, 6);
   input.value = code;
+  input.setAttribute("value", code);
+  input.dataset.autofilled = source === "webotp" && code.length === 6 ? "true" : "false";
+  if(source === "webotp"){
+    input.dispatchEvent(new Event("change", { bubbles:true }));
+  }
   if(code.length < 6){
     lastAutoVerifyCode = "";
     return code;
   }
+  if(source === "webotp"){
+    input.focus({ preventScroll:true });
+    setAuthStatus("OTP auto-filled. Verifying now...", "success");
+    setOtpHelp("OTP field me code auto-fill ho gaya hai. Login verify ho raha hai.");
+  }
   if(autoVerify && OTP_RE.test(code) && !otpVerifyInFlight && lastAutoVerifyCode !== code){
     lastAutoVerifyCode = code;
-    setTimeout(() => verifyOTP(), 150);
+    setTimeout(() => verifyOTP(), source === "webotp" ? 900 : 150);
   }
   return code;
 }
@@ -623,7 +633,7 @@ async function startOtpListener(){
       signal:webOtpController.signal
     });
     if(otp?.code){
-      setOtpValue(otp.code, { autoVerify:true });
+      setOtpValue(otp.code, { autoVerify:true, source:"webotp" });
     }
   }catch(error){
     devLog("Auto OTP unavailable:", error);

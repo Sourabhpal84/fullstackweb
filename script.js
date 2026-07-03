@@ -3493,6 +3493,61 @@ function renderHomepageSections(){
   }
 }
 
+const fallbackCustomerLoveReviews = [
+  {
+    title:"Fresh and hot",
+    message:"Pizza arrived warm and tasted fresh. Checkout was simple.",
+    name:"Greater Noida customer"
+  },
+  {
+    title:"Easy tracking",
+    message:"Live order updates made it easy to know when food was coming.",
+    name:"Regular customer"
+  },
+  {
+    title:"Good value",
+    message:"Combos are filling, tasty, and perfect for quick cravings.",
+    name:"MAGNEETOZ fan"
+  }
+];
+
+function customerReviewCard(review = {}){
+  const rating = Math.max(1, Math.min(5, Number(review.rating || 5)));
+  const message = normalizeUnicodeText(review.message || review.comment || review.text || "");
+  const name = normalizeUnicodeText(review.customerName || review.name || review.displayName || "MAGNEETOZ customer");
+  return `
+    <article>
+      <div class="customer-love-stars" aria-label="${rating} star rating">${"★".repeat(rating)}${"☆".repeat(5 - rating)}</div>
+      <strong>${escapeHTML(review.title || (rating >= 5 ? "Loved the food" : "Happy customer"))}</strong>
+      <p>${escapeHTML((message || "Fresh food, smooth ordering, and helpful delivery updates.").slice(0, 120))}</p>
+      <span>${escapeHTML(name)}</span>
+    </article>
+  `;
+}
+
+function renderCustomerLoveReviews(reviews = fallbackCustomerLoveReviews, source = "fallback"){
+  const grid = document.getElementById("customerLoveGrid");
+  const sourceLabel = document.getElementById("customerLoveSource");
+  if(!grid) return;
+  const safeReviews = (Array.isArray(reviews) && reviews.length ? reviews : fallbackCustomerLoveReviews).slice(0, 3);
+  grid.innerHTML = safeReviews.map(customerReviewCard).join("");
+  if(sourceLabel) sourceLabel.textContent = source === "live" ? "Latest approved reviews" : "Customer favourites";
+}
+
+async function loadCustomerLoveReviews(){
+  renderCustomerLoveReviews(fallbackCustomerLoveReviews, "fallback");
+  try{
+    const snapshot = await getDocs(query(collection(db, "feedback"), orderBy("createdAt", "desc")));
+    const approved = snapshot.docs
+      .map(item => ({ id:item.id, ...item.data() }))
+      .filter(item => item.reviewStatus === "approved" && Number(item.rating || 0) >= 4)
+      .slice(0, 3);
+    if(approved.length) renderCustomerLoveReviews(approved, "live");
+  }catch(error){
+    console.warn("Customer love reviews fallback used:", error);
+  }
+}
+
 function loadHomepageSections(){
   homepageSectionsUnsub?.();
   homepageSectionsUnsub = onSnapshot(
@@ -3572,6 +3627,7 @@ function loadCategories(){
 }
 loadCategories();
 loadHomepageSections();
+loadCustomerLoveReviews();
 
 /* LOAD DELIVERY SETTINGS */
 

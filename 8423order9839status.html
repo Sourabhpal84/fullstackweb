@@ -141,6 +141,12 @@
 .ops-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
 .ops-actions button{border:0;border-radius:12px;padding:11px 14px;font-weight:800;cursor:pointer}
 .open-btn{background:#22c55e;color:#06110a}.close-btn{background:#ef4444;color:white}.save-btn{background:#00ffcc;color:#06110a}
+.restaurant-toggle-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center;margin-top:12px;padding:14px;border:1px solid #263241;border-radius:18px;background:#0b0f14}
+.restaurant-toggle-card strong{display:block;font-size:18px;color:#fff}.restaurant-toggle-card small{display:block;margin-top:3px;color:#94a3b8;font-weight:700}
+.restaurant-toggle-card.open{border-color:#22c55e;box-shadow:0 0 0 1px rgba(34,197,94,.22)}.restaurant-toggle-card.closed{border-color:#ef4444;box-shadow:0 0 0 1px rgba(239,68,68,.22)}
+.restaurant-state-pill{display:inline-flex;align-items:center;gap:7px;margin-bottom:6px;padding:6px 10px;border-radius:999px;font-size:11px;font-weight:900;text-transform:uppercase}.restaurant-state-pill.open{background:rgba(34,197,94,.15);color:#86efac}.restaurant-state-pill.closed{background:rgba(239,68,68,.16);color:#fca5a5}
+.restaurant-switch{position:relative;display:inline-flex;align-items:center;width:78px;height:42px;cursor:pointer}.restaurant-switch input{position:absolute;opacity:0;inset:0}.restaurant-switch span{position:absolute;inset:0;border-radius:999px;background:#ef4444;transition:.2s;box-shadow:inset 0 0 0 2px rgba(255,255,255,.12)}.restaurant-switch span:before{content:"";position:absolute;width:34px;height:34px;left:4px;top:4px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 7px 18px rgba(0,0,0,.35)}.restaurant-switch input:checked+span{background:#22c55e}.restaurant-switch input:checked+span:before{transform:translateX(36px)}
+@media(max-width:560px){.restaurant-toggle-card{grid-template-columns:1fr}.restaurant-switch{justify-self:start}}
 .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#111827;color:white;border:1px solid #263241;border-radius:14px;padding:12px 16px;z-index:80;display:none;font-weight:800}
 .toast.show{display:block}
 .kitchen-alarm-bar{position:sticky;top:0;z-index:45;margin:0 auto 16px;max-width:980px;display:flex;align-items:center;justify-content:space-between;gap:12px;background:#121821;border:1px solid #263241;border-radius:16px;padding:12px 14px;box-shadow:0 16px 50px rgba(0,0,0,.3)}
@@ -200,11 +206,20 @@
       <label>Open Time <input type="time" id="openTime"></label>
       <label style="grid-column:1/-1">Unavailable Message <textarea id="unavailableMessage" rows="2"></textarea></label>
       <label><input type="checkbox" id="autoCloseEnabled"> Auto close schedule</label>
-      <label><input type="checkbox" id="maintenanceMode"> Emergency maintenance</label>
+      <label><input type="checkbox" id="maintenanceMode" onchange="updateRestaurantToggleUi(currentRestaurantOpen, this.checked)"> Emergency maintenance</label>
+    </div>
+    <div class="restaurant-toggle-card" id="restaurantToggleCard">
+      <div>
+        <span class="restaurant-state-pill" id="restaurantStatePill">Checking...</span>
+        <strong id="restaurantStateTitle">Restaurant status loading</strong>
+        <small id="restaurantStateHint">Toggle se website open/close status turant update hoga.</small>
+      </div>
+      <label class="restaurant-switch" aria-label="Restaurant open close toggle">
+        <input type="checkbox" id="restaurantOpenToggle" onchange="toggleRestaurantOpenFromSwitch(this.checked)">
+        <span></span>
+      </label>
     </div>
     <div class="ops-actions">
-      <button class="open-btn" onclick="setRestaurantOpen(true)">Open Restaurant</button>
-      <button class="close-btn" onclick="setRestaurantOpen(false)">Close Restaurant</button>
       <button class="save-btn" onclick="saveRestaurantSettings()">Save Settings</button>
       <button class="save-btn" onclick="fixCapturedPaymentOrders()">Fix Paid Online Orders</button>
       <button class="save-btn" onclick="runPaymentIntegrityChecker()">Payment Integrity Checker</button>
@@ -320,6 +335,7 @@ let latestActiveOrders = [];
 let menuDishCache = [];
 let currentOrderFilter = "Pending";
 let currentOrderDateKey = todayKey();
+let currentRestaurantOpen = true;
 const FUNCTIONS_BASE_URL = "https://asia-south1-magneetoz.cloudfunctions.net";
 protectAdminPage();
 mountAdminLogout(document.body);
@@ -686,6 +702,7 @@ window.sendToRider = async function(id){
 
 onSnapshot(doc(db,"settings","restaurant"), snap => {
   const data = snap.exists() ? snap.data() : {};
+  currentRestaurantOpen = data.restaurantOpen !== false;
   document.getElementById("closeTime").value = data.closeTime || "02:00";
   document.getElementById("openTime").value = data.openTime || "08:00";
   document.getElementById("unavailableMessage").value = data.unavailableMessage || "Restaurant currently closed";
@@ -693,11 +710,12 @@ onSnapshot(doc(db,"settings","restaurant"), snap => {
   document.getElementById("maintenanceMode").checked = data.maintenanceMode === true;
   document.getElementById("restaurantLatitude").value = data.location?.lat ?? "";
   document.getElementById("restaurantLongitude").value = data.location?.lng ?? "";
+  updateRestaurantToggleUi(currentRestaurantOpen, data.maintenanceMode === true);
 });
 
 async function writeRestaurantSettings(extra = {}){
   await setDoc(doc(db,"settings","restaurant"), {
-    restaurantOpen:true,
+    restaurantOpen:currentRestaurantOpen,
     unavailableMessage:document.getElementById("unavailableMessage").value || "Restaurant currently closed",
     autoCloseEnabled:document.getElementById("autoCloseEnabled").checked,
     closeTime:document.getElementById("closeTime").value || "02:00",
@@ -709,7 +727,33 @@ async function writeRestaurantSettings(extra = {}){
   toast("Restaurant settings updated");
 }
 
-window.setRestaurantOpen = open => writeRestaurantSettings({ restaurantOpen:open, maintenanceMode:open ? false : document.getElementById("maintenanceMode").checked });
+function updateRestaurantToggleUi(open = true, maintenance = false){
+  const effectiveOpen = open && !maintenance;
+  const toggle = document.getElementById("restaurantOpenToggle");
+  const card = document.getElementById("restaurantToggleCard");
+  const pill = document.getElementById("restaurantStatePill");
+  const title = document.getElementById("restaurantStateTitle");
+  const hint = document.getElementById("restaurantStateHint");
+  if(toggle) toggle.checked = effectiveOpen;
+  card?.classList.toggle("open", effectiveOpen);
+  card?.classList.toggle("closed", !effectiveOpen);
+  pill?.classList.toggle("open", effectiveOpen);
+  pill?.classList.toggle("closed", !effectiveOpen);
+  if(pill) pill.textContent = effectiveOpen ? "Open" : "Closed";
+  if(title) title.textContent = effectiveOpen ? "Website par restaurant OPEN hai" : "Website par restaurant CLOSED hai";
+  if(hint) hint.textContent = maintenance
+    ? "Emergency maintenance ON hai. Toggle open karne par maintenance off ho jayega."
+    : effectiveOpen ? "Customers abhi order place kar sakte hain." : "Customers ko closed message dikhega.";
+}
+
+window.updateRestaurantToggleUi = updateRestaurantToggleUi;
+window.toggleRestaurantOpenFromSwitch = async open => {
+  currentRestaurantOpen = !!open;
+  if(open) document.getElementById("maintenanceMode").checked = false;
+  updateRestaurantToggleUi(currentRestaurantOpen, document.getElementById("maintenanceMode").checked);
+  await writeRestaurantSettings({ restaurantOpen:currentRestaurantOpen, maintenanceMode:open ? false : document.getElementById("maintenanceMode").checked });
+};
+window.setRestaurantOpen = open => window.toggleRestaurantOpenFromSwitch(open);
 window.saveRestaurantSettings = () => writeRestaurantSettings();
 window.saveRestaurantLocation = async function(){
   const lat = Number(document.getElementById("restaurantLatitude").value);
