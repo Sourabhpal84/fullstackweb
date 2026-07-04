@@ -1751,6 +1751,170 @@ window.addSmartAssistantItem = function(dishId){
   if(dish) addDishObjectToCart(dish, 1);
 };
 
+const tasteQuizState = {
+  mood:"cheesy",
+  people:"1",
+  budget:"300",
+  crust:"any",
+  avoid:"none",
+  suggestions:[]
+};
+
+function quizPeopleCount(value = tasteQuizState.people){
+  if(value === "family") return 5;
+  if(value === "3-4") return 4;
+  return Math.max(1, Number(value || 1));
+}
+
+function quizBudgetValue(value = tasteQuizState.budget){
+  return value === "nolimit" ? Infinity : Number(value || 300);
+}
+
+function dishSearchText(dish = {}){
+  return `${dish.name || ""} ${dish.description || ""} ${dish.category || ""} ${dish.itemsIncluded || ""}`.toLowerCase();
+}
+
+function quizDishAllowed(dish = {}, avoid = tasteQuizState.avoid){
+  if(!dish?.available || dishLowestVariant(dish).price <= 0) return false;
+  if(!avoid || avoid === "none") return true;
+  const text = dishSearchText(dish);
+  const avoidMap = {
+    onion:["onion","pyaz"],
+    capsicum:["capsicum","shimla"],
+    cheese:["cheese","cheesy","mozzarella"]
+  };
+  return !(avoidMap[avoid] || [avoid]).some(word => text.includes(word));
+}
+
+function scoreTasteQuizDish(dish = {}, mood = tasteQuizState.mood){
+  const variant = dishLowestVariant(dish);
+  const price = Number(variant.price || 0);
+  const text = dishSearchText(dish);
+  let score = scoreBestSellerDish(dish);
+  if(mood === "cheesy") score += /cheese|cheesy|paneer|mozzarella|loaded/.test(text) ? 160 : 0;
+  if(mood === "spicy") score += /spicy|chilli|chili|masala|peri|tandoori|hot/.test(text) ? 160 : 0;
+  if(mood === "light") score += /veg|corn|garlic|bread|light|classic/.test(text) ? 80 : 0;
+  if(mood === "budget") score += Math.max(0, 220 - price);
+  if(mood === "party") score += /combo|large|family|party|meal|pizza/.test(text) ? 130 : 0;
+  return score;
+}
+
+function buildQuizCartCandidate(dishes = [], label = "Smart Cart", targetBudget = Infinity, maxItems = 3){
+  const items = [];
+  let total = 0;
+  for(const dish of dishes){
+    const variant = dishLowestVariant(dish);
+    const price = Number(variant.price || 0);
+    if(!price || items.some(item => String(item.dish.id) === String(dish.id))) continue;
+    if(Number.isFinite(targetBudget) && items.length && total + price > targetBudget + 40) continue;
+    items.push({ dish, variant });
+    total += price;
+    if(items.length >= maxItems) break;
+  }
+  return { label, items, total };
+}
+
+function buildTasteQuizSuggestions(){
+  const budget = quizBudgetValue();
+  const people = quizPeopleCount();
+  const maxItems = people >= 4 ? 4 : people >= 2 ? 3 : 2;
+  let pool = [...allMenuDishes]
+    .filter(dish => quizDishAllowed(dish))
+    .sort((a, b) => scoreTasteQuizDish(b) - scoreTasteQuizDish(a));
+  if(!pool.length) pool = cartSmartDishSuggestions(8);
+  const budgetPool = [...pool].sort((a, b) => dishLowestVariant(a).price - dishLowestVariant(b).price);
+  const moodPool = [...pool].sort((a, b) => scoreTasteQuizDish(b, tasteQuizState.mood) - scoreTasteQuizDish(a, tasteQuizState.mood));
+  const suggestions = [
+    buildQuizCartCandidate(budgetPool, "Best Value", budget, maxItems),
+    buildQuizCartCandidate(moodPool, tasteQuizState.mood === "spicy" ? "Most Spicy" : "Most Cheesy", budget, maxItems)
+  ];
+  if(people >= 4 || tasteQuizState.mood === "party"){
+    suggestions.push(buildQuizCartCandidate(moodPool, "Family Saver", budget, 4));
+  }
+  tasteQuizState.suggestions = suggestions.filter(item => item.items.length).slice(0, 3);
+  return tasteQuizState.suggestions;
+}
+
+function renderTasteQuizResults(){
+  const host = document.getElementById("tasteQuizResults");
+  if(!host) return;
+  const suggestions = buildTasteQuizSuggestions();
+  host.hidden = false;
+  if(!suggestions.length){
+    host.innerHTML = `<div class="taste-quiz-empty">Perfect match nahi mila. Best sellers loading hain, thoda retry karein.</div>`;
+    return;
+  }
+  host.innerHTML = `<div class="taste-quiz-results-head"><strong>Your smart carts</strong><span>Live menu se banaye gaye suggestions</span></div><div class="taste-quiz-suggestion-list">${suggestions.map((suggestion, index) => `<article class="taste-quiz-suggestion"><div class="taste-quiz-suggestion-title"><span>${escapeHTML(suggestion.label)}</span><b>${formatCurrency(suggestion.total)}</b></div><div class="taste-quiz-items">${suggestion.items.map(entry => `<div><img src="${escapeHTML(normalizeImageUrl(entry.dish.image))}" alt="${escapeHTML(entry.dish.name || "MAGNEETOZ item")}" loading="lazy" onerror="this.onerror=null;this.src='logo_tran.jpeg';"><span><strong>${escapeHTML(entry.dish.name || "Item")}</strong><small>${escapeHTML(entry.variant.size)} • ${formatCurrency(entry.variant.price)}</small></span></div>`).join("")}</div><button type="button" onclick="addTasteQuizSuggestionToCart(${index})">Add Smart Combo to Cart</button></article>`).join("")}</div>`;
+}
+
+window.addTasteQuizSuggestionToCart = function(index){
+  const suggestion = tasteQuizState.suggestions[Number(index)];
+  if(!suggestion?.items?.length) return;
+  const nextItems = suggestion.items.map(entry => {
+    const item = {
+      id:entry.dish.id || "",
+      name:entry.dish.name || "MAGNEETOZ Item",
+      size:entry.variant.size,
+      qty:1,
+      category:entry.dish.category || "Recommended",
+      image:normalizeImageUrl(entry.dish.image),
+      baseUnitPrice:entry.variant.price,
+      unitPrice:entry.variant.price,
+      price:entry.variant.price
+    };
+    if(tasteQuizState.crust !== "any" && isPizzaCartItem(item)){
+      const crust = normalizeCrust(tasteQuizState.crust);
+      item.crust = crust;
+      item.crustType = crust.label;
+      item.selectedCrust = crust.id;
+    }
+    return normalizeCartItemPricing(item);
+  });
+  cart = [...cart, ...nextItems];
+  persistGuestState();
+  updateCart();
+  closeTasteQuiz();
+  toggleCart(true);
+  toastSuccess("Smart cart added. Checkout flow same rahega.");
+};
+
+function openTasteQuiz(){
+  const modal = document.getElementById("tasteQuizModal");
+  if(!modal) return;
+  modal.hidden = false;
+  document.body.classList.add("taste-quiz-open");
+  renderTasteQuizResults();
+}
+
+function closeTasteQuiz(){
+  const modal = document.getElementById("tasteQuizModal");
+  if(!modal) return;
+  modal.hidden = true;
+  document.body.classList.remove("taste-quiz-open");
+}
+
+function bindTasteQuiz(){
+  document.getElementById("openTasteQuizBtn")?.addEventListener("click", openTasteQuiz);
+  document.getElementById("closeTasteQuizBtn")?.addEventListener("click", closeTasteQuiz);
+  document.getElementById("buildTasteQuizBtn")?.addEventListener("click", renderTasteQuizResults);
+  document.getElementById("tasteQuizModal")?.addEventListener("click", event => {
+    if(event.target?.id === "tasteQuizModal") closeTasteQuiz();
+  });
+  document.getElementById("tasteQuizForm")?.addEventListener("click", event => {
+    const button = event.target.closest("[data-value]");
+    if(!button) return;
+    const group = button.closest("[data-quiz-group]")?.dataset.quizGroup;
+    if(!group) return;
+    tasteQuizState[group] = button.dataset.value;
+    button.parentElement.querySelectorAll("button").forEach(item => item.classList.toggle("active", item === button));
+    renderTasteQuizResults();
+  });
+  document.querySelectorAll(".taste-quiz-group").forEach(group => {
+    const key = group.dataset.quizGroup;
+    group.querySelector(`[data-value="${tasteQuizState[key]}"]`)?.classList.add("active");
+  });
+}
+
 function notifyPremiumUI(name, detail = {}){
   window.dispatchEvent(new CustomEvent(name, { detail }));
 }
@@ -2669,13 +2833,20 @@ function normalizeCrust(value){
   return { ...option };
 }
 
+function isPizzaCartItem(item = {}){
+  const text = `${item.category || ""} ${item.dishCategory || ""} ${item.name || ""} ${item.size || ""}`.toLowerCase();
+  if(item.comboId || text.includes("combo")) return false;
+  return /pizza|pizaa|piza|margherita|marg[h]?rita/.test(text);
+}
+
 function normalizeCartItemPricing(item = {}){
   const qty = Math.max(1, Number(item.qty || item.quantity || 1) || 1);
   const existingExtras = normalizeCartExtras(item.extras || item.addOns || item.addons || item.extraToppings);
-  const crust = normalizeCrust(item.crust || item.crustType || item.selectedCrust);
+  const pizzaItem = isPizzaCartItem(item);
+  const crust = pizzaItem ? normalizeCrust(item.crust || item.crustType || item.selectedCrust) : null;
   const baseUnitPrice = Number(item.baseUnitPrice || item.unitPrice || (qty ? Number(item.price || 0) / qty - extrasTotalPerUnit(existingExtras) : item.price) || 0);
   const extrasTotal = extrasTotalPerUnit(existingExtras);
-  return {
+  const normalized = {
     ...item,
     qty,
     quantity:qty,
@@ -2683,12 +2854,19 @@ function normalizeCartItemPricing(item = {}){
     unitPrice:baseUnitPrice,
     extras:existingExtras,
     addOns:existingExtras,
-    crust,
-    crustType:crust.label,
-    selectedCrust:crust.id,
     extrasTotal,
     price:Math.round((baseUnitPrice + extrasTotal) * qty)
   };
+  if(pizzaItem){
+    normalized.crust = crust;
+    normalized.crustType = crust.label;
+    normalized.selectedCrust = crust.id;
+  }else{
+    delete normalized.crust;
+    delete normalized.crustType;
+    delete normalized.selectedCrust;
+  }
+  return normalized;
 }
 
 function cartItemTotal(item = {}){
@@ -2706,9 +2884,10 @@ function compactCartForStorage(items = []){
     const qty = Number(item.qty || item.quantity || 1);
     const baseUnitPrice = Number(item.baseUnitPrice || item.unitPrice || (qty ? Number(item.price || 0) / qty : item.price) || 0);
     const extras = normalizeCartExtras(item.extras || item.addOns || item.addons || item.extraToppings);
-    const crust = normalizeCrust(item.crust || item.crustType || item.selectedCrust);
+    const pizzaItem = isPizzaCartItem(item);
+    const crust = pizzaItem ? normalizeCrust(item.crust || item.crustType || item.selectedCrust) : null;
     const extrasTotal = extrasTotalPerUnit(extras);
-    return {
+    const compact = {
       id:String(item.id || "").slice(0, 120),
       name:String(item.name || "").slice(0, 160),
       size:String(item.size || "").slice(0, 80),
@@ -2717,15 +2896,18 @@ function compactCartForStorage(items = []){
       unitPrice:baseUnitPrice,
       extras,
       addOns:extras,
-      crust,
-      crustType:crust.label,
-      selectedCrust:crust.id,
       extrasTotal,
       price:cartItemTotal({ ...item, qty, baseUnitPrice, unitPrice:baseUnitPrice, extras }),
       qty,
       quantity:qty,
       image:!image || /^data:/i.test(image) ? "" : image.slice(0, 700)
     };
+    if(pizzaItem){
+      compact.crust = crust;
+      compact.crustType = crust.label;
+      compact.selectedCrust = crust.id;
+    }
+    return compact;
   });
 }
 
@@ -5532,21 +5714,22 @@ function updateCart() {
       const checked = extras.some(selected => selected.id === extra.id);
       return `<label><input type="checkbox" ${checked ? "checked" : ""} onchange="toggleCartExtra(${index}, '${extra.id}', this.checked)"> <span>${escapeHTML(extra.name)}</span><b>${formatCurrency(extra.price)}</b></label>`;
     }).join("");
-    const crust = normalizeCrust(item.crust);
-    const crustControls = CRUST_OPTIONS.map(option => `
+    const pizzaItem = isPizzaCartItem(item);
+    const crust = pizzaItem ? normalizeCrust(item.crust) : null;
+    const crustControls = pizzaItem ? CRUST_OPTIONS.map(option => `
       <label>
         <input type="radio" name="cart-crust-${index}" ${crust.id === option.id ? "checked" : ""} onchange="setCartCrust(${index}, '${option.id}')">
         <span>${escapeHTML(option.label)}</span>
         <small>${escapeHTML(option.description)}</small>
       </label>
-    `).join("");
+    `).join("") : "";
     itemsHTML += `
   <div class="cart-item cart-item-pro">
     <img src="${escapeHTML(normalizeImageUrl(item.image))}" alt="${escapeHTML(item.name)}" onerror="this.onerror=null;this.src='logo_tran.jpeg';">
     <div>
       <strong>${escapeHTML(item.name)}</strong><br>
-      <small>${escapeHTML(item.size || "Regular")} x ${item.qty} • ${escapeHTML(crust.label)}</small>
-      <div class="cart-crust-picker" aria-label="Crust option">${crustControls}</div>
+      <small>${escapeHTML(item.size || "Regular")} x ${item.qty}${pizzaItem ? ` • ${escapeHTML(crust.label)}` : ""}</small>
+      ${pizzaItem ? `<div class="cart-crust-picker" aria-label="Crust option">${crustControls}</div>` : ""}
       ${priceBreakdown}
       <details class="cart-extras-picker">
         <summary>Extra Toppings / Add-ons</summary>
@@ -5661,6 +5844,7 @@ window.toggleCartExtra = function(index, extraId, checked){
 window.setCartCrust = function(index, crustId){
   const item = cart[index];
   if(!item) return;
+  if(!isPizzaCartItem(item)) return;
   const crust = normalizeCrust(crustId);
   item.crust = crust;
   item.crustType = crust.label;
@@ -6707,6 +6891,7 @@ if(popup) popup.style.display="none";
 
 document.addEventListener("DOMContentLoaded", () => {
   initFirstOrderGuide();
+  bindTasteQuiz();
   bindHeroOfferActions();
   updateHeroBogoButton();
 
@@ -7858,8 +8043,12 @@ function orderItemBaseLineTotal(item = {}){
 function orderItemBreakdownHTML(item = {}, moneyFormatter = formatCurrency){
   const qty = Number(item.qty || item.quantity || 1);
   const extras = orderItemExtras(item);
-  const crust = normalizeCrust(item.crust || item.crustType || item.selectedCrust);
-  const lines = [`Crust: ${crust.label} - ${crust.description}`, `Base: ${moneyFormatter(orderItemBaseLineTotal(item))}`];
+  const lines = [];
+  if(isPizzaCartItem(item)){
+    const crust = normalizeCrust(item.crust || item.crustType || item.selectedCrust);
+    lines.push(`Crust: ${crust.label} - ${crust.description}`);
+  }
+  lines.push(`Base: ${moneyFormatter(orderItemBaseLineTotal(item))}`);
   extras.forEach(extra => {
     lines.push(`${extra.name}: ${moneyFormatter(Number(extra.price || 0) * qty)}`);
   });
@@ -7892,8 +8081,8 @@ window.downloadInvoicePDF = async function(orderId){
     const unit = qty ? baseTotal / qty : baseTotal;
     const size = item.size ? `<div class="muted">Size: ${escapeHTML(item.size)}</div>` : "";
     const combo = item.comboName ? `<div class="muted">Combo: ${escapeHTML(item.comboName)}</div>` : "";
-    const crust = normalizeCrust(item.crust || item.crustType || item.selectedCrust);
-    const crustLine = `<div class="muted">Crust: ${escapeHTML(crust.label)} - ${escapeHTML(crust.description)}</div>`;
+    const crust = isPizzaCartItem(item) ? normalizeCrust(item.crust || item.crustType || item.selectedCrust) : null;
+    const crustLine = crust ? `<div class="muted">Crust: ${escapeHTML(crust.label)} - ${escapeHTML(crust.description)}</div>` : "";
     const extras = orderItemExtras(item);
     const extrasLine = extras.length
       ? `<div class="muted">Extras: ${extras.map(extra => `${escapeHTML(extra.name)} ${money(Number(extra.price || 0) * qty)}`).join(", ")}</div>`

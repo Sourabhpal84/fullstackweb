@@ -495,6 +495,10 @@ Verify OTP
               <span>Best Sellers</span>
             </button>
 
+            <button type="button" class="hero-secondary taste-quiz-open" id="openTasteQuizBtn">
+              <span>Build my perfect order</span>
+            </button>
+
             <button type="button" class="hero-secondary magnetic-btn" id="openSearchBtn">
               <span id="heroSecondaryBtnText">Smart Search</span>
             </button>
@@ -1117,6 +1121,42 @@ Verify OTP
 
     </div>
 
+  </div>
+
+  <div id="tasteQuizModal" class="taste-quiz-modal" role="dialog" aria-modal="true" aria-labelledby="tasteQuizTitle" hidden>
+    <div class="taste-quiz-card">
+      <header>
+        <div>
+          <p>Smart Cart Builder</p>
+          <h2 id="tasteQuizTitle">Build my perfect order</h2>
+        </div>
+        <button type="button" id="closeTasteQuizBtn" aria-label="Close taste quiz">×</button>
+      </header>
+      <section class="taste-quiz-form" id="tasteQuizForm">
+        <div class="taste-quiz-group" data-quiz-group="mood">
+          <strong>Mood</strong>
+          <div><button type="button" data-value="cheesy">Cheesy</button><button type="button" data-value="spicy">Spicy</button><button type="button" data-value="light">Light</button><button type="button" data-value="budget">Budget</button><button type="button" data-value="party">Party</button></div>
+        </div>
+        <div class="taste-quiz-group" data-quiz-group="people">
+          <strong>People count</strong>
+          <div><button type="button" data-value="1">1</button><button type="button" data-value="2">2</button><button type="button" data-value="3-4">3-4</button><button type="button" data-value="family">Family</button></div>
+        </div>
+        <div class="taste-quiz-group" data-quiz-group="budget">
+          <strong>Budget</strong>
+          <div><button type="button" data-value="150">₹150</button><button type="button" data-value="300">₹300</button><button type="button" data-value="500">₹500</button><button type="button" data-value="nolimit">No limit</button></div>
+        </div>
+        <div class="taste-quiz-group" data-quiz-group="crust">
+          <strong>Crust</strong>
+          <div><button type="button" data-value="thin">Thin Crust</button><button type="button" data-value="pan">Pan Crust</button><button type="button" data-value="any">Any</button></div>
+        </div>
+        <div class="taste-quiz-group" data-quiz-group="avoid">
+          <strong>Avoid</strong>
+          <div><button type="button" data-value="onion">Onion</button><button type="button" data-value="capsicum">Capsicum</button><button type="button" data-value="cheese">Cheese</button><button type="button" data-value="none">None</button></div>
+        </div>
+        <button type="button" class="taste-quiz-build-btn" id="buildTasteQuizBtn">Show smart carts</button>
+      </section>
+      <section class="taste-quiz-results" id="tasteQuizResults" hidden></section>
+    </div>
   </div>
 
   <div class="smart-search-overlay" id="smartSearchOverlay" aria-hidden="true">

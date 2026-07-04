@@ -682,7 +682,7 @@ document.addEventListener("click", event => {
   if(auth.currentUser) return;
   if(authPopupVisible()) return;
   const target = event.target;
-  if(target?.closest?.("#authPopup,#recaptcha-container,.auth-login-action,.auth-state-action,.add-cart-btn,.cart-wrapper,.cart-panel,#cartPanel,.magneetoz-chatbot,[aria-label='Place order'],#codBtn,#upiBtn,[onclick*='toggleCart'],[onclick*='placeOrder'],[onclick*='codOrder'],[onclick*='upiOrder'],[data-auth-free],a[href^='tel:'],a[href^='mailto:']")) return;
+  if(target?.closest?.("#authPopup,#recaptcha-container,.auth-login-action,.auth-state-action,.add-cart-btn,.cart-wrapper,.cart-panel,#cartPanel,.magneetoz-chatbot,.taste-quiz-modal,.taste-quiz-open,[aria-label='Place order'],#codBtn,#upiBtn,[onclick*='toggleCart'],[onclick*='placeOrder'],[onclick*='codOrder'],[onclick*='upiOrder'],[data-auth-free],a[href^='tel:'],a[href^='mailto:']")) return;
   openAuthPopup("site_click");
   event.preventDefault();
   event.stopPropagation();
