@@ -198,6 +198,53 @@ body{
 .btn-green{background:linear-gradient(135deg,var(--green),#86efac);color:#06110a}
 .btn-red{background:linear-gradient(135deg,#ff5f5f,var(--red));color:white}
 .btn-soft{background:rgba(255,255,255,.09);color:white;border:1px solid var(--line)!important}
+.current-delivery-card{
+  border-color:rgba(45,211,111,.34)!important;
+  box-shadow:0 18px 48px rgba(45,211,111,.10), inset 0 1px 0 rgba(255,255,255,.08)!important;
+}
+.single-card-helper{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  align-items:center;
+  margin:12px 0 0;
+  padding:10px 12px;
+  border:1px solid rgba(45,211,111,.20);
+  border-radius:14px;
+  background:rgba(45,211,111,.08);
+}
+.single-card-helper b{font-size:12px;color:#dcfce7}
+.single-card-helper span{font-size:10px;color:#9fb0c4;text-align:right}
+.rider-flow{
+  display:grid;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  gap:6px;
+  margin-top:10px;
+}
+.rider-flow span{
+  display:grid;
+  gap:5px;
+  justify-items:center;
+  color:#8fa0b5;
+  font-size:9px;
+  font-weight:900;
+  text-align:center;
+}
+.rider-flow i{
+  width:100%;
+  height:6px;
+  border-radius:999px;
+  background:rgba(255,255,255,.10);
+}
+.rider-flow span.done{color:#bbf7d0}
+.rider-flow span.done i{background:linear-gradient(135deg,var(--green),#86efac)}
+.rider-flow span.active i{box-shadow:0 0 0 3px rgba(45,211,111,.16)}
+.actions .primary-next-action{
+  flex-basis:220px;
+  min-height:48px;
+  font-size:13px;
+  box-shadow:0 12px 24px rgba(45,211,111,.16);
+}
 .empty{
   padding:28px 18px;
   text-align:center;
@@ -808,6 +855,59 @@ function statusGroup(status){
   return "Assigned";
 }
 
+function isActiveDeliveryStatus(status){
+  return ["Rider Accepted","Picked Up","Out For Delivery","Reached Nearby","Collect Payment","Cash Collected","Payment Settled","Delivery Code Pending","Payment Completed"].includes(normalizeStatus(status));
+}
+
+function isSameOrder(order, orderId = ""){
+  return !!orderId && String(order?.id || "") === String(orderId);
+}
+
+function currentRiderOrder(mine = []){
+  const activeId = rider?.currentActiveOrderId || rider?.activeOrderId || "";
+  return mine.find(order => isSameOrder(order, activeId) && isActiveDeliveryStatus(order.status || order.orderStatus))
+    || mine.find(order => isActiveDeliveryStatus(order.status || order.orderStatus));
+}
+
+function riderFlowStep(status){
+  const normalized = normalizeStatus(status);
+  const steps = [
+    { key:"Rider Accepted", label:"Accepted", done:["Rider Accepted","Picked Up","Out For Delivery","Reached Nearby","Collect Payment","Cash Collected","Payment Settled","Payment Completed","Delivered"].includes(normalized), active:normalized === "Rider Accepted" },
+    { key:"Picked Up", label:"Picked", done:["Picked Up","Out For Delivery","Reached Nearby","Collect Payment","Cash Collected","Payment Settled","Payment Completed","Delivered"].includes(normalized), active:normalized === "Picked Up" },
+    { key:"Out For Delivery", label:"On way", done:["Out For Delivery","Reached Nearby","Collect Payment","Cash Collected","Payment Settled","Payment Completed","Delivered"].includes(normalized), active:normalized === "Out For Delivery" },
+    { key:"Reached Nearby", label:"Nearby", done:["Reached Nearby","Collect Payment","Cash Collected","Payment Settled","Payment Completed","Delivered"].includes(normalized), active:normalized === "Reached Nearby" || normalized === "Collect Payment" },
+    { key:"Delivered", label:"Done", done:normalized === "Delivered", active:false }
+  ];
+  return `<div class="rider-flow">${steps.map(step => `<span class="${step.done ? "done" : ""} ${step.active ? "active" : ""}"><i></i>${step.label}</span>`).join("")}</div>`;
+}
+
+function nextOrderActions(order, { group, isDelivered, requestLocked, requestButtonLabel, requestButtonAction, prepaidOnline, unpaidOnline, canDeliver, dist } = {}){
+  const status = normalizeStatus(order.status || order.orderStatus);
+  if(isDelivered) return `<button class="btn-green" disabled>Delivered</button>`;
+  if(group === "Requests"){
+    return `<button class="btn-green primary-next-action" ${requestLocked ? "disabled" : ""} onclick="${requestButtonAction}">${requestButtonLabel}</button><button class="btn-red" onclick="rejectRequest('${order.id}')">Reject</button>`;
+  }
+  if(status === "Rider Accepted" || status === "Assigned" || status === "Ready For Pickup"){
+    return `<button class="btn-blue primary-next-action" onclick="pickupOrder('${order.id}')">Picked Up</button>`;
+  }
+  if(status === "Picked Up"){
+    return `<button class="btn-blue primary-next-action" onclick="startDelivery('${order.id}')">Out For Delivery</button>`;
+  }
+  if(status === "Out For Delivery"){
+    return `<button class="btn-green primary-next-action" onclick="reachNearby('${order.id}')">Reached Nearby</button>`;
+  }
+  if((status === "Reached Nearby" || status === "Collect Payment") && !prepaidOnline && !unpaidOnline){
+    return `<button class="btn-green primary-next-action" onclick="markCashReceived('${order.id}')">Cash Received</button><button class="btn-blue" onclick="collectOnline('${order.id}')">Online Payment</button>`;
+  }
+  if(isCashCollectedOrder(order)){
+    return `<button class="btn-green primary-next-action" onclick="deliverCashOrder('${order.id}')">Delivered</button>`;
+  }
+  if(canDeliver){
+    return `<button class="btn-green primary-next-action" onclick="deliver('${order.id}', ${dist || 1})">Delivered</button>`;
+  }
+  return `<button class="btn-soft" disabled>Next step loading</button>`;
+}
+
 function assignedToMe(order){
   return order.riderId === rider?.riderId ||
     order.assignedRiderId === rider?.riderId ||
@@ -889,21 +989,25 @@ function renderOrders(){
   const activeCount = mine.filter(o => normalizeStatus(o.status) !== "Delivered").length;
   els.active.textContent = activeCount;
 
-  const filtered = currentFilter === "Requests"
+  const activeOrder = currentRiderOrder(mine);
+  let filtered = currentFilter === "Requests"
     ? allOrders.filter(requestedForMe)
     : mine.filter(o => statusGroup(o.status) === currentFilter);
-  els.title.textContent = `${currentFilter} orders`;
+  if(activeOrder && currentFilter !== "Delivered"){
+    filtered = [activeOrder, ...filtered.filter(order => order.id !== activeOrder.id)];
+  }
+  els.title.textContent = activeOrder && currentFilter !== "Delivered" ? "Current delivery" : `${currentFilter} orders`;
   els.count.textContent = `${filtered.length} order${filtered.length === 1 ? "" : "s"}`;
 
   if(!filtered.length){
-    ordersEl.innerHTML = `<div class="empty">${rider.currentActiveOrderId && currentFilter === "Requests" ? "Complete current delivery to receive new orders." : `No ${currentFilter.toLowerCase()} orders right now.`}</div>`;
+    ordersEl.innerHTML = `<div class="empty">${rider.currentActiveOrderId && currentFilter === "Requests" ? "Current delivery yahin dikhegi. Complete hone ke baad new requests aayengi." : `No ${currentFilter.toLowerCase()} orders right now.`}</div>`;
     return;
   }
 
   ordersEl.innerHTML = filtered.map(order => {
     const dist = orderDistance(order);
     const financials = calcFinancials(order, dist || 1);
-    const group = currentFilter === "Requests" ? "Requests" : statusGroup(order.status);
+    const group = currentFilter === "Requests" && requestedForMe(order) ? "Requests" : statusGroup(order.status);
     const prepaidOnline = isPaidOnlineOrder(order);
     const unpaidOnline = isUnpaidOnlineOrder(order);
     const convertedCodPaid = isCodConvertedToOnlinePaid(order);
@@ -921,19 +1025,22 @@ function renderOrders(){
       ? "Complete current delivery first"
       : "Accept";
     const requestButtonAction = `acceptRequest('${order.id}')`;
-    const isDelivered = order.status === "Delivered";
+    const normalizedStatus = normalizeStatus(order.status || order.orderStatus);
+    const isDelivered = normalizedStatus === "Delivered";
+    const isCurrentCard = activeOrder?.id === order.id && currentFilter !== "Delivered";
     const riderCollectedOnline = prepaidOnline && order.paymentCollectedBy === rider.riderId;
     const canDeliver = !isDelivered && paymentReady && (convertedCodPaid || !isCashOrder || isCashCollectedOrder(order) || cashSettlementDone) && (!prepaidOnline || prepaidOtpDone || riderCollectedOnline || convertedCodPaid);
     const badgeClass = group === "Requests" ? "request" : group === "Delivered" ? "delivered" : group === "Out For Delivery" ? "out" : "assigned";
     return `
-      <article class="glass order">
+      <article class="glass order ${isCurrentCard ? "current-delivery-card" : ""}">
         <div class="order-top">
           <div>
             <h4>#${order.orderNumber || order.orderId || order.id}</h4>
             <div class="customer">${order.customerName || "Customer"} • ${order.phone || ""}</div>
           </div>
-          <span class="badge ${badgeClass}">${group === "Requests" ? "New Request" : (order.status || "Assigned")}</span>
+          <span class="badge ${badgeClass}">${group === "Requests" ? "New Request" : (normalizedStatus || "Assigned")}</span>
         </div>
+        ${isCurrentCard ? `<div class="single-card-helper"><b>Same card se delivery complete karo</b><span>Next button neeche automatically change hoga.</span></div>${riderFlowStep(normalizedStatus)}` : ""}
         <div class="details">
           <div class="detail"><span>Distance</span><b>${dist ? `${dist} km` : "Pending"}</b></div>
           <div class="detail"><span>Earning</span><b>${formatCurrency(financials.riderEarning)}</b></div>
@@ -950,14 +1057,7 @@ function renderOrders(){
         <div class="actions">
           ${!isDelivered && order.location?.lat ? `<button class="btn-soft" onclick="openCustomer(${order.location.lat},${order.location.lng})">Navigate</button>` : ""}
           ${!isDelivered && order.phone ? `<button class="btn-soft" onclick="callUser('${order.phone}')">Call</button>` : ""}
-          ${group === "Requests" && !isDelivered ? `<button class="btn-green" ${requestLocked ? "disabled" : ""} onclick="${requestButtonAction}">${requestButtonLabel}</button><button class="btn-red" onclick="rejectRequest('${order.id}')">Reject</button>` : ""}
-          ${group === "Assigned" ? `<button class="btn-blue" onclick="pickupOrder('${order.id}')">Picked Up</button>` : ""}
-          ${order.status === "Picked Up" ? `<button class="btn-blue" onclick="startDelivery('${order.id}')">Out For Delivery</button>` : ""}
-          ${order.status === "Out For Delivery" ? `<button class="btn-green" onclick="reachNearby('${order.id}')">Reached Nearby</button>` : ""}
-          ${(order.status === "Reached Nearby" || order.status === "Collect Payment") && !prepaidOnline && !unpaidOnline ? `<button class="btn-green" onclick="markCashReceived('${order.id}')">Cash Received</button><button class="btn-blue" onclick="collectOnline('${order.id}')">Online Payment</button>` : ""}
-          ${isCashCollectedOrder(order) ? `<button class="btn-green" onclick="deliverCashOrder('${order.id}')">Delivered</button>` : ""}
-          ${canDeliver && order.status !== "Out For Delivery" && !isDelivered ? `<button class="btn-green" onclick="deliver('${order.id}', ${dist || 1})">Delivered</button>` : ""}
-          ${isDelivered ? `<button class="btn-green" disabled>Delivered</button>` : ""}
+          ${nextOrderActions(order, { group, isDelivered, requestLocked, requestButtonLabel, requestButtonAction, prepaidOnline, unpaidOnline, canDeliver, dist })}
         </div>
       </article>
     `;
