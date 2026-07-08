@@ -39,6 +39,7 @@ let pendingAuthResolve = null;
 let authNullTimer = null;
 let resendTimer = null;
 let otpDelayNoticeTimer = null;
+let otpPopupKeepAliveTimer = null;
 let webOtpController = null;
 let lastAutoVerifyCode = "";
 const VAPID_KEY_RE = /^[A-Za-z0-9_-]{80,}$/;
@@ -143,6 +144,51 @@ function isOtpSessionActive(){
   return !!(confirmationResult || document.getElementById("authPopup")?.classList.contains("otp-sent"));
 }
 
+function focusOtpField(){
+  const otpInput = $("otp");
+  if(!otpInput) return;
+  requestAnimationFrame(() => {
+    otpInput.focus({ preventScroll:true });
+    otpInput.click?.();
+  });
+}
+
+function stopOtpPopupKeepAlive(){
+  if(otpPopupKeepAliveTimer){
+    clearInterval(otpPopupKeepAliveTimer);
+    otpPopupKeepAliveTimer = null;
+  }
+}
+
+function keepOtpPopupVisible(reason = "otp"){
+  const popup = $("authPopup");
+  const app = $("mainWebsite");
+  if(app) app.style.display = "block";
+  document.body.classList.add("auth-required");
+  document.body.classList.remove("auth-success");
+  if(popup){
+    popup.style.display = "flex";
+    popup.dataset.reason = reason;
+    popup.classList.add("otp-sent");
+  }
+  setAuthStatus("OTP sent. Code enter karke verify karein.", "success");
+  focusOtpField();
+}
+
+function startOtpPopupKeepAlive(reason = "otp"){
+  stopOtpPopupKeepAlive();
+  let attempts = 0;
+  otpPopupKeepAliveTimer = setInterval(() => {
+    attempts += 1;
+    if(auth.currentUser || !isOtpSessionActive() || attempts > 60){
+      stopOtpPopupKeepAlive();
+      return;
+    }
+    const popup = $("authPopup");
+    if(!popup || popup.style.display === "none") keepOtpPopupVisible(reason);
+  }, 1000);
+}
+
 function syncAuthControls(user){
   const needsVerification = document.body.classList.contains("auth-needs-verification") || !!(user && !user.phoneNumber);
   const loggedIn = !!user && !needsVerification;
@@ -211,8 +257,12 @@ function openAuthPopup(reason = "checkout"){
     popup.style.display = "flex";
     popup.dataset.reason = reason;
   }
-  setAuthStatus("Enter mobile number", "info");
-  $("phoneNumber")?.focus();
+  if(isOtpSessionActive()){
+    keepOtpPopupVisible(reason);
+  }else{
+    setAuthStatus("Enter mobile number", "info");
+    $("phoneNumber")?.focus();
+  }
   window.dispatchEvent(new CustomEvent("magneetoz:auth-required", { detail:{ reason } }));
 }
 
@@ -423,6 +473,7 @@ function cleanupOtpSession({ keepRecaptcha = false } = {}){
   otpInFlight = false;
   otpVerifyInFlight = false;
   lastAutoVerifyCode = "";
+  stopOtpPopupKeepAlive();
   stopResendTimer();
   stopOtpListener();
   stopOtpDelayNotice();
@@ -503,6 +554,7 @@ async function sendOTP(options = {}){
   }
 
   otpInFlight = true;
+  openAuthPopup("otp_sending");
   setAuthStatus("Sending OTP...", "info");
   setOtpHelp("Security check ke baad OTP send hoga. Please ek baar tap karke wait karein.");
   setButton(button, true, "Sending OTP...");
@@ -510,21 +562,19 @@ async function sendOTP(options = {}){
 
   try{
     confirmationResult = await signInWithPhoneNumber(auth, `+91${phone}`, await ensureRecaptcha());
-    $("authPopup")?.classList.add("otp-sent");
+    keepOtpPopupVisible("otp_sent");
     const otpInput = $("otp");
     if(otpInput){
       prepareOtpInput();
       setOtpValue("");
-      requestAnimationFrame(() => {
-        otpInput.focus({ preventScroll:true });
-        otpInput.click?.();
-      });
+      focusOtpField();
     }
     setAuthStatus(`OTP sent to ${maskPhone(phone)}. Auto-detecting OTP...`, "success");
     setOtpHelp("OTP 30-60 seconds tak le sakta hai. Resend active hone se pehle wait karein; latest OTP hi valid hota hai.");
     toast("OTP sent", "success");
     startResendTimer(OTP_RESEND_SECONDS);
     startOtpDelayNotice(phone);
+    startOtpPopupKeepAlive("otp_sent");
     startOtpListener();
   }catch(error){
     devLog("sendOTP error:", error);
@@ -575,6 +625,7 @@ async function verifyOTP(){
     stopOtpListener();
     stopResendTimer();
     stopOtpDelayNotice();
+    stopOtpPopupKeepAlive();
     setAuthStatus("Login successful", "success");
     setOtpHelp("Login successful.");
     toast("Login successful", "success");
@@ -713,10 +764,7 @@ onAuthStateChanged(auth, (user) => {
   authNullTimer = setTimeout(() => {
     if(auth.currentUser) return;
     if(isOtpSessionActive()){
-      openAuthPopup($("authPopup")?.dataset.reason || "login");
-      $("authPopup")?.classList.add("otp-sent");
-      setAuthStatus("OTP sent. Code enter karke verify karein.", "success");
-      requestAnimationFrame(() => $("otp")?.focus({ preventScroll:true }));
+      keepOtpPopupVisible($("authPopup")?.dataset.reason || "login");
       authNullTimer = null;
       return;
     }

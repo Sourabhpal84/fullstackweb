@@ -1248,6 +1248,15 @@ function locationDisplayParts(detail = ""){
   };
 }
 
+function calculateCartItemPayable(pricing = calculateInvoicePricing(getCartSubtotal())){
+  const itemPayable = Number(pricing.subtotal || 0)
+    - Number(pricing.couponDiscount || 0)
+    - Number(pricing.offerDiscount || 0)
+    + Number(pricing.gstAmount || 0)
+    + Number(pricing.handlingCharge || 0);
+  return Math.max(0, Math.round(itemPayable));
+}
+
 function updateSelectedLocationUi(detail = ""){
   const display = locationDisplayParts(detail);
   [["heroLocationTitle",display.title],["heroLocationAddress",display.address],["cartLocationTitle",display.title],["cartLocationAddress",display.address]]
@@ -5157,16 +5166,13 @@ function renderCouponPanel(result = calculateInvoicePricing(getCartSubtotal())){
   }
   const breakdown = document.getElementById("cartPriceBreakdown");
   if(breakdown){
+    const itemPayable = calculateCartItemPayable(result);
     breakdown.innerHTML = `
       <div><span>Subtotal</span><b>${formatCurrency(result.subtotal)}</b></div>
-      <div><span>Delivery Distance</span><b>${deliveryDistance ? `${Number(deliveryDistance).toFixed(1)} KM` : "Checking…"}</b></div>
       ${result.offerApplied ? `<div><span>Offer Discount</span><b>-${formatCurrency(result.offerDiscount)}</b></div>` : `<div><span>Coupon Savings</span><b>-${formatCurrency(result.couponDiscount)}</b></div>`}
       <div><span>GST (${result.gstPercent || 0}%)</span><b>${formatCurrency(result.gstAmount || 0)}</b></div>
       <div><span>Handling Charges</span><b>${formatCurrency(result.handlingCharge || 0)}</b></div>
-      <div><span>Delivery Charges</span><b>${result.deliveryCharge ? formatCurrency(result.deliveryCharge) : "FREE"}</b></div>
-      ${result.freeDeliveryDiscount ? `<div><span>Free Delivery</span><b>-${formatCurrency(result.freeDeliveryDiscount)}</b></div>` : ""}
-      ${result.walletDiscount ? `<div><span>Pizza Points</span><b>-${formatCurrency(result.walletDiscount)}</b></div>` : ""}
-      <div class="grand"><span>Grand Total</span><b>${formatCurrency(result.finalTotal)}</b></div>
+      <div class="grand"><span>Item Total</span><b>${formatCurrency(itemPayable)}</b></div>
     `;
   }
 }
@@ -5783,7 +5789,10 @@ function updateCart() {
   renderAvailableCoupons();
   if(totalEl) totalEl.innerText = formatCurrency(couponResult.finalTotal);
   const stickyTotal = document.getElementById("stickyCheckoutTotal");
-  if(stickyTotal) stickyTotal.textContent = formatCurrency(couponResult.finalTotal);
+  const stickyTotalLabel = document.querySelector(".checkout-bar-total small");
+  const cartItemPayable = calculateCartItemPayable(couponResult);
+  if(stickyTotalLabel) stickyTotalLabel.textContent = "Item Total";
+  if(stickyTotal) stickyTotal.textContent = formatCurrency(cartItemPayable);
   if(countEl) countEl.innerText = totalQty;
   if(headerTitle) headerTitle.textContent = `Your Cart (${totalQty} ${totalQty === 1 ? "item" : "items"})`;
   if(hasItems){
@@ -6325,7 +6334,7 @@ async function prepareOrderSummary(options = {}) {
     GST (${pricing.gstPercent}%): ${formatCurrency(pricing.gstAmount)} <br>
     Handling: ${formatCurrency(pricing.handlingCharge)} <br>
     Distance: ${deliveryDistance} km ${estimatedTravelTime ? `(${estimatedTravelTime})` : ""}<br>
-    Delivery: ${formatCurrency(pricing.deliveryCharge)} <br>
+    Delivery charge added: ${pricing.deliveryCharge ? formatCurrency(pricing.deliveryCharge) : "FREE"} <br>
     ${pricing.walletDiscount ? `Pizza Points: -${formatCurrency(pricing.walletDiscount)} <br>` : ""}
     <hr style="margin:6px 0;">
     <strong>Total Payable: ${formatCurrency(pricing.grandTotal)}</strong>
