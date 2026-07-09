@@ -1600,9 +1600,22 @@ function isFallbackDishImage(value = ""){
 function dishImageLookupKey(value = ""){
   return normalizeUnicodeText(value)
     .toLowerCase()
+    .replace(/\bmagneetoz\b/g, "")
     .replace(/[^a-z0-9\u0900-\u097F]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function categoryImageLookupKeys(value = ""){
+  const key = dishImageLookupKey(value);
+  const compact = key
+    .replace(/\bclassic mania\b/g, "pizza")
+    .replace(/\bmagneetoz special\b/g, "pizza")
+    .replace(/\bmagneetoz burger\b/g, "burger")
+    .replace(/\bfries sides\b/g, "garlic bread")
+    .trim();
+  const parts = compact.split(" ").filter(Boolean);
+  return [...new Set([key, compact, ...parts].filter(Boolean))];
 }
 
 function rememberMenuDishImage(name = "", image = ""){
@@ -1700,13 +1713,13 @@ function imageFromRenderedMenuCard(name = "", category = ""){
 }
 
 function imageFromCategoryButton(category = ""){
-  const categoryKey = dishImageLookupKey(category);
-  if(!categoryKey) return "";
+  const categoryKeys = categoryImageLookupKeys(category);
+  if(!categoryKeys.length) return "";
   const buttons = [...document.querySelectorAll(".category-tab, [data-menu-category], [data-menu-group]")];
   const button = buttons.find(item => {
     const text = dishImageLookupKey(item.textContent || item.getAttribute("aria-label") || "");
     const data = dishImageLookupKey(item.dataset?.menuCategory || item.dataset?.menuGroup || "");
-    return text.includes(categoryKey) || data === categoryKey;
+    return categoryKeys.some(key => text.includes(key) || key.includes(text) || data === key || data.includes(key) || key.includes(data));
   });
   const img = button?.querySelector("img");
   const src = normalizeImageUrl(img?.currentSrc || img?.src || img?.getAttribute("src") || "");
@@ -1843,7 +1856,10 @@ function scoreBestSellerDish(dish = {}){
 function bestSellerCardMarkup(dish = {}, index = 0){
   const variant = dishLowestVariant(dish);
   window.__magneetozMenuImages = menuImageByDishName;
-  const image = dishBestImageUrl(dish);
+  const resolvedImage = dishBestImageUrl(dish);
+  const categoryButtonImage = imageFromCategoryButton(dish.category || "");
+  const sourceLooksFallback = isFallbackDishImage(dishImageSource(dish));
+  const image = (sourceLooksFallback || isFallbackDishImage(resolvedImage)) && categoryButtonImage ? categoryButtonImage : resolvedImage;
   const srcset = dishImageSrcset(dish);
   const srcsetAttr = srcset ? `srcset="${escapeHTML(srcset)}" sizes="(max-width: 640px) 204px, 235px"` : "";
   return `
