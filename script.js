@@ -1597,6 +1597,13 @@ function isFallbackDishImage(value = ""){
     || image.includes("placeholder");
 }
 
+function isGenericBrokenBurgerImage(value = ""){
+  const image = String(value || "").trim().toLowerCase();
+  return image.includes("burger%2fburger.png")
+    || image.includes("burger/burger.png")
+    || image.includes("burger%2Fburger.png".toLowerCase());
+}
+
 function dishImageLookupKey(value = ""){
   return normalizeUnicodeText(value)
     .toLowerCase()
@@ -1732,11 +1739,13 @@ function bestSellerRepairImage(card){
   const name = card.dataset.dishName || "";
   const category = card.dataset.dishCategory || "";
   const current = normalizeImageUrl(img.currentSrc || img.src || img.getAttribute("src") || "");
-  if(current && !isFallbackDishImage(current) && img.complete && img.naturalWidth > 12) return;
+  const burgerCategory = categoryImageLookupKeys(category).includes("burger");
+  if(current && !isFallbackDishImage(current) && !isGenericBrokenBurgerImage(current) && img.complete && img.naturalWidth > 12) return;
   const repaired = menuImageByDishName.get(dishImageLookupKey(name))
     || imageFromRenderedMenuCard(name, category)
     || menuImageByCategoryName.get(dishImageLookupKey(category))
-    || imageFromCategoryButton(category);
+    || imageFromCategoryButton(category)
+    || (burgerCategory ? imageFromCategoryButton("burger") : "");
   if(repaired && !isFallbackDishImage(repaired)){
     img.removeAttribute("srcset");
     img.src = repaired;
@@ -1859,7 +1868,9 @@ function bestSellerCardMarkup(dish = {}, index = 0){
   const resolvedImage = dishBestImageUrl(dish);
   const categoryButtonImage = imageFromCategoryButton(dish.category || "");
   const sourceLooksFallback = isFallbackDishImage(dishImageSource(dish));
-  const image = (sourceLooksFallback || isFallbackDishImage(resolvedImage)) && categoryButtonImage ? categoryButtonImage : resolvedImage;
+  const burgerCategory = categoryImageLookupKeys(dish.category || "").includes("burger");
+  const genericBurgerImage = isGenericBrokenBurgerImage(resolvedImage) || isGenericBrokenBurgerImage(dishImageSource(dish));
+  const image = (sourceLooksFallback || isFallbackDishImage(resolvedImage) || genericBurgerImage || burgerCategory) && categoryButtonImage ? categoryButtonImage : resolvedImage;
   const srcset = dishImageSrcset(dish);
   const srcsetAttr = srcset ? `srcset="${escapeHTML(srcset)}" sizes="(max-width: 640px) 204px, 235px"` : "";
   return `
