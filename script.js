@@ -1586,13 +1586,16 @@ function imageMarkup(src, alt, imageSet = null){
 function dishImageSource(dish = {}){
   return dish.image
     || dish.imageUrl
+    || dish.imageURL
+    || dish.photoURL
     || dish.photo
     || dish.thumbnail
+    || (Array.isArray(dish.images) ? dish.images[0] : "")
     || dish.mobileImage
     || dish.desktopImage
     || dish.heroImage
     || dish.bannerImage
-    || "logo_tran.jpeg";
+    || "";
 }
 
 function dishImageSet(dish = {}){
@@ -1919,6 +1922,7 @@ function scoreBestSellerDish(dish = {}){
 
 function bestSellerCardMarkup(dish = {}, index = 0){
   const variant = dishLowestVariant(dish);
+  const sourceImage = dishImageSource(dish);
   window.__magneetozMenuImages = menuImageByDishName;
   const resolvedImage = dishBestImageUrl(dish);
   const categoryButtonImage = imageFromCategoryButton(dish.category || "");
@@ -1926,12 +1930,20 @@ function bestSellerCardMarkup(dish = {}, index = 0){
   const burgerCategory = categoryImageLookupKeys(dish.category || "").includes("burger");
   const genericBurgerImage = isGenericBrokenBurgerImage(resolvedImage) || isGenericBrokenBurgerImage(dishImageSource(dish));
   const image = (sourceLooksFallback || isFallbackDishImage(resolvedImage) || genericBurgerImage || burgerCategory) && categoryButtonImage ? categoryButtonImage : resolvedImage;
+  const usableImage = image && !String(image).startsWith("gs://") ? image : "logo_tran.jpeg";
+  if((!sourceImage || String(sourceImage).startsWith("gs://")) && ["localhost", "127.0.0.1"].includes(location.hostname)){
+    console.warn("[Best Sellers] Missing or invalid public image URL", {
+      id:dish.id,
+      name:dish.name,
+      image
+    });
+  }
   const srcset = dishImageSrcset(dish);
-  const srcsetAttr = srcset ? `srcset="${escapeHTML(srcset)}" sizes="(max-width: 640px) 204px, 235px"` : "";
+  const srcsetAttr = srcset && !String(srcset).includes("gs://") ? `srcset="${escapeHTML(srcset)}" sizes="(max-width: 640px) 204px, 235px"` : "";
   return `
     <article class="homepage-best-seller-card" data-dish-name="${escapeHTML(dish.name || "")}" data-dish-category="${escapeHTML(dish.category || "")}">
       <span class="best-seller-rank">#${index + 1}</span>
-      <img src="${escapeHTML(image)}" ${srcsetAttr} alt="${escapeHTML(dish.name || "MAGNEETOZ best seller")}" width="320" height="240" loading="${index < 3 ? "eager" : "lazy"}" decoding="async">
+      <img src="${escapeHTML(usableImage)}" ${srcsetAttr} alt="${escapeHTML(dish.name || "MAGNEETOZ best seller")}" width="320" height="240" loading="${index < 3 ? "eager" : "lazy"}" decoding="async" onerror="if(!this.dataset.fallbackUsed){this.dataset.fallbackUsed='1';if(['localhost','127.0.0.1'].includes(location.hostname))console.warn('[Best Sellers] Image failed to load',this.currentSrc||this.src);this.removeAttribute('srcset');this.src='logo_tran.jpeg'}">
       <div>
         <small>${escapeHTML(dish.category || "Popular")}</small>
         <strong>${escapeHTML(dish.name || "MAGNEETOZ Item")}</strong>
