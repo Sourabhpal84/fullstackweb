@@ -12066,3 +12066,11 @@ body.otp-login-active #authPopup.otp-sent #otp,
 body.otp-login-active #authPopup.otp-sent #verifyOtpBtn{
   display:block!important;
 }
+
+/* Best seller image repair guard */
+.homepage-best-seller-card > img{
+  display:block!important;
+  overflow:hidden!important;
+  text-indent:-9999px!important;
+  color:transparent!important;
+}

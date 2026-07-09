@@ -1633,6 +1633,18 @@ function rebuildMenuImageIndexFromDom(){
   if(nextByCategory.size) menuImageByCategoryName = nextByCategory;
 }
 
+document.addEventListener("load", event => {
+  const img = event.target;
+  if(!(img instanceof HTMLImageElement)) return;
+  const card = img.closest?.(".inline-menu-section .new-card[data-dish-name]");
+  if(!card) return;
+  const src = normalizeImageUrl(img.currentSrc || img.src || img.getAttribute("src") || "");
+  if(isFallbackDishImage(src) || img.naturalWidth <= 12) return;
+  rememberMenuDishImage(card.dataset.dishName || "", src);
+  rememberMenuCategoryImage(card.dataset.dishCategory || "", src);
+  hydrateBestSellerImages();
+}, true);
+
 function imageCandidateScore(dish = {}){
   const source = normalizeImageUrl(dishImageSource(dish));
   let score = isFallbackDishImage(source) ? 0 : 100;
@@ -1675,9 +1687,61 @@ function dishImageSrcset(dish = {}){
   return buildImageSrcset(dishImageSet(imageDish));
 }
 
-function bestSellerFallbackAttrs(dish = {}){
-  const name = escapeHTML(dishImageLookupKey(dish.name || ""));
-  return `data-best-seller-key="${name}" onerror="this.onerror=null;const img=window.__magneetozMenuImages?.get(this.dataset.bestSellerKey);this.src=img||'logo_tran.jpeg';"`;
+function imageFromRenderedMenuCard(name = "", category = ""){
+  const nameKey = dishImageLookupKey(name);
+  const categoryKey = dishImageLookupKey(category);
+  const cards = [...document.querySelectorAll(".inline-menu-section .new-card[data-dish-name]")];
+  const exact = cards.find(card => dishImageLookupKey(card.dataset.dishName || "") === nameKey);
+  const categoryCard = cards.find(card => categoryKey && dishImageLookupKey(card.dataset.dishCategory || "") === categoryKey);
+  const card = exact || categoryCard;
+  const img = card?.querySelector("img");
+  const src = normalizeImageUrl(img?.currentSrc || img?.src || img?.getAttribute("src") || card?.dataset.dishImage || "");
+  return isFallbackDishImage(src) ? "" : src;
+}
+
+function imageFromCategoryButton(category = ""){
+  const categoryKey = dishImageLookupKey(category);
+  if(!categoryKey) return "";
+  const buttons = [...document.querySelectorAll(".category-tab, [data-menu-category], [data-menu-group]")];
+  const button = buttons.find(item => {
+    const text = dishImageLookupKey(item.textContent || item.getAttribute("aria-label") || "");
+    const data = dishImageLookupKey(item.dataset?.menuCategory || item.dataset?.menuGroup || "");
+    return text.includes(categoryKey) || data === categoryKey;
+  });
+  const img = button?.querySelector("img");
+  const src = normalizeImageUrl(img?.currentSrc || img?.src || img?.getAttribute("src") || "");
+  return isFallbackDishImage(src) ? "" : src;
+}
+
+function bestSellerRepairImage(card){
+  const img = card?.querySelector("img");
+  if(!img) return;
+  const name = card.dataset.dishName || "";
+  const category = card.dataset.dishCategory || "";
+  const current = normalizeImageUrl(img.currentSrc || img.src || img.getAttribute("src") || "");
+  if(current && !isFallbackDishImage(current) && img.complete && img.naturalWidth > 12) return;
+  const repaired = menuImageByDishName.get(dishImageLookupKey(name))
+    || imageFromRenderedMenuCard(name, category)
+    || menuImageByCategoryName.get(dishImageLookupKey(category))
+    || imageFromCategoryButton(category);
+  if(repaired && !isFallbackDishImage(repaired)){
+    img.removeAttribute("srcset");
+    img.src = repaired;
+  }
+}
+
+function hydrateBestSellerImages(){
+  document.querySelectorAll(".homepage-best-seller-card").forEach(card => {
+    bestSellerRepairImage(card);
+    const img = card.querySelector("img");
+    if(img && !img.dataset.bestSellerRepairBound){
+      img.dataset.bestSellerRepairBound = "1";
+      img.addEventListener("error", () => bestSellerRepairImage(card));
+      img.addEventListener("load", () => {
+        if(img.naturalWidth <= 12) bestSellerRepairImage(card);
+      });
+    }
+  });
 }
 
 function dishDataAttrs(d = {}){
@@ -1783,9 +1847,9 @@ function bestSellerCardMarkup(dish = {}, index = 0){
   const srcset = dishImageSrcset(dish);
   const srcsetAttr = srcset ? `srcset="${escapeHTML(srcset)}" sizes="(max-width: 640px) 204px, 235px"` : "";
   return `
-    <article class="homepage-best-seller-card">
+    <article class="homepage-best-seller-card" data-dish-name="${escapeHTML(dish.name || "")}" data-dish-category="${escapeHTML(dish.category || "")}">
       <span class="best-seller-rank">#${index + 1}</span>
-      <img src="${escapeHTML(image)}" ${srcsetAttr} alt="${escapeHTML(dish.name || "MAGNEETOZ best seller")}" width="320" height="240" loading="${index < 3 ? "eager" : "lazy"}" decoding="async" ${bestSellerFallbackAttrs(dish)}>
+      <img src="${escapeHTML(image)}" ${srcsetAttr} alt="${escapeHTML(dish.name || "MAGNEETOZ best seller")}" width="320" height="240" loading="${index < 3 ? "eager" : "lazy"}" decoding="async">
       <div>
         <small>${escapeHTML(dish.category || "Popular")}</small>
         <strong>${escapeHTML(dish.name || "MAGNEETOZ Item")}</strong>
@@ -1815,6 +1879,11 @@ function renderBestSellers(){
     return;
   }
   rail.innerHTML = dishes.map(bestSellerCardMarkup).join("");
+  requestAnimationFrame(() => {
+    hydrateBestSellerImages();
+    setTimeout(hydrateBestSellerImages, 500);
+    setTimeout(hydrateBestSellerImages, 1500);
+  });
 }
 
 window.addBestSellerItem = function(dishId){
