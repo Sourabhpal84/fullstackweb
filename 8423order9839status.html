@@ -20,6 +20,10 @@
     .date-filter button { cursor:pointer; color:var(--accent); }
     .date-filter button:hover { border-color:var(--accent); }
     .date-filter strong { color:var(--accent); font-size:13px; }
+    .homepage-control{max-width:980px;margin:0 auto 18px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;background:#121821;border:1px solid #263241;border-radius:16px;padding:14px}
+    .homepage-control strong{display:block;color:#fff}.homepage-control small{display:block;color:#94a3b8;margin-top:3px}
+    .homepage-control button{min-height:42px;border:1px solid var(--accent);border-radius:12px;background:var(--accent);color:#06110a;padding:0 16px;font:800 13px inherit;cursor:pointer}
+    .homepage-control button.is-hidden{background:#ef4444;border-color:#ef4444;color:#fff}
 
     .orders-grid { display:grid; gap:20px; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); }
     .order-card { background:var(--card); padding:20px; border-radius:20px; border:1px solid #1e2933; transition:0.3s; position:relative; }
@@ -208,6 +212,13 @@
       <button class="save-btn" type="button" onclick="toggleQuickStock()">Toggle Stock</button>
     </div>
   </section>
+  <section class="homepage-control">
+    <div>
+      <strong>Homepage Best Seller</strong>
+      <small id="bestSellerVisibilityText">Checking website visibility...</small>
+    </div>
+    <button type="button" id="bestSellerVisibilityToggle">Loading...</button>
+  </section>
   <section class="ops-panel">
     <h2>Restaurant Availability</h2>
     <div class="ops-grid">
@@ -344,6 +355,30 @@ let latestActiveOrders = [];
 let menuDishCache = [];
 let currentOrderFilter = "All";
 let currentOrderDateKey = todayKey();
+let bestSellerVisible = true;
+
+onSnapshot(doc(db, "settings", "homepage"), snapshot => {
+  bestSellerVisible = snapshot.exists() ? snapshot.data().showBestSellers !== false : true;
+  bestSellerVisibilityText.textContent = bestSellerVisible
+    ? "Best Seller section website par visible hai."
+    : "Best Seller section website se hidden hai.";
+  bestSellerVisibilityToggle.textContent = bestSellerVisible ? "Hide Best Seller" : "Show Best Seller";
+  bestSellerVisibilityToggle.classList.toggle("is-hidden", !bestSellerVisible);
+  bestSellerVisibilityToggle.disabled = false;
+});
+
+bestSellerVisibilityToggle.addEventListener("click", async () => {
+  bestSellerVisibilityToggle.disabled = true;
+  try{
+    await setDoc(doc(db, "settings", "homepage"), {
+      showBestSellers:!bestSellerVisible,
+      updatedAt:serverTimestamp()
+    }, { merge:true });
+  }catch(error){
+    bestSellerVisibilityToggle.disabled = false;
+    alert(error?.message || "Best Seller setting update nahi hui.");
+  }
+});
 let latestRenderedOrders = [];
 let currentRestaurantOpen = true;
 const FUNCTIONS_BASE_URL = "https://asia-south1-magneetoz.cloudfunctions.net";

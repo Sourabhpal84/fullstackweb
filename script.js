@@ -255,6 +255,7 @@ let menuDishesUnsub = null;
 let allMenuDishes = [];
 let menuImageByDishName = new Map();
 let menuImageByCategoryName = new Map();
+const failedBestSellerImages = new Set();
 let smartAssistantIntent = "popular";
 let heroSliderTimer = null;
 let heroSliderIndex = 0;
@@ -1757,15 +1758,42 @@ function bestSellerRepairImage(card){
   const current = normalizeImageUrl(img.currentSrc || img.src || img.getAttribute("src") || "");
   const burgerCategory = categoryImageLookupKeys(category).includes("burger");
   if(current && !isFallbackDishImage(current) && !isGenericBrokenBurgerImage(current) && img.complete && img.naturalWidth > 12) return;
-  const repaired = menuImageByDishName.get(dishImageLookupKey(name))
-    || imageFromRenderedMenuCard(name, category)
-    || menuImageByCategoryName.get(dishImageLookupKey(category))
-    || imageFromCategoryButton(category)
-    || (burgerCategory ? imageFromCategoryButton("burger") : "");
-  if(repaired && !isFallbackDishImage(repaired)){
+  if(current) failedBestSellerImages.add(current);
+  const nameKey = dishImageLookupKey(name);
+  const matchingDishImages = allMenuDishes
+    .filter(item => dishImageLookupKey(item?.name || "") === nameKey)
+    .flatMap(item => {
+      const set = dishImageSet(item);
+      return [
+        dishImageSource(item),
+        imageVariantUrl(set, "mobile"),
+        imageVariantUrl(set, "desktop"),
+        imageVariantUrl(set, "thumbnail"),
+        set?.url
+      ];
+    });
+  const candidates = [
+    imageFromRenderedMenuCard(name, category),
+    ...matchingDishImages,
+    menuImageByDishName.get(nameKey),
+    menuImageByCategoryName.get(dishImageLookupKey(category)),
+    imageFromCategoryButton(category),
+    burgerCategory ? imageFromCategoryButton("burger") : ""
+  ]
+    .map(normalizeImageUrl)
+    .filter((src, index, list) => src
+      && !isFallbackDishImage(src)
+      && !isGenericBrokenBurgerImage(src)
+      && !failedBestSellerImages.has(src)
+      && list.indexOf(src) === index);
+  const repaired = candidates[0];
+  if(repaired){
     img.removeAttribute("srcset");
     img.src = repaired;
+    return;
   }
+  img.removeAttribute("srcset");
+  img.src = "logo_tran.jpeg";
 }
 
 function hydrateBestSellerImages(){
@@ -1774,7 +1802,10 @@ function hydrateBestSellerImages(){
     const img = card.querySelector("img");
     if(img && !img.dataset.bestSellerRepairBound){
       img.dataset.bestSellerRepairBound = "1";
-      img.addEventListener("error", () => bestSellerRepairImage(card));
+      img.addEventListener("error", () => {
+        failedBestSellerImages.add(normalizeImageUrl(img.currentSrc || img.src || ""));
+        bestSellerRepairImage(card);
+      });
       img.addEventListener("load", () => {
         if(img.naturalWidth <= 12) bestSellerRepairImage(card);
       });
