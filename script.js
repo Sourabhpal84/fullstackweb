@@ -253,6 +253,8 @@ let authCacheNullTimer = null;
 let orderTrackingPausedForAuthRefresh = false;
 let menuDishesUnsub = null;
 let allMenuDishes = [];
+let menuImageByDishName = new Map();
+let menuImageByCategoryName = new Map();
 let smartAssistantIntent = "popular";
 let heroSliderTimer = null;
 let heroSliderIndex = 0;
@@ -1595,6 +1597,42 @@ function isFallbackDishImage(value = ""){
     || image.includes("placeholder");
 }
 
+function dishImageLookupKey(value = ""){
+  return normalizeUnicodeText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9\u0900-\u097F]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function rememberMenuDishImage(name = "", image = ""){
+  const key = dishImageLookupKey(name);
+  const src = normalizeImageUrl(image);
+  if(!key || isFallbackDishImage(src)) return;
+  if(!menuImageByDishName.has(key)) menuImageByDishName.set(key, src);
+}
+
+function rememberMenuCategoryImage(category = "", image = ""){
+  const key = dishImageLookupKey(category);
+  const src = normalizeImageUrl(image);
+  if(!key || isFallbackDishImage(src)) return;
+  if(!menuImageByCategoryName.has(key)) menuImageByCategoryName.set(key, src);
+}
+
+function rebuildMenuImageIndexFromDom(){
+  const nextByName = new Map();
+  const nextByCategory = new Map();
+  document.querySelectorAll(".inline-menu-section .new-card[data-dish-name]").forEach(card => {
+    const nameKey = dishImageLookupKey(card.dataset.dishName || "");
+    const categoryKey = dishImageLookupKey(card.dataset.dishCategory || "");
+    const src = normalizeImageUrl(card.dataset.dishImage || card.querySelector("img")?.currentSrc || card.querySelector("img")?.src || "");
+    if(nameKey && !isFallbackDishImage(src) && !nextByName.has(nameKey)) nextByName.set(nameKey, src);
+    if(categoryKey && !isFallbackDishImage(src) && !nextByCategory.has(categoryKey)) nextByCategory.set(categoryKey, src);
+  });
+  if(nextByName.size) menuImageByDishName = nextByName;
+  if(nextByCategory.size) menuImageByCategoryName = nextByCategory;
+}
+
 function imageCandidateScore(dish = {}){
   const source = normalizeImageUrl(dishImageSource(dish));
   let score = isFallbackDishImage(source) ? 0 : 100;
@@ -1607,12 +1645,12 @@ function imageCandidateScore(dish = {}){
 }
 
 function dishImagePeer(dish = {}){
-  const name = normalizeUnicodeText(dish.name || "").toLowerCase();
+  const name = dishImageLookupKey(dish.name || "");
   if(!name || !Array.isArray(allMenuDishes) || allMenuDishes.length < 2) return dish;
   const category = normalizeUnicodeText(dish.category || "").toLowerCase();
   const currentScore = imageCandidateScore(dish);
   const sameName = allMenuDishes
-    .filter(item => item && item !== dish && normalizeUnicodeText(item.name || "").toLowerCase() === name)
+    .filter(item => item && item !== dish && dishImageLookupKey(item.name || "") === name)
     .sort((a, b) => imageCandidateScore(b) - imageCandidateScore(a));
   const betterPeer = sameName.find(item => !category || normalizeUnicodeText(item.category || "").toLowerCase() === category)
     || sameName[0];
@@ -1620,6 +1658,10 @@ function dishImagePeer(dish = {}){
 }
 
 function dishBestImageUrl(dish = {}){
+  const indexedImage = menuImageByDishName.get(dishImageLookupKey(dish.name || ""));
+  if(indexedImage && !isFallbackDishImage(indexedImage)) return indexedImage;
+  const categoryImage = menuImageByCategoryName.get(dishImageLookupKey(dish.category || ""));
+  if(categoryImage && !isFallbackDishImage(categoryImage)) return categoryImage;
   const imageDish = dishImagePeer(dish);
   const directImage = normalizeImageUrl(dishImageSource(imageDish));
   if(directImage && !isFallbackDishImage(directImage)) return directImage;
@@ -1631,6 +1673,11 @@ function dishImageSrcset(dish = {}){
   const directImage = normalizeImageUrl(dishImageSource(imageDish));
   if(directImage && !isFallbackDishImage(directImage)) return "";
   return buildImageSrcset(dishImageSet(imageDish));
+}
+
+function bestSellerFallbackAttrs(dish = {}){
+  const name = escapeHTML(dishImageLookupKey(dish.name || ""));
+  return `data-best-seller-key="${name}" onerror="this.onerror=null;const img=window.__magneetozMenuImages?.get(this.dataset.bestSellerKey);this.src=img||'logo_tran.jpeg';"`;
 }
 
 function dishDataAttrs(d = {}){
@@ -1731,13 +1778,14 @@ function scoreBestSellerDish(dish = {}){
 
 function bestSellerCardMarkup(dish = {}, index = 0){
   const variant = dishLowestVariant(dish);
+  window.__magneetozMenuImages = menuImageByDishName;
   const image = dishBestImageUrl(dish);
   const srcset = dishImageSrcset(dish);
   const srcsetAttr = srcset ? `srcset="${escapeHTML(srcset)}" sizes="(max-width: 640px) 204px, 235px"` : "";
   return `
     <article class="homepage-best-seller-card">
       <span class="best-seller-rank">#${index + 1}</span>
-      <img src="${escapeHTML(image)}" ${srcsetAttr} alt="${escapeHTML(dish.name || "MAGNEETOZ best seller")}" width="320" height="240" loading="${index < 3 ? "eager" : "lazy"}" decoding="async" ${imageFallbackAttrs()}>
+      <img src="${escapeHTML(image)}" ${srcsetAttr} alt="${escapeHTML(dish.name || "MAGNEETOZ best seller")}" width="320" height="240" loading="${index < 3 ? "eager" : "lazy"}" decoding="async" ${bestSellerFallbackAttrs(dish)}>
       <div>
         <small>${escapeHTML(dish.category || "Popular")}</small>
         <strong>${escapeHTML(dish.name || "MAGNEETOZ Item")}</strong>
@@ -4260,6 +4308,8 @@ function loadMenu(){
 
     allMenuDishes.forEach(d => {
       if(!d.available || !d.category) return;
+      rememberMenuDishImage(d.name, dishImageSource(d));
+      rememberMenuCategoryImage(d.category, dishImageSource(d));
 
       const gridId = "grid-cat-" + normalize(d.category);
 
@@ -4294,6 +4344,7 @@ function loadMenu(){
       notifyPremiumUI("magneetoz:menu-rendered", {
         count: document.querySelectorAll(".new-card").length
       });
+      rebuildMenuImageIndexFromDom();
       warmVisibleMenuImages();
       renderBestSellers();
       renderHomepageSections();
