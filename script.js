@@ -1584,16 +1584,53 @@ function dishImageSet(dish = {}){
     || null;
 }
 
+function isFallbackDishImage(value = ""){
+  const image = String(value || "").trim().toLowerCase();
+  return !image
+    || image === "logo_tran.jpeg"
+    || image === "logo_tran.png"
+    || image.endsWith("/logo_tran.jpeg")
+    || image.endsWith("/logo_tran.png")
+    || image.includes("company-logo")
+    || image.includes("placeholder");
+}
+
+function imageCandidateScore(dish = {}){
+  const source = normalizeImageUrl(dishImageSource(dish));
+  let score = isFallbackDishImage(source) ? 0 : 100;
+  const set = dishImageSet(dish);
+  if(imageVariantUrl(set, "mobile")) score += 45;
+  if(imageVariantUrl(set, "desktop")) score += 35;
+  if(imageVariantUrl(set, "thumbnail")) score += 20;
+  if(set?.url && !isFallbackDishImage(set.url)) score += 25;
+  return score;
+}
+
+function dishImagePeer(dish = {}){
+  const name = normalizeUnicodeText(dish.name || "").toLowerCase();
+  if(!name || !Array.isArray(allMenuDishes) || allMenuDishes.length < 2) return dish;
+  const category = normalizeUnicodeText(dish.category || "").toLowerCase();
+  const currentScore = imageCandidateScore(dish);
+  const sameName = allMenuDishes
+    .filter(item => item && item !== dish && normalizeUnicodeText(item.name || "").toLowerCase() === name)
+    .sort((a, b) => imageCandidateScore(b) - imageCandidateScore(a));
+  const betterPeer = sameName.find(item => !category || normalizeUnicodeText(item.category || "").toLowerCase() === category)
+    || sameName[0];
+  return betterPeer && imageCandidateScore(betterPeer) > currentScore ? betterPeer : dish;
+}
+
 function dishBestImageUrl(dish = {}){
-  const directImage = normalizeImageUrl(dishImageSource(dish));
-  if(directImage && directImage !== "logo_tran.jpeg") return directImage;
-  return bestImageUrl(directImage, dishImageSet(dish));
+  const imageDish = dishImagePeer(dish);
+  const directImage = normalizeImageUrl(dishImageSource(imageDish));
+  if(directImage && !isFallbackDishImage(directImage)) return directImage;
+  return bestImageUrl(directImage, dishImageSet(imageDish));
 }
 
 function dishImageSrcset(dish = {}){
-  const directImage = normalizeImageUrl(dishImageSource(dish));
-  if(directImage && directImage !== "logo_tran.jpeg") return "";
-  return buildImageSrcset(dishImageSet(dish));
+  const imageDish = dishImagePeer(dish);
+  const directImage = normalizeImageUrl(dishImageSource(imageDish));
+  if(directImage && !isFallbackDishImage(directImage)) return "";
+  return buildImageSrcset(dishImageSet(imageDish));
 }
 
 function dishDataAttrs(d = {}){
