@@ -947,6 +947,7 @@ let categoriesUnsub = null;
 let categoriesReady = false;
 let homepageSectionsUnsub = null;
 let homepageSections = [];
+let homepageDisplaySettings = { showBestSellers:true };
 let menuListenerStarted = false;
 let categoryGridIds = new Set();
 let cachedCategorySections = [];
@@ -981,6 +982,21 @@ function registerGlobalSnapshot(unsub){
   if(typeof unsub === "function") globalSnapshotUnsubs.push(unsub);
   return unsub;
 }
+
+function comboIsOrderable(combo = {}){
+  return combo && combo.active !== false && combo.deleted !== true && combo.stockOut !== true && combo.inStock !== false;
+}
+
+registerGlobalSnapshot(onSnapshot(doc(db, "settings", "homepage"), snap => {
+  homepageDisplaySettings = snap.exists()
+    ? { showBestSellers:snap.data().showBestSellers !== false }
+    : { showBestSellers:true };
+  renderBestSellers();
+}, error => {
+  console.warn("Homepage display settings failed:", error);
+  homepageDisplaySettings = { showBestSellers:true };
+  renderBestSellers();
+}));
 
 function cleanupCheckoutListeners(){
   try{ orderTrackingUnsub?.(); }catch(error){}
@@ -1892,6 +1908,13 @@ function renderBestSellers(){
   const section = document.getElementById("homepageBestSellers");
   const rail = document.getElementById("homepageBestSellersRail");
   if(!section || !rail) return;
+  if(homepageDisplaySettings.showBestSellers === false){
+    section.classList.remove("is-loading");
+    section.setAttribute("aria-busy", "false");
+    section.hidden = true;
+    rail.innerHTML = "";
+    return;
+  }
   const dishes = [...allMenuDishes]
     .filter(dish => dish?.available && dishLowestVariant(dish).price > 0)
     .sort((a, b) => scoreBestSellerDish(b) - scoreBestSellerDish(a)
@@ -3164,13 +3187,13 @@ async function getReorderMenuDishes(){
 }
 
 async function getReorderCombos(){
-  const cached = (window.__magneetozActiveCombos || []).filter(combo => combo && combo.active !== false && combo.deleted !== true);
+  const cached = (window.__magneetozActiveCombos || []).filter(comboIsOrderable);
   if(cached.length) return cached;
   try{
     const snapshot = await getDocs(collection(db, "combos"));
     const combos = snapshot.docs
       .map(docSnap => ({ id:docSnap.id, ...docSnap.data() }))
-      .filter(combo => combo.active !== false && combo.deleted !== true);
+      .filter(comboIsOrderable);
     window.__magneetozActiveCombos = combos;
     return combos;
   }catch(error){
@@ -4996,7 +5019,7 @@ registerGlobalSnapshot(onSnapshot(query(collection(db, "combos"), orderBy("creat
   if(!host) return;
   const combos = snapshot.docs
     .map(item => ({ id:item.id, ...item.data() }))
-    .filter(combo => combo.active !== false)
+    .filter(comboIsOrderable)
     .sort((a,b) => Number(b.featured === true) - Number(a.featured === true) || Number(a.displayOrder ?? 999) - Number(b.displayOrder ?? 999))
     .slice(0, 12);
   const featured = combos.find(combo => combo.featured === true) || combos[0];
@@ -6283,7 +6306,10 @@ window.addComboToCart = function(id){
     return;
   }
   const combo = (window.__magneetozActiveCombos || []).find(item => item.id === id);
-  if(!combo) return;
+  if(!combo || !comboIsOrderable(combo)){
+    alert("This combo is currently out of stock.");
+    return;
+  }
   const price = Number(combo.comboPrice || 0);
   cart.push({
     name:combo.name || "MAGNEETOZ Combo",

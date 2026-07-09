@@ -1,5 +1,5 @@
-const CACHE_NAME = "magneetoz-premium-v12";
-const RUNTIME_CACHE = "magneetoz-runtime-v6";
+const CACHE_NAME = "magneetoz-premium-v13";
+const RUNTIME_CACHE = "magneetoz-runtime-v7";
 const APP_SHELL = [
   "/",
   "/index.html",

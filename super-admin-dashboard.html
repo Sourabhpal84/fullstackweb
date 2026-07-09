@@ -35,7 +35,19 @@
     <section id="overview" class="section active panel"><h2>Overview</h2><div class="grid" id="overviewList"></div></section>
     <section id="costs" class="section panel"><h2>Magneetoz Cost Engine</h2><p>Ingredient, recipe, margin, food-cost and price-impact management. Internal use only.</p><button class="primary" onclick="location.href='cost-engine.html'">Open Cost Management</button></section>
     <section id="menu" class="section panel"><h2>Add Dish & Categories</h2><p>Add, edit, enable or remove dishes and food categories from the menu.</p><button class="primary" onclick="location.href='add8423category9839dishes.html'">Open Dish Management</button></section>
-    <section id="orders" class="section panel"><h2>Orders</h2><p>Use the full order console for rider assignment and status flow.</p><button class="primary" onclick="location.href='8423order9839status.html'">Open Orders</button></section>
+    <section id="orders" class="section panel">
+      <h2>Orders</h2>
+      <p>Use the full order console for rider assignment and status flow.</p>
+      <div class="actions"><button class="primary" onclick="location.href='8423order9839status.html'">Open Orders</button></div>
+      <div class="item" style="margin-top:12px">
+        <h3>Best Seller Section</h3>
+        <p>Website homepage par Best Seller rail dikhani hai ya hide rakhni hai.</p>
+        <span class="pill" id="bestSellerToggleState">Loading...</span>
+        <div class="actions">
+          <button class="soft" id="bestSellerVisibilityToggle" type="button">Loading...</button>
+        </div>
+      </div>
+    </section>
     <section id="sales" class="section panel"><h2>Sales</h2><p>Revenue, daily, weekly, monthly, and top item reports.</p><button class="primary" onclick="location.href='8423total_sell9839.html'">Open Sales Dashboard</button></section>
     <section id="riders" class="section panel">
       <h2>Rider Admin</h2>
@@ -85,6 +97,12 @@
         <label>Button Text <input id="comboCta" placeholder="Add this combo"></label>
         <label>Display Order <input id="comboOrder" type="number" min="0" value="10"></label>
         <label>Accent Color <input id="comboAccent" type="color" value="#ff6b00"></label>
+        <label>Stock Status
+          <select id="comboStockStatus">
+            <option value="in">In stock</option>
+            <option value="out">Stock out</option>
+          </select>
+        </label>
         <label><input id="comboFeaturedInput" type="checkbox" style="width:auto"> Featured hero combo</label>
         <label style="grid-column:1/-1">Highlights <input id="comboHighlights" placeholder="Medium Pizza, Fries, 2 Cold Drinks"></label>
         <label style="grid-column:1/-1">Description <textarea id="comboDescription"></textarea></label>
@@ -114,6 +132,7 @@ const fmt = n => new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",
 let combos=[], offers=[];
 let offerEngine=null;
 let comboUploadTask=null;
+let homepageSettings={showBestSellers:true};
 function showComboPreview(url=comboImage.value.trim()){comboImagePreview.src=url||"";comboImagePreview.classList.toggle("show",!!url)}
 comboImage.addEventListener("input",()=>showComboPreview());
 comboImageFile.addEventListener("change",()=>{const file=comboImageFile.files?.[0];if(file)showComboPreview(URL.createObjectURL(file))});
@@ -172,12 +191,17 @@ function renderOfferEngineStatus(){
   const categories=offerEngine?.eligibleCategories?.length?offerEngine.eligibleCategories.join(", "):"No category selected";
   offerEngineStatus.innerHTML=`<h3>BOGO Offer Engine</h3><p>${active?"Offer is live on website.":"Offer is disabled. Normal checkout active."}</p><span class="pill ${active?"on":"off"}">${active?"Active":"Disabled"}</span><p style="margin-top:8px">Type: <b>${type}</b><br>Categories: ${categories}</p><div class="actions"><button class="primary" onclick="location.href='offers-admin.html'">Open BOGO Manager</button></div>`;
 }
+onSnapshot(doc(db,"settings","homepage"), snap=>{homepageSettings=snap.exists()?{showBestSellers:snap.data().showBestSellers!==false}: {showBestSellers:true};renderBestSellerToggle();});
+function renderBestSellerToggle(){const visible=homepageSettings.showBestSellers!==false;bestSellerToggleState.textContent=visible?"Visible on website":"Hidden from website";bestSellerToggleState.className=`pill ${visible?"on":"off"}`;bestSellerVisibilityToggle.textContent=visible?"Hide Best Seller":"Show Best Seller";}
+bestSellerVisibilityToggle.onclick=async()=>{const next=homepageSettings.showBestSellers===false;bestSellerVisibilityToggle.disabled=true;try{await setDoc(doc(db,"settings","homepage"),{showBestSellers:next,updatedAt:serverTimestamp()},{merge:true});}finally{bestSellerVisibilityToggle.disabled=false;}};
 onSnapshot(query(collection(db,"combos"), orderBy("createdAt","desc")), snap => {combos=snap.docs.map(d=>({id:d.id,...d.data()}));mCombos.textContent=combos.length;renderCombos();});
-function renderCombos(){const ordered=[...combos].sort((a,b)=>Number(a.displayOrder??999)-Number(b.displayOrder??999));comboList.innerHTML=ordered.map(c=>`<div class="item"><h3>${c.name||"Combo"}</h3><p>${c.itemsIncluded||""}</p><p>${fmt(c.comboPrice)} <s>${fmt(c.originalPrice)}</s></p><span class="pill ${c.active!==false?"on":"off"}">${c.active!==false?"Active":"Inactive"}</span><div class="combo-order-controls"><button class="soft" onclick="moveCombo('${c.id}','top')">Top</button><button class="soft" onclick="moveCombo('${c.id}','up')">↑</button><button class="soft" onclick="moveCombo('${c.id}','down')">↓</button><button class="soft" onclick="moveCombo('${c.id}','bottom')">Bottom</button></div><div class="actions"><button class="soft" onclick="editCombo('${c.id}')">Edit</button><button class="soft" onclick="toggleCombo('${c.id}',${c.active===false})">${c.active===false?"Activate":"Deactivate"}</button><button class="danger" onclick="deleteCombo('${c.id}')">Delete</button></div></div>`).join("") || "<div class='item'><p>No combos yet.</p></div>"}
+function comboInStock(c={}){return c.stockOut!==true && c.inStock!==false}
+function renderCombos(){const ordered=[...combos].sort((a,b)=>Number(a.displayOrder??999)-Number(b.displayOrder??999));comboList.innerHTML=ordered.map(c=>{const inStock=comboInStock(c);return `<div class="item"><h3>${c.name||"Combo"}</h3><p>${c.itemsIncluded||""}</p><p>${fmt(c.comboPrice)} <s>${fmt(c.originalPrice)}</s></p><span class="pill ${c.active!==false?"on":"off"}">${c.active!==false?"Active":"Inactive"}</span> <span class="pill ${inStock?"on":"off"}">${inStock?"In stock":"Stock out"}</span><div class="combo-order-controls"><button class="soft" onclick="moveCombo('${c.id}','top')">Top</button><button class="soft" onclick="moveCombo('${c.id}','up')">↑</button><button class="soft" onclick="moveCombo('${c.id}','down')">↓</button><button class="soft" onclick="moveCombo('${c.id}','bottom')">Bottom</button></div><div class="actions"><button class="soft" onclick="editCombo('${c.id}')">Edit</button><button class="soft" onclick="toggleComboStock('${c.id}',${!inStock})">${inStock?"Mark Stock Out":"Mark In Stock"}</button><button class="soft" onclick="toggleCombo('${c.id}',${c.active===false})">${c.active===false?"Activate":"Deactivate"}</button><button class="danger" onclick="deleteCombo('${c.id}')">Delete</button></div></div>`}).join("") || "<div class='item'><p>No combos yet.</p></div>"}
 window.moveCombo=async(id,direction)=>{const ordered=[...combos].sort((a,b)=>Number(a.displayOrder??999)-Number(b.displayOrder??999));const current=ordered.findIndex(c=>c.id===id);if(current<0)return;const target=direction==="top"?0:direction==="bottom"?ordered.length-1:direction==="up"?Math.max(0,current-1):Math.min(ordered.length-1,current+1);if(target===current)return;const [moved]=ordered.splice(current,1);ordered.splice(target,0,moved);await Promise.all(ordered.map((combo,index)=>updateDoc(doc(db,"combos",combo.id),{displayOrder:index+1,updatedAt:serverTimestamp()})));};
-comboForm.addEventListener("submit",async e=>{e.preventDefault();if(comboUploadTask){alert("Please wait for image upload to finish.");return}const id=comboId.value;const payload={name:comboName.value.trim(),itemsIncluded:comboItems.value.trim(),originalPrice:Number(comboOriginal.value),comboPrice:Number(comboPrice.value),image:comboImage.value.trim()||"logo_tran.png",badge:comboBadge.value.trim(),subtitle:comboSubtitle.value.trim(),ctaText:comboCta.value.trim()||"Add Combo",displayOrder:Number(comboOrder.value)||0,accentColor:comboAccent.value||"#ff6b00",featured:comboFeaturedInput.checked,highlights:comboHighlights.value.trim(),description:comboDescription.value.trim(),active:true,updatedAt:serverTimestamp()}; if(id){await updateDoc(doc(db,"combos",id),payload)}else{await addDoc(collection(db,"combos"),{...payload,createdAt:serverTimestamp()})} comboForm.reset();comboAccent.value="#ff6b00";comboOrder.value="10";comboImagePreview.classList.remove("show");comboUploadStatus.textContent="JPG, PNG, WEBP or AVIF — maximum 8 MB.";});
-window.editCombo=id=>{const c=combos.find(x=>x.id===id); if(!c)return; comboId.value=id; comboName.value=c.name||""; comboItems.value=c.itemsIncluded||""; comboOriginal.value=c.originalPrice||0; comboPrice.value=c.comboPrice||0; comboImage.value=c.image||"";showComboPreview(c.image||"");comboBadge.value=c.badge||"";comboSubtitle.value=c.subtitle||"";comboCta.value=c.ctaText||"";comboOrder.value=c.displayOrder??10;comboAccent.value=c.accentColor||"#ff6b00";comboFeaturedInput.checked=c.featured===true;comboHighlights.value=c.highlights||"";comboDescription.value=c.description||"";};
+comboForm.addEventListener("submit",async e=>{e.preventDefault();if(comboUploadTask){alert("Please wait for image upload to finish.");return}const id=comboId.value;const stockOut=comboStockStatus.value==="out";const payload={name:comboName.value.trim(),itemsIncluded:comboItems.value.trim(),originalPrice:Number(comboOriginal.value),comboPrice:Number(comboPrice.value),image:comboImage.value.trim()||"logo_tran.png",badge:comboBadge.value.trim(),subtitle:comboSubtitle.value.trim(),ctaText:comboCta.value.trim()||"Add Combo",displayOrder:Number(comboOrder.value)||0,accentColor:comboAccent.value||"#ff6b00",stockOut,inStock:!stockOut,stockStatus:stockOut?"out":"in",featured:comboFeaturedInput.checked,highlights:comboHighlights.value.trim(),description:comboDescription.value.trim(),active:true,updatedAt:serverTimestamp()}; if(id){await updateDoc(doc(db,"combos",id),payload)}else{await addDoc(collection(db,"combos"),{...payload,createdAt:serverTimestamp()})} comboForm.reset();comboAccent.value="#ff6b00";comboOrder.value="10";comboStockStatus.value="in";comboImagePreview.classList.remove("show");comboUploadStatus.textContent="JPG, PNG, WEBP or AVIF — maximum 8 MB.";});
+window.editCombo=id=>{const c=combos.find(x=>x.id===id); if(!c)return; comboId.value=id; comboName.value=c.name||""; comboItems.value=c.itemsIncluded||""; comboOriginal.value=c.originalPrice||0; comboPrice.value=c.comboPrice||0; comboImage.value=c.image||"";showComboPreview(c.image||"");comboBadge.value=c.badge||"";comboSubtitle.value=c.subtitle||"";comboCta.value=c.ctaText||"";comboOrder.value=c.displayOrder??10;comboAccent.value=c.accentColor||"#ff6b00";comboStockStatus.value=comboInStock(c)?"in":"out";comboFeaturedInput.checked=c.featured===true;comboHighlights.value=c.highlights||"";comboDescription.value=c.description||"";};
 window.toggleCombo=(id,active)=>updateDoc(doc(db,"combos",id),{active,updatedAt:serverTimestamp()});
+window.toggleComboStock=(id,inStock)=>updateDoc(doc(db,"combos",id),{inStock,stockOut:!inStock,stockStatus:inStock?"in":"out",updatedAt:serverTimestamp()});
 window.deleteCombo=async id=>{if(await MagneetozNotify.confirm("Delete this combo?")) await deleteDoc(doc(db,"combos",id));};
 onSnapshot(query(collection(db,"feedback"), orderBy("createdAt","desc")), snap => {feedbackList.innerHTML=snap.docs.slice(0,8).map(d=>{const f=d.data();return `<div class="item"><h3>${"â˜…".repeat(f.rating||0)}</h3><p>${f.comment||"No comment"}</p><span class="pill">${f.customerName||f.phone||"Customer"}</span></div>`}).join("") || "<div class='item'><p>No feedback yet.</p></div>"});
 onSnapshot(doc(db,"settings","restaurant"), snap=>{const s=snap.data()||{};settingLat.value=s.location?.lat??"";settingLng.value=s.location?.lng??""});
