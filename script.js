@@ -1646,7 +1646,7 @@ function rememberMenuDishImage(name = "", image = ""){
   const key = dishImageLookupKey(name);
   const src = normalizeImageUrl(image);
   if(!key || isFallbackDishImage(src)) return;
-  if(!menuImageByDishName.has(key)) menuImageByDishName.set(key, src);
+  menuImageByDishName.set(key, src);
 }
 
 function rememberMenuCategoryImage(category = "", image = ""){
@@ -1662,7 +1662,9 @@ function rebuildMenuImageIndexFromDom(){
   document.querySelectorAll(".inline-menu-section .new-card[data-dish-name]").forEach(card => {
     const nameKey = dishImageLookupKey(card.dataset.dishName || "");
     const categoryKey = dishImageLookupKey(card.dataset.dishCategory || "");
-    const src = normalizeImageUrl(card.dataset.dishImage || card.querySelector("img")?.currentSrc || card.querySelector("img")?.src || "");
+    const img = card.querySelector("img");
+    const renderedSrc = img?.complete && img.naturalWidth > 12 ? (img.currentSrc || img.src) : "";
+    const src = normalizeImageUrl(renderedSrc || card.dataset.dishImage || img?.src || "");
     if(nameKey && !isFallbackDishImage(src) && !nextByName.has(nameKey)) nextByName.set(nameKey, src);
     if(categoryKey && !isFallbackDishImage(src) && !nextByCategory.has(categoryKey)) nextByCategory.set(categoryKey, src);
   });
@@ -1756,7 +1758,13 @@ function bestSellerRepairImage(card){
   const name = card.dataset.dishName || "";
   const category = card.dataset.dishCategory || "";
   const current = normalizeImageUrl(img.currentSrc || img.src || img.getAttribute("src") || "");
+  const renderedMenuImage = imageFromRenderedMenuCard(name, category);
   const burgerCategory = categoryImageLookupKeys(category).includes("burger");
+  if(renderedMenuImage && renderedMenuImage !== current && !failedBestSellerImages.has(renderedMenuImage)){
+    img.removeAttribute("srcset");
+    img.src = renderedMenuImage;
+    return;
+  }
   if(current && !isFallbackDishImage(current) && !isGenericBrokenBurgerImage(current) && img.complete && img.naturalWidth > 12) return;
   if(current) failedBestSellerImages.add(current);
   const nameKey = dishImageLookupKey(name);
@@ -1773,7 +1781,7 @@ function bestSellerRepairImage(card){
       ];
     });
   const candidates = [
-    imageFromRenderedMenuCard(name, category),
+    renderedMenuImage,
     ...matchingDishImages,
     menuImageByDishName.get(nameKey),
     menuImageByCategoryName.get(dishImageLookupKey(category)),
