@@ -1,5 +1,5 @@
-const CACHE_NAME = "magneetoz-premium-v11";
-const RUNTIME_CACHE = "magneetoz-runtime-v5";
+const CACHE_NAME = "magneetoz-premium-v12";
+const RUNTIME_CACHE = "magneetoz-runtime-v6";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -46,7 +46,14 @@ self.addEventListener("fetch", event => {
 
   if(url.pathname.endsWith(".js") || url.pathname.endsWith(".mjs")){
     event.respondWith(
-      fetch(event.request, { cache:"no-store" })
+      fetch(event.request)
+        .then(response => {
+          const copy = response.clone();
+          caches.open(RUNTIME_CACHE)
+            .then(cache => cache.put(event.request, copy))
+            .catch(() => {});
+          return response;
+        })
         .catch(() => caches.match(event.request))
     );
     return;

@@ -1564,11 +1564,43 @@ function imageMarkup(src, alt, imageSet = null){
   </span>`;
 }
 
+function dishImageSource(dish = {}){
+  return dish.image
+    || dish.imageUrl
+    || dish.photo
+    || dish.thumbnail
+    || dish.mobileImage
+    || dish.desktopImage
+    || dish.heroImage
+    || dish.bannerImage
+    || "logo_tran.jpeg";
+}
+
+function dishImageSet(dish = {}){
+  return dish.imageSet
+    || dish.photoSet
+    || dish.thumbnailSet
+    || dish.heroImageSet
+    || null;
+}
+
+function dishBestImageUrl(dish = {}){
+  const directImage = normalizeImageUrl(dishImageSource(dish));
+  if(directImage && directImage !== "logo_tran.jpeg") return directImage;
+  return bestImageUrl(directImage, dishImageSet(dish));
+}
+
+function dishImageSrcset(dish = {}){
+  const directImage = normalizeImageUrl(dishImageSource(dish));
+  if(directImage && directImage !== "logo_tran.jpeg") return "";
+  return buildImageSrcset(dishImageSet(dish));
+}
+
 function dishDataAttrs(d = {}){
   return `
     data-dish-name="${escapeHTML(normalizeUnicodeText(d.name || ""))}"
     data-dish-desc="${escapeHTML(normalizeUnicodeText(d.description || "Fresh MAGNEETOZ favourite"))}"
-    data-dish-image="${escapeHTML(bestImageUrl(d.image, d.imageSet))}"
+    data-dish-image="${escapeHTML(dishBestImageUrl(d))}"
     data-dish-category="${escapeHTML(d.category || "Recommended")}"
     data-dish-type="${escapeHTML(d.type || "size_based")}"
   `;
@@ -1612,7 +1644,7 @@ function addDishObjectToCart(dish = {}, qty = 1){
     size:variant.size,
     qty,
     category:dish.category || "Recommended",
-    image:normalizeImageUrl(dish.image),
+    image:dishBestImageUrl(dish),
     baseUnitPrice:variant.price,
     unitPrice:variant.price,
     price:variant.price * qty
@@ -1662,10 +1694,13 @@ function scoreBestSellerDish(dish = {}){
 
 function bestSellerCardMarkup(dish = {}, index = 0){
   const variant = dishLowestVariant(dish);
+  const image = dishBestImageUrl(dish);
+  const srcset = dishImageSrcset(dish);
+  const srcsetAttr = srcset ? `srcset="${escapeHTML(srcset)}" sizes="(max-width: 640px) 204px, 235px"` : "";
   return `
     <article class="homepage-best-seller-card">
       <span class="best-seller-rank">#${index + 1}</span>
-      <img src="${escapeHTML(bestImageUrl(dish.image, dish.imageSet))}" alt="${escapeHTML(dish.name || "MAGNEETOZ best seller")}" width="320" height="240" loading="${index < 3 ? "eager" : "lazy"}" decoding="async" ${imageFallbackAttrs()}>
+      <img src="${escapeHTML(image)}" ${srcsetAttr} alt="${escapeHTML(dish.name || "MAGNEETOZ best seller")}" width="320" height="240" loading="${index < 3 ? "eager" : "lazy"}" decoding="async" ${imageFallbackAttrs()}>
       <div>
         <small>${escapeHTML(dish.category || "Popular")}</small>
         <strong>${escapeHTML(dish.name || "MAGNEETOZ Item")}</strong>
@@ -8064,6 +8099,43 @@ function orderItemBreakdownHTML(item = {}, moneyFormatter = formatCurrency){
   return lines.map(line => `<small>${escapeHTML(line)}</small>`).join("");
 }
 
+function loadExternalScriptOnce(src, globalCheck){
+  if(typeof globalCheck === "function" && globalCheck()) return Promise.resolve();
+  window.__magneetozScriptLoads = window.__magneetozScriptLoads || {};
+  if(window.__magneetozScriptLoads[src]) return window.__magneetozScriptLoads[src];
+  window.__magneetozScriptLoads[src] = new Promise((resolve, reject) => {
+    const existing = [...document.scripts].find(script => script.src === src);
+    if(existing){
+      existing.addEventListener("load", () => resolve(), { once:true });
+      existing.addEventListener("error", () => reject(new Error(`Unable to load ${src}`)), { once:true });
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.crossOrigin = "anonymous";
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error(`Unable to load ${src}`));
+    document.head.appendChild(script);
+  });
+  return window.__magneetozScriptLoads[src];
+}
+
+async function ensureInvoicePdfTools(){
+  await loadExternalScriptOnce(
+    "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js",
+    () => !!window.html2canvas
+  );
+  await loadExternalScriptOnce(
+    "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
+    () => !!window.jspdf?.jsPDF
+  );
+  return {
+    html2canvas:window.html2canvas,
+    jsPDF:window.jspdf?.jsPDF
+  };
+}
+
 window.downloadInvoicePDF = async function(orderId){
   const localOrder = liveOrders.find(order => order.id === orderId);
   let order = localOrder;
@@ -8073,15 +8145,15 @@ window.downloadInvoicePDF = async function(orderId){
     order = { id:snap.id, ...snap.data() };
   }
   const invoice = invoiceRows(order);
-  const jsPDF = window.jspdf?.jsPDF;
-  if(!jsPDF){
-    alert("Invoice PDF tool is still loading. Please try again in a moment.");
+  let tools;
+  try{
+    tools = await ensureInvoicePdfTools();
+  }catch(error){
+    console.warn("Invoice PDF tools failed to load:", error);
+    alert("Invoice PDF tool load nahi ho pa raha. Please internet check karke retry karein.");
     return;
   }
-  if(!window.html2canvas){
-    alert("Invoice PDF renderer is still loading. Please try again in a moment.");
-    return;
-  }
+  const jsPDF = tools.jsPDF;
   const money = value => `Rs. ${Math.round(Number(value) || 0).toLocaleString("en-IN")}`;
   const rows = (order.items || []).map(item => {
     const qty = Number(item.qty || 1);

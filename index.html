@@ -161,6 +161,12 @@ base-uri 'self';
     rel="preconnect"
     href="https://fonts.gstatic.com"
     crossorigin />
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin />
+  <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin />
+  <link rel="preconnect" href="https://checkout.razorpay.com" crossorigin />
+  <link rel="dns-prefetch" href="//cdnjs.cloudflare.com" />
+  <link rel="preload" as="image" href="logo_tran.jpeg" fetchpriority="high" />
 
   <!-- GOOGLE FONTS -->
   <link
@@ -170,7 +176,7 @@ base-uri 'self';
   <!-- CSS -->
   <link
     rel="stylesheet"
-    href="style.css" />
+    href="style.css?v=20260709-otp-popup-guard" />
 
   <script type="application/ld+json">
   {
@@ -1367,13 +1373,11 @@ Verify OTP
 
   <!-- RAZORPAY -->
   <script src="https://checkout.razorpay.com/v1/checkout.js" defer></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 
   <!-- MODULES -->
   <script type="module" src="./firebase.js?v=20260524-restaurant-location"></script>
-  <script type="module" src="./auth.js?v=20260621-recaptcha-fresh-invisible"></script>
-<script type="module" src="./script.js?v=20260618-homepage-sections"></script>
+  <script type="module" src="./auth.js?v=20260709-otp-popup-guard"></script>
+<script type="module" src="./script.js?v=20260709-best-seller-images"></script>
 
 <script>
 
@@ -1415,11 +1419,11 @@ window.addEventListener("unhandledrejection", (e) => {
 </script>
 
 
-<script type="module" src="premium-ui.js"></script>
+<script type="module" src="premium-ui.js?v=20260709-performance"></script>
 
 
 
-  <script src="app-notifications.js" defer></script>
+  <script src="app-notifications.js?v=20260709-performance" defer></script>
 </body>
 
 </html>

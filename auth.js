@@ -40,6 +40,8 @@ let authNullTimer = null;
 let resendTimer = null;
 let otpDelayNoticeTimer = null;
 let otpPopupKeepAliveTimer = null;
+let otpPopupObserver = null;
+let otpPopupRestoring = false;
 let webOtpController = null;
 let lastAutoVerifyCode = "";
 const VAPID_KEY_RE = /^[A-Za-z0-9_-]{80,}$/;
@@ -158,25 +160,51 @@ function stopOtpPopupKeepAlive(){
     clearInterval(otpPopupKeepAliveTimer);
     otpPopupKeepAliveTimer = null;
   }
+  if(otpPopupObserver){
+    otpPopupObserver.disconnect();
+    otpPopupObserver = null;
+  }
+  document.body.classList.remove("otp-login-active");
 }
 
 function keepOtpPopupVisible(reason = "otp"){
+  if(otpPopupRestoring) return;
+  otpPopupRestoring = true;
   const popup = $("authPopup");
   const app = $("mainWebsite");
   if(app) app.style.display = "block";
   document.body.classList.add("auth-required");
+  document.body.classList.add("otp-login-active");
   document.body.classList.remove("auth-success");
   if(popup){
     popup.style.display = "flex";
+    popup.style.opacity = "1";
+    popup.style.visibility = "visible";
+    popup.style.pointerEvents = "auto";
     popup.dataset.reason = reason;
     popup.classList.add("otp-sent");
   }
   setAuthStatus("OTP sent. Code enter karke verify karein.", "success");
   focusOtpField();
+  otpPopupRestoring = false;
 }
 
 function startOtpPopupKeepAlive(reason = "otp"){
   stopOtpPopupKeepAlive();
+  const popup = $("authPopup");
+  if(popup){
+    otpPopupObserver = new MutationObserver(() => {
+      if(auth.currentUser || !isOtpSessionActive()) return;
+      const hidden = popup.style.display === "none"
+        || popup.style.visibility === "hidden"
+        || popup.style.opacity === "0"
+        || document.body.classList.contains("auth-success")
+        || !popup.classList.contains("otp-sent");
+      if(hidden) keepOtpPopupVisible(reason);
+    });
+    otpPopupObserver.observe(popup, { attributes:true, attributeFilter:["style","class"] });
+    otpPopupObserver.observe(document.body, { attributes:true, attributeFilter:["class"] });
+  }
   let attempts = 0;
   otpPopupKeepAliveTimer = setInterval(() => {
     attempts += 1;
@@ -185,8 +213,8 @@ function startOtpPopupKeepAlive(reason = "otp"){
       return;
     }
     const popup = $("authPopup");
-    if(!popup || popup.style.display === "none") keepOtpPopupVisible(reason);
-  }, 1000);
+    if(!popup || popup.style.display === "none" || popup.style.visibility === "hidden" || popup.style.opacity === "0" || document.body.classList.contains("auth-success")) keepOtpPopupVisible(reason);
+  }, 250);
 }
 
 function syncAuthControls(user){

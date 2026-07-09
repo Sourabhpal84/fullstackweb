@@ -12044,3 +12044,25 @@ body.dark-theme #combosSection .combo-feature-copy>strong{color:#cbd5e1!importan
     margin-top:10px!important;
   }
 }
+
+/* OTP login guard: keep verification popup visible after Send OTP */
+body.otp-login-active #authPopup,
+body.otp-login-active #authPopup.otp-sent,
+body.auth-success.otp-login-active #authPopup,
+body.auth-success.otp-login-active #authPopup.otp-sent{
+  display:flex!important;
+  opacity:1!important;
+  visibility:visible!important;
+  pointer-events:auto!important;
+  z-index:999999!important;
+}
+body.otp-login-active #authPopup .auth-box,
+body.auth-success.otp-login-active #authPopup .auth-box{
+  opacity:1!important;
+  visibility:visible!important;
+  pointer-events:auto!important;
+}
+body.otp-login-active #authPopup.otp-sent #otp,
+body.otp-login-active #authPopup.otp-sent #verifyOtpBtn{
+  display:block!important;
+}
