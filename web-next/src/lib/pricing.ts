@@ -24,9 +24,7 @@ function normalizePricingText(value?: string) {
 }
 
 export function isPizzaManiaOnionPizza(item: Pick<CartItem, "name" | "category">) {
-  if (normalizePricingText(item.name) !== ONION_PIZZA_NAME) return false;
-  const category = normalizePricingText(item.category);
-  return !category || category === PIZZA_MANIA_CATEGORY || category.includes("pizza") || category.includes("piza");
+  return normalizePricingText(item.name) === ONION_PIZZA_NAME;
 }
 
 export function cartItemLineTotal(item: CartItem) {

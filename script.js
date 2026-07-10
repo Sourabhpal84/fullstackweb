@@ -3134,9 +3134,7 @@ function normalizePricingRuleText(value = ""){
 }
 
 function isPizzaManiaOnionPizza(item = {}){
-  if(normalizePricingRuleText(item.name) !== PIZZA_MANIA_ONION_RULE.name) return false;
-  const category = normalizePricingRuleText(item.category || item.dishCategory);
-  return !category || category === PIZZA_MANIA_ONION_RULE.category || category.includes("pizza") || category.includes("piza");
+  return normalizePricingRuleText(item.name) === PIZZA_MANIA_ONION_RULE.name;
 }
 
 function cartBaseLineTotal(item = {}, qty = Number(item.qty || item.quantity || 1)){
