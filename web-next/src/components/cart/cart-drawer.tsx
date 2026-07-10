@@ -9,7 +9,7 @@ import { db } from "@/lib/firebase";
 import { useCartStore } from "@/lib/cart-store";
 import { formatCurrency } from "@/lib/format";
 import { createPaymentSession, loadRazorpayScript, verifyPayment } from "@/lib/checkout";
-import { calculatePricing, validateCoupon } from "@/lib/pricing";
+import { calculatePricing, cartItemLineTotal, checkoutCartItems, validateCoupon } from "@/lib/pricing";
 import { createCodOrder, type CodOrderDraft } from "@/lib/orders";
 import { calculateOffer, PIZZA_POINTS_BOGO_MESSAGE } from "@/lib/offerEngine";
 import type { ActiveOffer } from "@/lib/offerTypes";
@@ -31,6 +31,7 @@ export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCou
     [categories, checkoutContext.activeCoupon, checkoutContext.distanceKm, couponLocked, items]
   );
   const payableTotal = Math.max(0, pricing.grandTotal - offer.discount);
+  const checkoutItems = useMemo(() => checkoutCartItems(items), [items]);
   const offerSignature = useMemo(
     () => `${activeOffer?.type || "no_offer"}:${activeOffer?.active === false ? "off" : "on"}:${activeOffer?.eligibleCategories?.join("|") || "all"}:${items.map((item) => `${item.id}:${item.qty}:${item.price}`).join("|")}`,
     [activeOffer, items]
@@ -71,7 +72,7 @@ export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCou
       landmark: checkoutContext.customerLandmark,
       addressLat: checkoutContext.customerLocation?.lat || null,
       addressLng: checkoutContext.customerLocation?.lng || null,
-      items: items.map((item) => ({
+      items: checkoutItems.map((item) => ({
         id: item.dishId,
         name: item.name,
         price: item.price,
@@ -127,7 +128,7 @@ export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCou
       const loaded = await loadRazorpayScript();
       if (!loaded || !window.Razorpay) throw new Error("Payment gateway unavailable");
       const draft = orderDraft("online");
-      const session = await createPaymentSession(items, draft, payableTotal);
+      const session = await createPaymentSession(checkoutItems, draft, payableTotal);
       const razorpay = new window.Razorpay({
         key: session.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         amount: Math.round(session.amount * 100),
@@ -161,7 +162,7 @@ export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCou
     }
     setBusy(true);
     try {
-      const result = await createCodOrder(orderDraft("cod"), items);
+      const result = await createCodOrder(orderDraft("cod"), checkoutItems);
       trackEvent("purchase", { value: payableTotal, currency: "INR", payment_type: "cod", order_number: result.orderNumber });
       clear();
       setOpen(false);
@@ -193,7 +194,7 @@ export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCou
               </div>
               <div className="min-w-0 flex-1">
                 <h3 className="truncate text-sm font-black">{item.name}</h3>
-                <p className="mt-1 text-xs text-white/55">{formatCurrency(item.price)}</p>
+                <p className="mt-1 text-xs text-white/55">{formatCurrency(cartItemLineTotal(item))}</p>
                 <div className="mt-3 flex items-center gap-2">
                   <button className="grid h-8 w-8 place-items-center rounded-full bg-white/10" onClick={() => changeQty(item.id, -1)} aria-label="Decrease quantity"><Minus size={14} /></button>
                   <b>{item.qty}</b>

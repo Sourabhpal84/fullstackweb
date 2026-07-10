@@ -14,8 +14,38 @@ export type Pricing = {
   grandTotal: number;
 };
 
+const PIZZA_MANIA_CATEGORY = "pizza mania";
+const ONION_PIZZA_NAME = "onion pizza";
+const ONION_PIZZA_FIRST_PRICE = 49;
+const ONION_PIZZA_ADDITIONAL_PRICE = 59;
+
+function normalizePricingText(value?: string) {
+  return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+export function isPizzaManiaOnionPizza(item: Pick<CartItem, "name" | "category">) {
+  return normalizePricingText(item.name) === ONION_PIZZA_NAME
+    && normalizePricingText(item.category) === PIZZA_MANIA_CATEGORY;
+}
+
+export function cartItemLineTotal(item: CartItem) {
+  const qty = Math.max(0, Number(item.qty || 0));
+  if (!qty) return 0;
+  if (isPizzaManiaOnionPizza(item)) {
+    return ONION_PIZZA_FIRST_PRICE + Math.max(0, qty - 1) * ONION_PIZZA_ADDITIONAL_PRICE;
+  }
+  return Number(item.price || 0) * qty;
+}
+
+export function checkoutCartItems(items: CartItem[]) {
+  return items.map((item) => ({
+    ...item,
+    price: cartItemLineTotal(item)
+  }));
+}
+
 export function cartSubtotal(items: CartItem[]) {
-  return items.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.qty || 1), 0);
+  return items.reduce((sum, item) => sum + cartItemLineTotal(item), 0);
 }
 
 export function couponExpired(coupon?: Coupon) {

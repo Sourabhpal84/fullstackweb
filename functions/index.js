@@ -509,13 +509,37 @@ function cartSubtotalFromSnapshot(items = []) {
   return roundMoney((Array.isArray(items) ? items : []).reduce((sum, item) => sum + Number(item.price || 0), 0));
 }
 
+const PIZZA_MANIA_ONION_RULE = Object.freeze({
+  category: "pizza mania",
+  name: "onion pizza",
+  firstPrice: 49,
+  additionalPrice: 59
+});
+
+function normalizePricingRuleText(value = "") {
+  return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function isPizzaManiaOnionPizza(item = {}) {
+  return normalizePricingRuleText(item.name) === PIZZA_MANIA_ONION_RULE.name
+    && normalizePricingRuleText(item.category) === PIZZA_MANIA_ONION_RULE.category;
+}
+
+function cartBaseLineTotal(item = {}, qty = Number(item.qty || item.quantity || 1)) {
+  if (isPizzaManiaOnionPizza(item)) {
+    return PIZZA_MANIA_ONION_RULE.firstPrice
+      + Math.max(0, Number(qty || 0) - 1) * PIZZA_MANIA_ONION_RULE.additionalPrice;
+  }
+  const baseUnit = Number(item.baseUnitPrice || item.unitPrice || 0);
+  return baseUnit > 0 ? baseUnit * Number(qty || 0) : 0;
+}
+
 function cartBaseSubtotalFromSnapshot(items = []) {
   return roundMoney((Array.isArray(items) ? items : []).reduce((sum, item) => {
     const qty = Number(item.qty || item.quantity || 1);
     const extras = Array.isArray(item.extras) ? item.extras : (Array.isArray(item.addOns) ? item.addOns : []);
     const extrasTotal = extras.reduce((extraSum, extra) => extraSum + Number(extra.price || 0), 0) * qty;
-    const baseUnit = Number(item.baseUnitPrice || item.unitPrice || 0);
-    const baseLine = baseUnit > 0 ? baseUnit * qty : Math.max(0, Number(item.price || 0) - extrasTotal);
+    const baseLine = cartBaseLineTotal(item, qty) || Math.max(0, Number(item.price || 0) - extrasTotal);
     return sum + baseLine;
   }, 0));
 }
