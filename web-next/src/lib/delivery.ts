@@ -55,8 +55,8 @@ export async function calculateRouteDistance(origin: GeoPointLike, destination: 
 
 export function deliveryChargeFor(distanceKm: number, subtotal: number) {
   if (!distanceKm) return 0;
-  if (distanceKm > 6 || subtotal < 99) return 0;
-  const threshold = distanceKm <= 1 ? 99
+  if (distanceKm > 6 || subtotal < 149) return 0;
+  const threshold = distanceKm <= 1 ? 149
     : distanceKm <= 2 ? 149
     : distanceKm <= 3 ? 199
     : distanceKm <= 4 ? 249

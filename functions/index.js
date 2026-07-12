@@ -560,7 +560,7 @@ async function secureDeliveryDraft(draft, cartSnapshot) {
   const settings = normalizeDeliverySettings(settingsSnap.exists ? settingsSnap.data() : {});
   const delivery = calculateDeliveryPricing({ distanceKm: route.distanceKm, subtotal, eligibleSubtotal: baseSubtotal, settings });
   if (!delivery.minimumOrderMet) {
-    throw Object.assign(new Error("Minimum order value is ₹99 before extra toppings."), { status: 409 });
+    throw Object.assign(new Error("Minimum order value is ₹149 before extra toppings."), { status: 409 });
   }
   if (!delivery.deliveryServiceable) {
     throw Object.assign(new Error("Sorry, we are not available at your location yet."), { status: 409 });

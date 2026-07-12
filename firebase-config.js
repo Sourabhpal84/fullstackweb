@@ -8,9 +8,7 @@ import {
   setPersistence
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
-import {
-  initializeFirestore
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 import {
   getStorage
@@ -66,10 +64,10 @@ setPersistence(auth, browserLocalPersistence).catch(error => {
   console.warn("Firebase auth persistence unavailable:", error);
 });
 
-export const db = initializeFirestore(app, {
-  experimentalForceLongPolling:true,
-  useFetchStreams:false
-});
+// Prefer Firestore's streaming transport. Forced long polling adds a request/response
+// round trip to every listener and should only be used as a targeted fallback for
+// networks that demonstrably block streaming.
+export const db = getFirestore(app);
 
 export const storage = getStorage(app);
 

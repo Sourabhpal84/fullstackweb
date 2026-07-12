@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { collection, doc, onSnapshot, orderBy, query, where } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
@@ -10,14 +11,15 @@ import { Hero } from "@/components/home/hero";
 import { CategoryRail } from "@/components/menu/category-rail";
 import { MenuGrid } from "@/components/menu/menu-grid";
 import { SmartMenuTools } from "@/components/menu/smart-menu-tools";
-import { CartDrawer } from "@/components/cart/cart-drawer";
-import { TrackingPanel } from "@/components/tracking/tracking-panel";
-import { AuthModal } from "@/components/auth/auth-modal";
 import { CheckoutPersistence } from "@/components/home/checkout-persistence";
 import { calculateRouteDistance, DEFAULT_MAX_DISTANCE_KM, getBrowserLocation } from "@/lib/delivery";
 import { useCartStore } from "@/lib/cart-store";
 import { GeoSections } from "@/components/home/geo-sections";
 import type { ActiveOffer } from "@/lib/offerTypes";
+
+const CartDrawer = dynamic(() => import("@/components/cart/cart-drawer").then((module) => module.CartDrawer), { ssr:false });
+const TrackingPanel = dynamic(() => import("@/components/tracking/tracking-panel").then((module) => module.TrackingPanel), { ssr:false });
+const AuthModal = dynamic(() => import("@/components/auth/auth-modal").then((module) => module.AuthModal), { ssr:false });
 
 export function HomeExperience() {
   const [categories, setCategories] = useState<Category[]>([]);

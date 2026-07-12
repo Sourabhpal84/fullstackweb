@@ -168,7 +168,7 @@ let appPricing = {
 };
 let deliveryPricingSettings = {
   freeDeliveryEnabled:true,
-  minimumOrderValue:0,
+  minimumOrderValue:149,
   flatDeliveryFee:30,
   maxDeliveryDistanceKm:6,
   whatsappNumber:"918303614331",
@@ -4366,7 +4366,7 @@ registerGlobalSnapshot(onSnapshot(
     deliveryPricingSettings = {
       ...deliveryPricingSettings,
       freeDeliveryEnabled:data.freeDeliveryEnabled !== false,
-      minimumOrderValue:Math.max(0, Number(data.minimumOrderValue ?? 0)) === 99 ? 0 : Math.max(0, Number(data.minimumOrderValue ?? 0)),
+      minimumOrderValue:Math.max(149, Number(data.minimumOrderValue ?? 149) || 149),
       flatDeliveryFee:deliverySettingNumber(data.flatDeliveryFee, 30, 24),
       maxDeliveryDistanceKm:MAX_DELIVERY_DISTANCE,
       whatsappNumber:String(data.whatsappNumber || deliveryPricingSettings.whatsappNumber).replace(/\D/g,""),
@@ -4953,9 +4953,6 @@ registerGlobalSnapshot(onSnapshot(collection(db, "coupons"), useCouponSnapshot, 
     renderAvailableCoupons();
   }
 }));
-getDocs(collection(db, "coupons"))
-  .then(useCouponSnapshot)
-  .catch(error => console.warn("Initial coupon load failed.", error));
 
 function useBogoOfferSnapshot(snapshot){
   const data = snapshot.exists() ? snapshot.data() : null;
@@ -5006,9 +5003,6 @@ registerGlobalSnapshot(onSnapshot(doc(db, "settings", "offerEngine"), useBogoOff
     updateCart();
   }
 }));
-getDoc(doc(db, "settings", "offerEngine"))
-  .then(useBogoOfferSnapshot)
-  .catch(error => console.warn("Initial BOGO load failed.", error));
 
 function bogoOfferLabels(){
   const offer = calculateBogoOffer().offer || activeBogoOffer;

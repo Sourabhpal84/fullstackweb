@@ -15,6 +15,8 @@ import { calculateOffer, PIZZA_POINTS_BOGO_MESSAGE } from "@/lib/offerEngine";
 import type { ActiveOffer } from "@/lib/offerTypes";
 import { trackEvent } from "@/components/seo/analytics";
 
+const MINIMUM_ORDER_VALUE = 149;
+
 export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCouponCode: string; onCouponCodeChange: (code: string) => void }) {
   const { items, open, setOpen, changeQty, remove, clear, checkoutContext } = useCartStore();
   const setCheckoutContext = useCartStore((state) => state.setCheckoutContext);
@@ -31,6 +33,8 @@ export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCou
     [categories, checkoutContext.activeCoupon, checkoutContext.distanceKm, couponLocked, items]
   );
   const payableTotal = Math.max(0, pricing.grandTotal - offer.discount);
+  const minimumOrderRemaining = Math.max(0, MINIMUM_ORDER_VALUE - pricing.subtotal);
+  const minimumOrderMet = minimumOrderRemaining === 0;
   const checkoutItems = useMemo(() => checkoutCartItems(items), [items]);
   const offerSignature = useMemo(
     () => `${activeOffer?.type || "no_offer"}:${activeOffer?.active === false ? "off" : "on"}:${activeOffer?.eligibleCategories?.join("|") || "all"}:${items.map((item) => `${item.id}:${item.qty}:${item.price}`).join("|")}`,
@@ -116,6 +120,7 @@ export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCou
 
   async function payOnline() {
     if (!items.length || busy) return;
+    if (!minimumOrderMet) return alert(`Please add ${formatCurrency(minimumOrderRemaining)} more. Minimum order is ${formatCurrency(MINIMUM_ORDER_VALUE)}.`);
     if (!auth.currentUser) return alert("Please login before checkout.");
     if (checkoutContext.restaurantUnavailable) return alert(checkoutContext.restaurantUnavailableMessage || "Restaurant is currently unavailable.");
     if (!checkoutContext.customerLocation) return alert("Please use location before checkout.");
@@ -153,6 +158,7 @@ export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCou
 
   async function placeCodOrder() {
     if (!items.length || busy) return;
+    if (!minimumOrderMet) return alert(`Please add ${formatCurrency(minimumOrderRemaining)} more. Minimum order is ${formatCurrency(MINIMUM_ORDER_VALUE)}.`);
     if (!auth.currentUser) return alert("Please login before checkout.");
     if (checkoutContext.restaurantUnavailable) return alert(checkoutContext.restaurantUnavailableMessage || "Restaurant is currently unavailable.");
     if (!checkoutContext.customerLocation) return alert("Please use location before checkout.");
@@ -309,15 +315,20 @@ export function CartDrawer({ activeCouponCode, onCouponCodeChange }: { activeCou
             {!couponLocked ? <Row label="Coupon savings" value={-pricing.couponDiscount} /> : null}
             <Row label="Delivery" value={pricing.deliveryCharge} />
             <Row label="Final Total" value={payableTotal} />
+            {!minimumOrderMet ? (
+              <div className="rounded-xl bg-amber-400/10 p-3 text-xs font-bold text-amber-100">
+                Add {formatCurrency(minimumOrderRemaining)} more to reach the minimum order of {formatCurrency(MINIMUM_ORDER_VALUE)}.
+              </div>
+            ) : null}
           </div>
           <div className="mb-4 flex items-center justify-between">
             <span className="text-sm font-bold text-white/60">Total</span>
             <strong className="text-2xl font-black">{formatCurrency(payableTotal)}</strong>
           </div>
-          <button disabled={!items.length || busy} onClick={payOnline} className="h-12 w-full rounded-full bg-brand font-black text-white disabled:opacity-45">
+          <button disabled={!items.length || busy || !minimumOrderMet} onClick={payOnline} className="h-12 w-full rounded-full bg-brand font-black text-white disabled:opacity-45">
             {busy ? "Processing..." : "Pay Online Securely"}
           </button>
-          <button disabled={!items.length || busy} onClick={placeCodOrder} className="mt-2 h-12 w-full rounded-full bg-white font-black text-ink disabled:opacity-45">
+          <button disabled={!items.length || busy || !minimumOrderMet} onClick={placeCodOrder} className="mt-2 h-12 w-full rounded-full bg-white font-black text-ink disabled:opacity-45">
             Cash on Delivery
           </button>
         </div>

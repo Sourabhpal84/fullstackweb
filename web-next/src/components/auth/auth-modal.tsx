@@ -8,17 +8,33 @@ export function AuthModal({ open, onClose }: { open: boolean; onClose: () => voi
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState("");
+  const [resendSeconds, setResendSeconds] = useState(0);
   const [confirmation, setConfirmation] = useState<ConfirmationResult | null>(null);
   const verifier = useRef<RecaptchaVerifier | null>(null);
   const verifying = useRef(false);
+  const otpAbortController = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!open) return;
     return () => {
       verifier.current?.clear();
       verifier.current = null;
+      otpAbortController.current?.abort();
     };
   }, [open]);
+
+  useEffect(() => {
+    if (resendSeconds <= 0) return;
+    const timer = window.setTimeout(() => setResendSeconds((seconds) => Math.max(0, seconds - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [resendSeconds]);
+
+  function recordTiming(operation: string, stage: string, startedAt: number) {
+    window.dispatchEvent(new CustomEvent("magneetoz:auth-timing", {
+      detail: { operation, stage, durationMs: Math.round(performance.now() - startedAt), at: new Date().toISOString() }
+    }));
+  }
 
   async function ensureVerifier() {
     if (verifier.current) return verifier.current;
@@ -35,40 +51,54 @@ export function AuthModal({ open, onClose }: { open: boolean; onClose: () => voi
       alert("Enter a valid mobile number");
       return;
     }
+    if (busy || resendSeconds > 0) return;
+    const startedAt = performance.now();
     setBusy(true);
+    setStatus("Sending OTP…");
     try {
       const result = await signInWithPhoneNumber(auth, `+91${clean}`, await ensureVerifier());
+      recordTiming("otp-request", "provider-accepted", startedAt);
       setConfirmation(result);
       setOtp("");
-      startOtpAutofill();
+      setStatus("OTP sent. Enter the code from your SMS.");
+      setResendSeconds(45);
+      startOtpAutofill(result);
     } catch (error) {
+      recordTiming("otp-request", "failed", startedAt);
       verifier.current?.clear();
       verifier.current = null;
-      alert(error instanceof Error ? error.message : "Unable to send OTP");
+      setStatus(error instanceof Error ? error.message : "Unable to send OTP");
     } finally {
       setBusy(false);
     }
   }
 
-  async function verify(code = otp) {
-    if (!confirmation || verifying.current || !/^\d{6}$/.test(code)) return;
+  async function verify(code = otp, activeConfirmation = confirmation) {
+    if (!activeConfirmation || verifying.current || !/^\d{6}$/.test(code)) return;
+    const startedAt = performance.now();
     verifying.current = true;
     setBusy(true);
+    setStatus("Verifying OTP…");
     try {
-      await confirmation.confirm(code);
+      await activeConfirmation.confirm(code);
+      recordTiming("otp-verify", "verified", startedAt);
+      otpAbortController.current?.abort();
       onClose();
     } catch {
-      alert("Wrong OTP. Please try again.");
+      recordTiming("otp-verify", "failed", startedAt);
+      setStatus("Incorrect or expired OTP. Please try again.");
     } finally {
       verifying.current = false;
       setBusy(false);
     }
   }
 
-  async function startOtpAutofill() {
+  async function startOtpAutofill(activeConfirmation: ConfirmationResult) {
     if (!("OTPCredential" in window)) return;
     try {
+      otpAbortController.current?.abort();
       const controller = new AbortController();
+      otpAbortController.current = controller;
       window.setTimeout(() => controller.abort(), 60000);
       const credential = await navigator.credentials.get({
         otp: { transport: ["sms"] },
@@ -77,7 +107,7 @@ export function AuthModal({ open, onClose }: { open: boolean; onClose: () => voi
       const code = (credential as unknown as { code?: string })?.code;
       if (code) {
         setOtp(code);
-        verify(code);
+        verify(code, activeConfirmation);
       }
     } catch {
       // Browser support is best-effort only.
@@ -104,9 +134,10 @@ export function AuthModal({ open, onClose }: { open: boolean; onClose: () => voi
             placeholder="10 digit number"
           />
         </div>
-        <button disabled={busy} onClick={sendOtp} className="mt-4 h-12 w-full rounded-full bg-brand font-black text-white disabled:opacity-50">
-          {busy ? "Please wait..." : "Send OTP"}
+        <button disabled={busy || resendSeconds > 0} onClick={sendOtp} className="mt-4 h-12 w-full rounded-full bg-brand font-black text-white disabled:opacity-50">
+          {busy ? "Sending OTP…" : resendSeconds > 0 ? `Resend OTP in ${resendSeconds}s` : confirmation ? "Resend OTP" : "Send OTP"}
         </button>
+        {status ? <p aria-live="polite" className="mt-3 text-sm font-semibold text-white/70">{status}</p> : null}
         {confirmation ? (
           <>
             <label className="mt-5 block text-xs font-black uppercase text-white/55">OTP</label>

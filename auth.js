@@ -47,6 +47,7 @@ let lastAutoVerifyCode = "";
 const VAPID_KEY_RE = /^[A-Za-z0-9_-]{80,}$/;
 const DEV_LOGS = ["localhost", "127.0.0.1"].includes(location.hostname) || location.search.includes("debugAuth=1");
 const REFERRAL_STORAGE_KEY = "magneetozPendingReferral";
+const authTimings = new Map();
 
 auth.languageCode = "en";
 
@@ -79,6 +80,24 @@ const $ = (id) => document.getElementById(id);
 
 function devLog(...args){
   if(DEV_LOGS) console.info(...args);
+}
+
+function startAuthTiming(operation){
+  const startedAt = performance.now();
+  authTimings.set(operation, startedAt);
+  performance.mark?.(`magneetoz:${operation}:start`);
+  return startedAt;
+}
+
+function finishAuthTiming(operation, stage, startedAt = authTimings.get(operation)){
+  if(!Number.isFinite(startedAt)) return;
+  const durationMs = Math.round(performance.now() - startedAt);
+  performance.mark?.(`magneetoz:${operation}:${stage}`);
+  window.dispatchEvent(new CustomEvent("magneetoz:auth-timing", {
+    detail:{ operation, stage, durationMs, at:new Date().toISOString() }
+  }));
+  devLog("[AUTH TIMING]", { operation, stage, durationMs });
+  if(stage === "accepted" || stage === "verified" || stage === "failed") authTimings.delete(operation);
 }
 
 function setAuthStatus(message, type = "info"){
@@ -582,6 +601,7 @@ async function sendOTP(options = {}){
   }
 
   otpInFlight = true;
+  const requestStartedAt = startAuthTiming("otp-request");
   openAuthPopup("otp_sending");
   setAuthStatus("Sending OTP...", "info");
   setOtpHelp("Security check ke baad OTP send hoga. Please ek baar tap karke wait karein.");
@@ -589,7 +609,13 @@ async function sendOTP(options = {}){
   resetRecaptcha({ recreateContainer:true });
 
   try{
-    confirmationResult = await signInWithPhoneNumber(auth, `+91${phone}`, await ensureRecaptcha());
+    const captchaStartedAt = performance.now();
+    const verifier = await ensureRecaptcha();
+    finishAuthTiming("otp-request", "captcha-ready", captchaStartedAt);
+    const providerStartedAt = performance.now();
+    confirmationResult = await signInWithPhoneNumber(auth, `+91${phone}`, verifier);
+    finishAuthTiming("otp-request", "provider-accepted", providerStartedAt);
+    finishAuthTiming("otp-request", "accepted", requestStartedAt);
     keepOtpPopupVisible("otp_sent");
     const otpInput = $("otp");
     if(otpInput){
@@ -605,6 +631,7 @@ async function sendOTP(options = {}){
     startOtpPopupKeepAlive("otp_sent");
     startOtpListener();
   }catch(error){
+    finishAuthTiming("otp-request", "failed", requestStartedAt);
     devLog("sendOTP error:", error);
     const rawMessage = String(error?.message || error?.code || "");
     if(!retryAfterRecaptchaReset && /already.*rendered|reCAPTCHA has already been rendered/i.test(rawMessage)){
@@ -645,11 +672,13 @@ async function verifyOTP(){
   }
 
   otpVerifyInFlight = true;
+  const verificationStartedAt = startAuthTiming("otp-verify");
   setAuthStatus("Verifying OTP...", "info");
   setButton(button, true, "Verifying OTP...");
 
   try{
     await confirmationResult.confirm(code);
+    finishAuthTiming("otp-verify", "verified", verificationStartedAt);
     stopOtpListener();
     stopResendTimer();
     stopOtpDelayNotice();
@@ -658,6 +687,7 @@ async function verifyOTP(){
     setOtpHelp("Login successful.");
     toast("Login successful", "success");
   }catch(error){
+    finishAuthTiming("otp-verify", "failed", verificationStartedAt);
     devLog("verifyOTP error:", error);
     const message = friendlyAuthError(error);
     setAuthStatus(message, "error");

@@ -1,6 +1,7 @@
 "use strict";
 
 const DELIVERY_RULE_VERSION = "zone-fee-base-threshold-v3";
+const ABSOLUTE_MINIMUM_ORDER_VALUE = 149;
 
 function settingNumber(value, fallback, legacyValue) {
   const parsed = Math.max(0, Number(value ?? fallback));
@@ -9,9 +10,9 @@ function settingNumber(value, fallback, legacyValue) {
 
 function normalizeDeliverySettings(data = {}) {
   const configuredFlatFee = settingNumber(data.flatDeliveryFee, 30, 24);
-  const configuredMinimum = Math.max(0, Number(data.minimumOrderValue ?? 0));
+  const configuredMinimum = Math.max(0, Number(data.minimumOrderValue ?? ABSOLUTE_MINIMUM_ORDER_VALUE));
   return {
-    minimumOrderValue: configuredMinimum === 99 ? 0 : configuredMinimum,
+    minimumOrderValue: Math.max(ABSOLUTE_MINIMUM_ORDER_VALUE, configuredMinimum),
     flatDeliveryFee: configuredFlatFee,
     maxDistanceKm: Math.max(0.1, Number(data.maxDeliveryDistanceKm || data.maxDistance || 6)),
     freeDeliveryEnabled: data.freeDeliveryEnabled !== false,
@@ -59,6 +60,7 @@ function calculateDeliveryPricing({ distanceKm, subtotal, eligibleSubtotal, sett
 
 module.exports = {
   DELIVERY_RULE_VERSION,
+  ABSOLUTE_MINIMUM_ORDER_VALUE,
   normalizeDeliverySettings,
   calculateDeliveryPricing
 };

@@ -2,8 +2,7 @@
 
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth, browserLocalPersistence, setPersistence } from "firebase/auth";
-import { getFirestore, initializeFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
+import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyBaPN1a6qKdycroI-_IMLQA6ry7qPzrtRo",
@@ -16,15 +15,6 @@ const firebaseConfig = {
 
 export const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = (() => {
-  try {
-    return initializeFirestore(app, {
-      experimentalForceLongPolling: true
-    });
-  } catch {
-    return getFirestore(app);
-  }
-})();
-export const storage = getStorage(app);
+export const db = getFirestore(app);
 
 setPersistence(auth, browserLocalPersistence).catch(() => undefined);
