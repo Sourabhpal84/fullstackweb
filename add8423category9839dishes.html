@@ -197,6 +197,8 @@
 .order-controls button{min-width:38px;min-height:36px;margin:0;padding:5px 8px;border:1px solid #334155;background:#172033;color:#cbd5e1;font-size:11px}
 .order-controls button:hover{border-color:#22c55e;color:#22c55e}
 .dish-row strong{color:#f8fafc}.dish-row small{display:block;color:#94a3b8;margin-top:3px}
+.repeat-pricing-badge{display:inline-flex;align-items:center;margin-left:8px;padding:3px 8px;border-radius:999px;background:rgba(34,197,94,.14);border:1px solid rgba(34,197,94,.45);color:#86efac;font-size:11px;font-weight:900;vertical-align:middle}
+.repeat-pricing-badge.off{background:rgba(148,163,184,.08);border-color:rgba(148,163,184,.25);color:#94a3b8}
 .dish-actions{display:flex;gap:6px;flex-wrap:wrap}
 .dish-edit-panel{display:none;margin-top:12px;padding:12px;border-radius:14px;background:#020617;border:1px solid #334155}
 .dish-edit-panel.active{display:grid;gap:10px}
@@ -1297,6 +1299,9 @@ onSnapshot(collection(db,"categories"), (catSnap)=>{
           const large = sizes.large || {};
           const currentPrice = isSizeBased ? (small.price || medium.price || large.price || 0) : simplePrice;
           const repeatPricingRule = normalizeRepeatPricingRule(dish.repeatPricingRule || dish.repeatPricing);
+          const repeatPricingBadge = repeatPricingRule.enabled
+            ? `<span class="repeat-pricing-badge">Repeat +${formatCurrency(repeatPricingRule.extraPerAdditionalUnit)}</span>`
+            : `<span class="repeat-pricing-badge off">Repeat OFF</span>`;
 
           html += `
           <div class="dish-row" id="dishRow-${d.id}" data-dish-id="${d.id}" data-category="${escapeHTML(dish.category || "")}">
@@ -1304,7 +1309,7 @@ onSnapshot(collection(db,"categories"), (catSnap)=>{
               <div class="dish-row-info">
                 <span class="dish-drag-handle" title="Drag to reorder">☰</span>
                 <div>
-                <strong>${escapeHTML(dish.name || "Untitled dish")}</strong> - ${formatCurrency(currentPrice)}
+                <strong>${escapeHTML(dish.name || "Untitled dish")}</strong>${repeatPricingBadge} - ${formatCurrency(currentPrice)}
                 <small>${escapeHTML(dish.description || "No description")} • ${isSizeBased ? "Size based" : "Simple"} • ${dish.available ? "Active" : "Disabled"}</small>
                 </div>
               </div>
