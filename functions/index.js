@@ -491,6 +491,7 @@ function compactCartItem(item = {}) {
     selectedCrust: compactText(item.selectedCrust || item.crust?.id || "pan", 40),
     baseUnitPrice: Number(item.baseUnitPrice || item.unitPrice || 0),
     unitPrice: Number(item.unitPrice || item.baseUnitPrice || 0),
+    repeatPricingRule: normalizeRepeatPricingRule(item.repeatPricingRule || item.repeatPricing || {}),
     extras,
     addOns: extras,
     extrasTotal: Number(item.extrasTotal || extras.reduce((sum, extra) => sum + Number(extra.price || 0), 0)),
@@ -509,28 +510,25 @@ function cartSubtotalFromSnapshot(items = []) {
   return roundMoney((Array.isArray(items) ? items : []).reduce((sum, item) => sum + Number(item.price || 0), 0));
 }
 
-const PIZZA_MANIA_ONION_RULE = Object.freeze({
-  category: "pizza mania",
-  name: "onion pizza",
-  firstPrice: 49,
-  additionalPrice: 59
-});
-
 function normalizePricingRuleText(value = "") {
   return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-function isPizzaManiaOnionPizza(item = {}) {
-  return normalizePricingRuleText(item.name) === PIZZA_MANIA_ONION_RULE.name;
+function normalizeRepeatPricingRule(rule = {}) {
+  const enabled = rule?.enabled === true || rule?.enabled === "true" || rule?.enabled === 1 || rule?.enabled === "1";
+  const extraPerAdditionalUnit = Math.max(0, Number(rule?.extraPerAdditionalUnit || rule?.repeatExtra || rule?.extra || 0) || 0);
+  return enabled && extraPerAdditionalUnit > 0
+    ? { enabled: true, extraPerAdditionalUnit }
+    : { enabled: false, extraPerAdditionalUnit: 0 };
 }
 
 function cartBaseLineTotal(item = {}, qty = Number(item.qty || item.quantity || 1)) {
-  if (isPizzaManiaOnionPizza(item)) {
-    return PIZZA_MANIA_ONION_RULE.firstPrice
-      + Math.max(0, Number(qty || 0) - 1) * PIZZA_MANIA_ONION_RULE.additionalPrice;
-  }
+  const count = Math.max(0, Number(qty || 0));
   const baseUnit = Number(item.baseUnitPrice || item.unitPrice || 0);
-  return baseUnit > 0 ? baseUnit * Number(qty || 0) : 0;
+  const rule = normalizeRepeatPricingRule(item.repeatPricingRule || item.repeatPricing || {});
+  return baseUnit > 0
+    ? (baseUnit * count) + (rule.enabled ? Math.max(0, count - 1) * rule.extraPerAdditionalUnit : 0)
+    : 0;
 }
 
 function cartBaseSubtotalFromSnapshot(items = []) {

@@ -1825,13 +1825,23 @@ function hydrateBestSellerImages(){
 }
 
 function dishDataAttrs(d = {}){
+  const repeatPricingRule = normalizeRepeatPricingRule(d.repeatPricingRule || d.repeatPricing || {});
   return `
     data-dish-name="${escapeHTML(normalizeUnicodeText(d.name || ""))}"
     data-dish-desc="${escapeHTML(normalizeUnicodeText(d.description || "Fresh MAGNEETOZ favourite"))}"
     data-dish-image="${escapeHTML(dishBestImageUrl(d))}"
     data-dish-category="${escapeHTML(d.category || "Recommended")}"
     data-dish-type="${escapeHTML(d.type || "size_based")}"
+    data-repeat-pricing-enabled="${repeatPricingRule.enabled ? "true" : "false"}"
+    data-repeat-pricing-extra="${repeatPricingRule.extraPerAdditionalUnit}"
   `;
+}
+
+function repeatPricingRuleFromCard(card){
+  return normalizeRepeatPricingRule({
+    enabled:card?.dataset?.repeatPricingEnabled,
+    extraPerAdditionalUnit:card?.dataset?.repeatPricingExtra
+  });
 }
 
 function dishLowestVariant(d = {}){
@@ -1875,6 +1885,7 @@ function addDishObjectToCart(dish = {}, qty = 1){
     image:dishBestImageUrl(dish),
     baseUnitPrice:variant.price,
     unitPrice:variant.price,
+    repeatPricingRule:dish.repeatPricingRule || dish.repeatPricing,
     price:variant.price * qty
   });
   persistGuestState();
@@ -2159,6 +2170,7 @@ window.addTasteQuizSuggestionToCart = function(index){
       image:normalizeImageUrl(entry.dish.image),
       baseUnitPrice:entry.variant.price,
       unitPrice:entry.variant.price,
+      repeatPricingRule:entry.dish.repeatPricingRule || entry.dish.repeatPricing,
       price:entry.variant.price
     };
     if(tasteQuizState.crust !== "any" && isPizzaCartItem(item)){
@@ -3122,37 +3134,34 @@ function extrasTotalPerUnit(extras = []){
   return normalizeCartExtras(extras).reduce((sum, extra) => sum + Number(extra.price || 0), 0);
 }
 
-const PIZZA_MANIA_ONION_RULE = Object.freeze({
-  category:"pizza mania",
-  name:"onion pizza",
-  firstPrice:49,
-  additionalPrice:59
-});
-
 function normalizePricingRuleText(value = ""){
   return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-function isPizzaManiaOnionPizza(item = {}){
-  return normalizePricingRuleText(item.name) === PIZZA_MANIA_ONION_RULE.name;
+function normalizeRepeatPricingRule(rule = {}){
+  const enabled = rule?.enabled === true || rule?.enabled === "true" || rule?.enabled === 1 || rule?.enabled === "1";
+  const extraPerAdditionalUnit = Math.max(0, Number(rule?.extraPerAdditionalUnit || rule?.repeatExtra || rule?.extra || 0) || 0);
+  return enabled && extraPerAdditionalUnit > 0
+    ? { enabled:true, extraPerAdditionalUnit }
+    : { enabled:false, extraPerAdditionalUnit:0 };
+}
+
+function cartRepeatPricingRule(item = {}){
+  return normalizeRepeatPricingRule(item.repeatPricingRule || item.repeatPricing || {});
 }
 
 function cartBaseLineTotal(item = {}, qty = Number(item.qty || item.quantity || 1)){
-  if(isPizzaManiaOnionPizza(item)){
-    return PIZZA_MANIA_ONION_RULE.firstPrice
-      + Math.max(0, Number(qty || 0) - 1) * PIZZA_MANIA_ONION_RULE.additionalPrice;
-  }
-  return Number(item.baseUnitPrice || item.unitPrice || 0) * Number(qty || 0);
+  const count = Math.max(0, Number(qty || 0));
+  const baseUnit = Number(item.baseUnitPrice || item.unitPrice || 0);
+  const rule = cartRepeatPricingRule(item);
+  return (baseUnit * count) + (rule.enabled ? Math.max(0, count - 1) * rule.extraPerAdditionalUnit : 0);
 }
 
 function cartOfferUnitPrices(item = {}, qty = Number(item.qty || item.quantity || 1)){
-  if(isPizzaManiaOnionPizza(item)){
-    return Array.from({ length:Math.max(0, Number(qty || 0)) }, (_, index) => (
-      index === 0 ? PIZZA_MANIA_ONION_RULE.firstPrice : PIZZA_MANIA_ONION_RULE.additionalPrice
-    ));
-  }
+  const count = Math.max(0, Number(qty || 0));
   const unitPrice = Number(item.unitPrice || item.baseUnitPrice || (qty ? Number(item.price || 0) / qty : item.price)) || 0;
-  return Array.from({ length:Math.max(0, Number(qty || 0)) }, () => unitPrice);
+  const rule = cartRepeatPricingRule(item);
+  return Array.from({ length:count }, (_, index) => unitPrice + (rule.enabled && index > 0 ? rule.extraPerAdditionalUnit : 0));
 }
 
 function findMatchingCartItemIndex(candidate = {}){
@@ -3206,6 +3215,7 @@ function normalizeCartItemPricing(item = {}){
   const crust = pizzaItem ? normalizeCrust(item.crust || item.crustType || item.selectedCrust) : null;
   const baseUnitPrice = Number(item.baseUnitPrice || item.unitPrice || (qty ? Number(item.price || 0) / qty - extrasTotalPerUnit(existingExtras) : item.price) || 0);
   const extrasTotal = extrasTotalPerUnit(existingExtras);
+  const repeatPricingRule = cartRepeatPricingRule(item);
   const baseLineTotal = cartBaseLineTotal({ ...item, baseUnitPrice, unitPrice:baseUnitPrice }, qty);
   const normalized = {
     ...item,
@@ -3213,6 +3223,7 @@ function normalizeCartItemPricing(item = {}){
     quantity:qty,
     baseUnitPrice,
     unitPrice:baseUnitPrice,
+    repeatPricingRule,
     extras:existingExtras,
     addOns:existingExtras,
     extrasTotal,
@@ -3248,6 +3259,7 @@ function compactCartForStorage(items = []){
     const pizzaItem = isPizzaCartItem(item);
     const crust = pizzaItem ? normalizeCrust(item.crust || item.crustType || item.selectedCrust) : null;
     const extrasTotal = extrasTotalPerUnit(extras);
+    const repeatPricingRule = cartRepeatPricingRule(item);
     const compact = {
       id:String(item.id || "").slice(0, 120),
       name:String(item.name || "").slice(0, 160),
@@ -3255,10 +3267,11 @@ function compactCartForStorage(items = []){
       category:String(item.category || "").slice(0, 120),
       baseUnitPrice,
       unitPrice:baseUnitPrice,
+      repeatPricingRule,
       extras,
       addOns:extras,
       extrasTotal,
-      price:cartItemTotal({ ...item, qty, baseUnitPrice, unitPrice:baseUnitPrice, extras }),
+      price:cartItemTotal({ ...item, qty, baseUnitPrice, unitPrice:baseUnitPrice, repeatPricingRule, extras }),
       qty,
       quantity:qty,
       image:!image || /^data:/i.test(image) ? "" : image.slice(0, 700)
@@ -3397,6 +3410,7 @@ function rebuildCartItemFromOrder(item = {}, menuDish = null){
     image:normalizeImageUrl(bestImageUrl(menuDish?.image, menuDish?.imageSet) || item.image || "logo_tran.jpeg"),
     baseUnitPrice,
     unitPrice:baseUnitPrice,
+    repeatPricingRule:menuDish?.repeatPricingRule || menuDish?.repeatPricing || item.repeatPricingRule || item.repeatPricing,
     extras,
     addOns:extras,
     crust,
@@ -6356,6 +6370,7 @@ function addToCartFull(btn, name){
     image: card.dataset.dishImage || card.querySelector("img")?.getAttribute("src") || "logo_tran.jpeg",
     baseUnitPrice: price,
     unitPrice: price,
+    repeatPricingRule: repeatPricingRuleFromCard(card),
     price: price * qty
   });
 
@@ -6391,6 +6406,7 @@ function addToCartSimple(btn, name){
     image: card.dataset.dishImage || card.querySelector("img")?.getAttribute("src") || "logo_tran.jpeg",
     baseUnitPrice: price,
     unitPrice: price,
+    repeatPricingRule: repeatPricingRuleFromCard(card),
     price
   });
 
@@ -8396,7 +8412,7 @@ function orderItemBaseLineTotal(item = {}){
   const extras = orderItemExtras(item);
   const extrasTotal = extras.reduce((sum, extra) => sum + Number(extra.price || 0), 0) * qty;
   const storedBase = Number(item.baseUnitPrice || item.unitPrice || 0);
-  if(storedBase > 0) return storedBase * qty;
+  if(storedBase > 0) return cartBaseLineTotal(item, qty);
   return Math.max(0, Number(item.price || 0) - extrasTotal);
 }
 

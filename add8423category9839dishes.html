@@ -226,6 +226,11 @@
 .category-mode-card input{width:auto;margin-top:3px;accent-color:#22c55e}
 .category-mode-card small{display:block;margin-left:25px;color:#94a3b8;line-height:1.45}
 .field-hint{display:block;margin:-6px 0 8px;color:#94a3b8;font-size:11px;line-height:1.4}
+.repeat-pricing-card{margin:8px 0 12px;padding:12px;border:1px solid #334155;border-radius:14px;background:#0b1220;display:grid;gap:8px}
+.repeat-pricing-card label{display:flex;align-items:center;gap:8px;color:#f8fafc;font-weight:800}
+.repeat-pricing-card input[type="checkbox"]{width:auto;margin:0;accent-color:#22c55e}
+.repeat-pricing-card input[type="number"]{width:min(220px,100%);margin:0}
+.repeat-pricing-card small{display:block;color:#94a3b8;line-height:1.45}
 @media(max-width:560px){.dish-edit-image{grid-template-columns:78px minmax(0,1fr)}.dish-edit-image img{width:78px;height:72px}}
 @media(max-width:640px){
   .sidebar{padding:10px 12px;align-items:flex-start;flex-direction:column;gap:9px}
@@ -318,6 +323,12 @@
       <option value="simple">Simple</option>
       <option value="multiple">Size Based</option>
     </select>
+
+    <div class="repeat-pricing-card">
+      <label><input id="repeatPricingEnabled" type="checkbox"> Same item repeat price rule ON</label>
+      <input id="repeatPricingExtra" type="number" min="0" step="1" placeholder="Repeat extra ₹ e.g. 10">
+      <small>Example: price ₹59 + repeat extra ₹10 = first ₹59, second/third ₹69 each.</small>
+    </div>
 
     <div id="simpleBox">
       <input id="price" placeholder="Price">
@@ -469,6 +480,14 @@ function jsString(value = ""){
 function numberValue(value, fallback = 0){
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function normalizeRepeatPricingRule(rule = {}){
+  const enabled = rule?.enabled === true || rule?.enabled === "true" || rule?.enabled === 1 || rule?.enabled === "1";
+  const extraPerAdditionalUnit = Math.max(0, numberValue(rule?.extraPerAdditionalUnit || rule?.repeatExtra || rule?.extra, 0));
+  return enabled && extraPerAdditionalUnit > 0
+    ? { enabled:true, extraPerAdditionalUnit }
+    : { enabled:false, extraPerAdditionalUnit:0 };
 }
 
 const uploadBox = document.getElementById("dishUploadBox");
@@ -1165,6 +1184,10 @@ window.addDish = async function(){
       productType: /pizza/i.test(`${cat} ${dishName}`) ? "pizza" : "food",
       type: t,
       description: descText,
+      repeatPricingRule: normalizeRepeatPricingRule({
+        enabled: document.getElementById("repeatPricingEnabled")?.checked,
+        extraPerAdditionalUnit: document.getElementById("repeatPricingExtra")?.value
+      }),
       available: true
     };
     const existingCategoryDishes = await getDocs(collection(db,"dishes"));
@@ -1219,6 +1242,8 @@ window.addDish = async function(){
     preview.style.display = "none";
     prompt.style.display = "block";
     setUploadStatus("Firebase Storage upload ready", 0);
+    document.getElementById("repeatPricingEnabled").checked = false;
+    document.getElementById("repeatPricingExtra").value = "";
 
     alert("Dish Added ✅");
 
@@ -1271,6 +1296,7 @@ onSnapshot(collection(db,"categories"), (catSnap)=>{
           const medium = sizes.medium || {};
           const large = sizes.large || {};
           const currentPrice = isSizeBased ? (small.price || medium.price || large.price || 0) : simplePrice;
+          const repeatPricingRule = normalizeRepeatPricingRule(dish.repeatPricingRule || dish.repeatPricing);
 
           html += `
           <div class="dish-row" id="dishRow-${d.id}" data-dish-id="${d.id}" data-category="${escapeHTML(dish.category || "")}">
@@ -1340,6 +1366,12 @@ onSnapshot(collection(db,"categories"), (catSnap)=>{
                 <label>Medium market<input id="edit-medium-market-${d.id}" type="number" value="${medium.market || ""}"></label>
                 <label>Large price<input id="edit-large-${d.id}" type="number" value="${large.price || ""}"></label>
                 <label>Large market<input id="edit-large-market-${d.id}" type="number" value="${large.market || ""}"></label>
+              </div>
+
+              <div class="repeat-pricing-card">
+                <label><input id="edit-repeat-enabled-${d.id}" type="checkbox" ${repeatPricingRule.enabled ? "checked" : ""}> Same item repeat price rule ON</label>
+                <input id="edit-repeat-extra-${d.id}" type="number" min="0" step="1" value="${repeatPricingRule.extraPerAdditionalUnit || ""}" placeholder="Repeat extra ₹ e.g. 10">
+                <small>First item normal price. Same item dobara add karne par normal price + ye extra amount lagega.</small>
               </div>
 
               <div>
@@ -1475,7 +1507,11 @@ window.saveDishEdit = async function(id){
       description: normalizeUnicodeText(document.getElementById(`edit-desc-${id}`)?.value),
       image: normalizeUnicodeText(document.getElementById(`edit-image-${id}`)?.value),
       category: normalizeUnicodeText(document.getElementById(`edit-category-${id}`)?.value),
-      type
+      type,
+      repeatPricingRule: normalizeRepeatPricingRule({
+        enabled: document.getElementById(`edit-repeat-enabled-${id}`)?.checked,
+        extraPerAdditionalUnit: document.getElementById(`edit-repeat-extra-${id}`)?.value
+      })
     };
     data.productType = /pizza/i.test(`${data.category} ${data.name}`) ? "pizza" : "food";
     const editedImage = editedDishImages.get(id);

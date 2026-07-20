@@ -647,6 +647,14 @@ function itemLineAmount(item = {}){
   return itemUnitAmount(item) * itemQty(item);
 }
 
+function normalizeRepeatPricingRule(rule = {}){
+  const enabled = rule?.enabled === true || rule?.enabled === "true" || rule?.enabled === 1 || rule?.enabled === "1";
+  const extraPerAdditionalUnit = Math.max(0, Number(rule?.extraPerAdditionalUnit || rule?.repeatExtra || rule?.extra || 0) || 0);
+  return enabled && extraPerAdditionalUnit > 0
+    ? { enabled:true, extraPerAdditionalUnit }
+    : { enabled:false, extraPerAdditionalUnit:0 };
+}
+
 function itemExtras(item = {}){
   const extras = Array.isArray(item.extras) ? item.extras : (Array.isArray(item.addOns) ? item.addOns : []);
   return extras.filter(extra => extra && extra.name);
@@ -662,7 +670,10 @@ function itemCrust(item = {}){
 function itemBaseLineAmount(item = {}){
   const qty = itemQty(item);
   const base = itemUnitAmount(item);
-  if(base > 0) return base * qty;
+  if(base > 0){
+    const rule = normalizeRepeatPricingRule(item.repeatPricingRule || item.repeatPricing || {});
+    return (base * qty) + (rule.enabled ? Math.max(0, qty - 1) * rule.extraPerAdditionalUnit : 0);
+  }
   const extrasTotal = itemExtras(item).reduce((sum, extra) => sum + Number(extra.price || 0), 0) * qty;
   return Math.max(0, itemLineAmount(item) - extrasTotal);
 }
